@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es" data-tema="claro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solventa · Prototipo web y móvil</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="salto-contenido" id="salto" href="#contenido">Saltar al contenido principal</a>
+
+  <header class="cabecera">
+    <div class="marca">
+      <span class="simbolo" aria-hidden="true"></span>
+      <div>
+        <h1 id="titulo-producto">Solventa</h1>
+        <p id="subtitulo-producto">Prototipo de navegación</p>
+      </div>
+    </div>
+
+    <div class="controles">
+      <div class="control">
+        <label for="sel-idioma" id="rotulo-idioma">Idioma</label>
+        <select id="sel-idioma">
+          <option value="es">Español</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+      <div class="control">
+        <label for="sel-region" id="rotulo-region">Región</label>
+        <select id="sel-region"></select>
+      </div>
+      <button class="boton-icono" id="tema" type="button" aria-label="Cambiar tema"></button>
+    </div>
+  </header>
+
+  <main id="contenido">
+    <div class="cinta-superior">
+      <div class="canales" role="tablist" aria-label="Canal">
+        <button id="tab-web" role="tab" aria-selected="true" aria-controls="pantalla">Aplicación web</button>
+        <button id="tab-movil" role="tab" aria-selected="false" aria-controls="pantalla">Aplicación móvil</button>
+      </div>
+      <div class="dispositivos" id="dispositivos" aria-label="Dispositivo"></div>
+    </div>
+
+    <div class="lienzo">
+      <nav class="indice" aria-label="Pantallas">
+        <h2 id="rotulo-pantallas">Pantallas</h2>
+        <ol id="indice"></ol>
+      </nav>
+      <section class="escenario" id="pantalla" role="tabpanel" aria-live="polite"></section>
+    </div>
+
+    <section class="usabilidad" id="usabilidad" aria-label="Decisiones de usabilidad"></section>
+    <section class="usabilidad cobertura" id="cobertura" aria-label="Cobertura del alcance"></section>
+  </main>
+
+  <footer class="pie">Equipo 7 · Solventa · MISW4501 Proyecto Final · Semana 6</footer>
+
+  <script src="iconos.js"></script>
+  <script src="i18n.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
