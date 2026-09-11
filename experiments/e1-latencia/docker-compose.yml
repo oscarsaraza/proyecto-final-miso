@@ -1,0 +1,28 @@
+name: e1-latencia
+
+services:
+  api:
+    build: ../api
+    environment:
+      PROVIDER_URL: http://provider-sim:8001
+      PROVIDER_TIMEOUT_MS: 700
+      CACHE_TTL_S: 60
+      REPLICA_NAME: api-e1
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  provider-sim:
+    build: ../provider-sim
+    environment:
+      LATENCY_MS: ${LATENCY_MS:-50}
+      ERROR_RATE: ${ERROR_RATE:-0}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M

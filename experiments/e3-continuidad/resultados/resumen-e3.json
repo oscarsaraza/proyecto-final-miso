@@ -1,0 +1,28 @@
+{
+  "v1": {
+    "exito": [
+      100,
+      100,
+      100
+    ],
+    "mediana_exito": 100,
+    "trafico_a_la_replica_caida": [
+      30,
+      49,
+      30
+    ]
+  },
+  "v2": {
+    "exito": [
+      100,
+      100,
+      100
+    ],
+    "mediana_exito": 100,
+    "trafico_a_la_replica_caida": [
+      48,
+      53,
+      37
+    ]
+  }
+}

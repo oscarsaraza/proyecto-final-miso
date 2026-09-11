@@ -1,0 +1,37 @@
+name: e3-continuidad
+
+services:
+  api-a:
+    build: ../api
+    container_name: e3-api-a
+    environment:
+      PROVIDER_URL: http://provider-sim:8001
+      REPLICA_NAME: replica-A
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+
+  api-b:
+    build: ../api
+    container_name: e3-api-b
+    environment:
+      PROVIDER_URL: http://provider-sim:8001
+      REPLICA_NAME: replica-B
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+
+  provider-sim:
+    build: ../provider-sim
+    environment:
+      LATENCY_MS: 50
+      ERROR_RATE: 0
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: e3-nginx
+    volumes:
+      - ${NGINX_CONF:-./nginx.conf}:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080:80"
+    depends_on: [api-a, api-b]
