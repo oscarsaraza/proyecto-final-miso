@@ -188,7 +188,7 @@ const PANTALLAS_WEB = [
         </section>
         <p class="pista">${t('vigenciaOferta')}: ${fecha('2026-09-25T18:00:00', 'medium')}</p>
         ${boton('emitir', { tipo: 'ancho', icono: 'escudo', ir: 'w6' })}
-
+        ${boton('verDegradada', { tipo: 'secundario ancho', icono: 'alerta', ir: 'w5' })}
       </aside>
     </div>`; } },
 
@@ -433,6 +433,7 @@ const PANTALLAS_MOVIL = [
         <span class="chip neutro">${t('pendiente')}</span></li>
     </ul>
     ${boton('reportarSiniestro', { tipo: 'ancho', icono: 'camara', ir: 'm5' })}
+    ${boton('verSinConexion', { tipo: 'secundario ancho', icono: 'sinSenal', ir: 'm4' })}
     <p class="pista" style="margin-top:var(--e4)">${ICONOS.reloj(13)} ${t('ultimaSync')}: ${fecha('2026-09-11T07:42:00', 'short')}</p>` },
 
   { id: 'm4', grupo: 'gBilletera', hu: ['HU-MOV-07'], cuerpo: () => `
@@ -478,7 +479,6 @@ const PANTALLAS_MOVIL = [
           ${dato(t('adjuntos'), `2 · 1,8 MB`)}
           ${dato(t('fechaHora'), fecha('2026-09-11T09:16:00', 'short'))}
         </ul>
-        <p class="pista">${t('colaDetalle')}</p>
         <div class="aviso info" style="margin-bottom:0">${ICONOS.candado(20)}
           <div><strong>${t('radicadoUnico')}</strong>${t('radicadoUnicoTexto')}</div></div>
       </div>

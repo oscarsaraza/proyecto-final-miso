@@ -31,6 +31,7 @@ const TEXTOS = {
     degradado: 'Perfil parcial',
     avisoDegradado: 'Esta cotización se calculó con el último perfil disponible porque el proveedor de Open Finance superó el tiempo máximo de espera. El precio puede ajustarse al recuperar la conexión.',
     antiguedad: 'Antigüedad del perfil utilizado: 3 días', reintentar: 'Reintentar con datos actualizados',
+    verDegradada: 'Ver variante con perfil parcial', verSinConexion: 'Ver estado sin conexión',
 
     w6t: 'Emisión, cobro y confirmación', w6d: 'Un solo cobro por cotización aceptada.',
     metodoPago: 'Medio de pago', tarjeta: 'Tarjeta terminada en 4417',
@@ -224,6 +225,7 @@ const TEXTOS = {
     degradado: 'Partial profile',
     avisoDegradado: 'This quote was calculated with the latest available profile because the Open Finance provider exceeded the maximum waiting time. The price may change once the connection is restored.',
     antiguedad: 'Age of the profile used: 3 days', reintentar: 'Retry with fresh data',
+    verDegradada: 'View partial-profile variant', verSinConexion: 'View offline state',
 
     w6t: 'Issuance, payment and confirmation', w6d: 'One single charge per accepted quote.',
     metodoPago: 'Payment method', tarjeta: 'Card ending in 4417',
