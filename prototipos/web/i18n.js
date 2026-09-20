@@ -1,0 +1,410 @@
+/* ============================================================================
+   Solventa · Catálogo bilingüe (ES/EN) orientado al usuario final
+   ========================================================================= */
+
+const REGIONES = {
+  CO: { etiqueta: 'Colombia', locale: 'es-CO', moneda: 'COP', simbolo: '$', montoBase: 250000000, plazoBase: 180, factorTasa: 0.0002736, pasoMonto: 10000000 },
+  MX: { etiqueta: 'México',   locale: 'es-MX', moneda: 'MXN', simbolo: '$', montoBase: 1200000,   plazoBase: 180, factorTasa: 0.0002733, pasoMonto: 50000 },
+  CL: { etiqueta: 'Chile',    locale: 'es-CL', moneda: 'CLP', simbolo: '$', montoBase: 55000000,  plazoBase: 180, factorTasa: 0.0002735, pasoMonto: 2000000 },
+  PE: { etiqueta: 'Perú',     locale: 'es-PE', moneda: 'PEN', simbolo: 'S/', montoBase: 240000,    plazoBase: 180, factorTasa: 0.0002750, pasoMonto: 10000 },
+};
+
+const TEXTOS = {
+  es: {
+    producto: 'Solventa',
+    lemaHeader: 'Aseguradora digital · Portal Comercial',
+    asesorRol: 'Asesora comercial',
+    analistaRol: 'Analista de operaciones',
+    socioRol: 'Banco Aliado S.A.',
+    idioma: 'Idioma',
+    region: 'Región',
+    temaOscuro: 'Modo oscuro',
+    temaClaro: 'Modo claro',
+    cerrarSesion: 'Cerrar sesión',
+    
+    // Autenticación Web (W1)
+    loginTitulo: 'Plataforma de suscripción digital',
+    loginLema: 'Cotiza, suscribe y emite pólizas en segundos, con perfilamiento sobre Finanzas Abiertas.',
+    loginP1: 'Perfilamiento inmediato y personalizado',
+    loginP2: 'Emisión electrónica transparente',
+    loginP3: 'Trazabilidad y seguridad de cada operación',
+    loginFormTitulo: 'Acceso del asesor',
+    loginFormDesc: 'Ingrese con sus credenciales de asesor comercial.',
+    usuarioCorp: 'Correo corporativo',
+    clave: 'Contraseña',
+    olvideClave: '¿Olvidó su contraseña?',
+    btnEntrar: 'Entrar',
+    recuperarClaveMsg: 'Se ha enviado un enlace de recuperación a su correo corporativo.',
+    demoHintAsesor: 'Demo: Clic para ingresar como Asesora Comercial',
+    
+    // Navegación
+    navCotizador: 'Cotizador y Emisión',
+    navGestion: 'Gestión de Pólizas',
+    navSocios: 'Canal Banco Aliado',
+    
+    // Stepper
+    paso1: 'Identificación',
+    paso2: 'Consentimiento',
+    paso3: 'Cotización',
+    paso4: 'Emisión',
+    
+    // Paso 1: Identificación
+    p1Titulo: 'Identificación del cliente y crédito',
+    p1Subtitulo: 'Registre los datos del solicitante y las condiciones del crédito originado.',
+    seccionCliente: 'Datos del cliente',
+    seccionCredito: 'Condiciones del crédito hipotecario',
+    tipoDocumento: 'Tipo de documento',
+    cedula: 'Cédula de ciudadanía',
+    documento: 'Número de documento',
+    nombre: 'Nombre completo',
+    edad: 'Edad',
+    telefono: 'Teléfono móvil',
+    correo: 'Correo electrónico',
+    entidad: 'Entidad financiera originadora',
+    monto: 'Monto del crédito',
+    plazo: 'Plazo (meses)',
+    continuarConsentimiento: 'Continuar a consentimiento',
+    
+    // Paso 2: Consentimiento
+    p2Titulo: 'Consentimiento informado del titular',
+    p2Subtitulo: 'Autorización legal explícita previa a la consulta de fuentes de información.',
+    datosConsultados: 'Fuentes de datos que se consultarán',
+    fuenteOF: 'Entidades financieras',
+    detalleOF: 'Comportamiento de pago, nivel de endeudamiento y estabilidad de ingresos.',
+    fuenteOD: 'Fuentes públicas',
+    detalleOD: 'Información sociodemográfica y características del inmueble.',
+    fuenteKYC: 'Validación de identidad',
+    detalleKYC: 'Validación del documento y comprobación de antecedentes.',
+    autorizaCliente: 'Autorización del cliente',
+    autorizaTexto: 'El cliente autoriza a Solventa a consultar su información financiera para calcular su perfil de riesgo y el precio de su seguro.',
+    marcarConsentimiento: 'El cliente otorga su consentimiento informado',
+    verificacionOtp: 'Código de verificación SMS (Demo)',
+    otpEnviado: 'Código enviado al teléfono del cliente',
+    ingreseOtp: 'Código de 6 dígitos recibido',
+    simularOtp: 'Autocompletar SMS demo',
+    esperandoCliente: 'Esperando confirmación',
+    autorizadoOk: 'Autorización confirmada',
+    cotizarAhora: 'Consultar y cotizar',
+    baseLegal: 'Tratamiento de datos según normatividad vigente de protección de datos personales.',
+    
+    // Paso 3: Cotización
+    p3Titulo: 'Resultado de cotización personalizada',
+    p3Subtitulo: 'Precio claro y transparente calculado en tiempo real.',
+    primaMensual: 'Prima mensual',
+    calculadaEn: 'Calculada al instante',
+    origenCompleto: 'Perfil verificado en línea',
+    perfilCompletoChip: 'Perfil verificado',
+    ahorro: 'Ahorro por perfil',
+    desgloseTitulo: 'Desglose transparente del precio',
+    tarifaBase: 'Tarifa base actuarial',
+    ajusteRiesgo: 'Ajuste por historial de pago',
+    ajusteEdad: 'Ajuste por edad',
+    impuestos: 'Impuestos de ley',
+    resumenRiesgo: 'Perfil de riesgo del cliente',
+    nivelRiesgo: 'Nivel de riesgo',
+    nivelBajo: 'Bajo (Excelente historial crediticio)',
+    nivelMedio: 'Medio (Capacidad balanceada)',
+    factoresPrecio: 'Factores que respaldan el precio',
+    factor1: 'Historial de pago al día en los últimos 36 meses',
+    factor2: 'Capacidad de pago óptima para la cuota solicitada',
+    factor3: 'Sin moras registradas en entidades financieras',
+    coberturasIncluidas: 'Coberturas incluidas',
+    cob1: 'Fallecimiento por cualquier causa (100% suma asegurada)',
+    cob2: 'Incapacidad total y permanente (100% suma asegurada)',
+    cob3: 'Auxilio funerario inmediato ($5.000.000)',
+    vigenciaOferta: 'Oferta válida por 15 días',
+    irAEmision: 'Proceder a emitir póliza',
+    
+    // Variante Perfil Parcial
+    avisoDegradado: 'Aviso de servicio: La cotización se calculó con el historial más reciente disponible para agilizar su atención sin tiempos de espera. El precio definitivo se confirma con la emisión de la póliza.',
+    perfilParcialChip: 'Perfil disponible',
+    reintentarOpenFinance: 'Actualizar con datos en vivo',
+    impactoPrecio: 'Comparativo de precio',
+    conPerfilCompleto: 'Con información en tiempo real',
+    conPerfilParcial: 'Con información disponible (+4%)',
+    antiguedadPerfil: 'Última actualización: hace 3 días',
+    
+    // Paso 4: Emisión
+    p4Titulo: 'Emisión, pago y confirmación',
+    p4Subtitulo: 'Formalización de la póliza con confirmación de pago y entrega digital.',
+    pasosEmision: 'Progreso de la emisión',
+    pasoCobro: 'Cobro de la prima',
+    pasoFirma: 'Firma electrónica de condiciones',
+    pasoPoliza: 'Generación digital de la póliza',
+    pasoEnvio: 'Envío a la billetera móvil del cliente',
+    completado: 'Completado',
+    pendiente: 'Pendiente',
+    resumenCompra: 'Resumen de la póliza',
+    productoSeguro: 'Producto',
+    vidaHipotecario: 'Vida Hipotecario',
+    sumaAsegurada: 'Suma asegurada',
+    metodoPago: 'Medio de pago',
+    tarjeta: 'Tarjeta crédito terminada en •••• 4417',
+    debitoCuenta: 'Débito automático cuenta de ahorros',
+    totalPagar: 'Total primer pago',
+    referenciaPago: 'Comprobante de transacción',
+    seguridadAviso: 'Transacción protegida con certificación bancaria. Se genera un único comprobante oficial.',
+    pagarYEmitir: 'Pagar prima y emitir póliza',
+    polizaEmitidaExito: '¡Póliza emitida y activada con éxito!',
+    polizaNumGenerada: 'Número de póliza generado',
+    verEnGestion: 'Ver en gestión de pólizas',
+    
+    // Rechazo (Variante)
+    rechazoTitulo: 'Suscripción automática requiere revisión',
+    rechazoMotivo: 'El monto solicitado supera el cupo de aprobación directa para este perfil.',
+    solicitarRevision: 'Solicitar revisión por suscriptor',
+    solicitudEnviada: 'Solicitud de revisión radicada con éxito (Ticket #REV-9912).',
+    
+    // Pestaña Gestión
+    gTitulo: 'Gestión y consulta de pólizas',
+    gSubtitulo: 'Búsqueda, auditoría de pólizas y seguimiento de siniestros.',
+    buscarPlaceholder: 'Buscar por cédula, nombre o número de póliza...',
+    filtroEstado: 'Estado',
+    filtroTodos: 'Todos los estados',
+    vigente: 'Vigente',
+    pendienteEstado: 'Pendiente',
+    rechazada: 'Rechazada',
+    colPoliza: 'Póliza',
+    colCliente: 'Cliente',
+    colRamo: 'Ramo',
+    colInicio: 'Fecha inicio',
+    colPrima: 'Prima mensual',
+    colEstado: 'Estado',
+    detallePoliza: 'Detalle de póliza seleccionada',
+    tabCoberturas: 'Coberturas contratadas',
+    tabSiniestros: 'Siniestros asociados',
+    sinSiniestros: 'No hay siniestros reportados para esta póliza.',
+    siniestroItem: 'Siniestro',
+    fechaReporte: 'Fecha de reporte',
+    estadoSiniestro: 'Estado actual',
+    
+    // Pestaña Socios (Banco Aliado)
+    sTitulo: 'Canal Banco Aliado · Crédito Hipotecario',
+    sSubtitulo: 'Simulación de lo que ve el cliente en la banca en línea al tramitar su crédito.',
+    simulacionBanco: 'Banco Aliado · Solicitud de Crédito en Línea',
+    bancoTexto: 'El cliente del banco revisa su crédito hipotecario y puede incluir su seguro de vida en el mismo trámite.',
+    creditoMonto: 'Monto del crédito aprobado',
+    cuotaCredito: 'Cuota mensual estimada',
+    agregarSeguro: 'Añadir seguro a mi crédito',
+    masTarde: 'Ahora no',
+    ofertaAceptadaExito: '✓ Seguro Solventa añadido exitosamente a su crédito con Banco Aliado.',
+    ofertaDisponible: 'Oferta disponible',
+    ofertaNoDisponible: 'Oferta no disponible en este momento',
+    ofertaNoDisponibleTexto: 'En este momento no pudimos cargar la oferta de seguro. Podrá solicitarla más adelante desde su crédito.',
+    tiempoResp: 'Tiempo de respuesta del servicio',
+  },
+  en: {
+    producto: 'Solventa',
+    lemaHeader: 'Digital Insurer · Commercial Portal',
+    asesorRol: 'Commercial Advisor',
+    analistaRol: 'Operations Analyst',
+    socioRol: 'Banco Aliado S.A.',
+    idioma: 'Language',
+    region: 'Region',
+    temaOscuro: 'Dark mode',
+    temaClaro: 'Light mode',
+    cerrarSesion: 'Sign out',
+    
+    // Authentication (W1)
+    loginTitulo: 'Digital underwriting platform',
+    loginLema: 'Quote, underwrite and issue policies in seconds, with profiling on Open Finance.',
+    loginP1: 'Instant personalized risk assessment',
+    loginP2: 'Seamless digital policy issuance',
+    loginP3: 'Full auditability and transaction security',
+    loginFormTitulo: 'Advisor access',
+    loginFormDesc: 'Access the commercial management portal.',
+    usuarioCorp: 'Corporate email',
+    clave: 'Password',
+    olvideClave: 'Forgot your password?',
+    btnEntrar: 'Enter',
+    recuperarClaveMsg: 'A password recovery link has been sent to your corporate email.',
+    demoHintAsesor: 'Demo: Click to sign in as Commercial Advisor',
+    
+    // Nav
+    navCotizador: 'Quoting & Issuance',
+    navGestion: 'Policy Management',
+    navSocios: 'Banco Aliado Channel',
+    
+    // Stepper
+    paso1: 'Identification',
+    paso2: 'Consent',
+    paso3: 'Quote',
+    paso4: 'Issuance',
+    
+    // Step 1
+    p1Titulo: 'Customer and loan identification',
+    p1Subtitulo: 'Enter applicant personal information and loan conditions.',
+    seccionCliente: 'Customer details',
+    seccionCredito: 'Mortgage loan conditions',
+    tipoDocumento: 'Document type',
+    cedula: 'National ID',
+    documento: 'ID number',
+    nombre: 'Full name',
+    edad: 'Age',
+    telefono: 'Mobile phone',
+    correo: 'E-mail address',
+    entidad: 'Originating financial institution',
+    monto: 'Loan amount',
+    plazo: 'Term (months)',
+    continuarConsentimiento: 'Continue to consent',
+    
+    // Step 2
+    p2Titulo: 'Customer informed consent',
+    p2Subtitulo: 'Explicit customer authorization before querying financial databases.',
+    datosConsultados: 'Data sources queried',
+    fuenteOF: 'Financial institutions',
+    detalleOF: 'Payment history, debt balance and income stability.',
+    fuenteOD: 'Public records',
+    detalleOD: 'Sociodemographic information and property details.',
+    fuenteKYC: 'Identity verification',
+    detalleKYC: 'Official identity check and background screening.',
+    autorizaCliente: 'Customer authorization',
+    autorizaTexto: 'The applicant authorizes Solventa to access financial records solely to compute insurance risk and premium.',
+    marcarConsentimiento: 'Customer grants informed consent',
+    verificacionOtp: 'SMS Verification code (Demo)',
+    otpEnviado: 'Code sent to customer phone',
+    ingreseOtp: '6-digit code received',
+    simularOtp: 'Autofill demo SMS',
+    esperandoCliente: 'Waiting for confirmation',
+    autorizadoOk: 'Authorization confirmed',
+    cotizarAhora: 'Calculate quote',
+    baseLegal: 'Data processing complies with applicable privacy regulations.',
+    
+    // Step 3
+    p3Titulo: 'Tailored quotation result',
+    p3Subtitulo: 'Clear and explainable pricing computed in real time.',
+    primaMensual: 'Monthly premium',
+    calculadaEn: 'Calculated instantly',
+    origenCompleto: 'Verified online profile',
+    perfilCompletoChip: 'Verified profile',
+    ahorro: 'Savings from profile',
+    desgloseTitulo: 'Transparent price breakdown',
+    tarifaBase: 'Actuarial base rate',
+    ajusteRiesgo: 'Payment history adjustment',
+    ajusteEdad: 'Age adjustment',
+    impuestos: 'Statutory taxes',
+    resumenRiesgo: 'Customer risk assessment',
+    nivelRiesgo: 'Risk level',
+    nivelBajo: 'Low (Outstanding payment track record)',
+    nivelMedio: 'Medium (Balanced capacity)',
+    factoresPrecio: 'Factors underpinning this price',
+    factor1: 'On-time payment history for the past 36 months',
+    factor2: 'Optimal debt capacity for requested loan amount',
+    factor3: 'Zero delinquency reports in credit records',
+    coberturasIncluidas: 'Included coverages',
+    cob1: 'Death from any cause (100% insured sum)',
+    cob2: 'Total and permanent disability (100% insured sum)',
+    cob3: 'Immediate funeral assistance ($5,000,000 COP eq.)',
+    vigenciaOferta: 'Binding offer valid for 15 days',
+    irAEmision: 'Proceed to policy issuance',
+    
+    // Degraded Mode
+    avisoDegradado: 'Service notice: This quote was computed with the latest verified profile available to avoid waiting times. Final price is confirmed upon issuance.',
+    perfilParcialChip: 'Available profile',
+    reintentarOpenFinance: 'Refresh with live data',
+    impactoPrecio: 'Price comparison',
+    conPerfilCompleto: 'With real-time live data',
+    conPerfilParcial: 'With available profile (+4%)',
+    antiguedadPerfil: 'Last updated: 3 days ago',
+    
+    // Step 4
+    p4Titulo: 'Issuance, payment and confirmation',
+    p4Subtitulo: 'Policy formalization with payment confirmation and digital dispatch.',
+    pasosEmision: 'Transaction pipeline',
+    pasoCobro: 'Premium payment',
+    pasoFirma: 'Electronic agreement signature',
+    pasoPoliza: 'Digital policy generation',
+    pasoEnvio: 'Dispatch certificate to mobile wallet',
+    completado: 'Completed',
+    pendiente: 'Pending',
+    resumenCompra: 'Policy summary',
+    productoSeguro: 'Product',
+    vidaHipotecario: 'Mortgage Life',
+    sumaAsegurada: 'Sum insured',
+    metodoPago: 'Payment method',
+    tarjeta: 'Credit card ending in •••• 4417',
+    debitoCuenta: 'Direct bank account debit',
+    totalPagar: 'Total first premium',
+    referenciaPago: 'Payment receipt reference',
+    seguridadAviso: 'Protected transaction with banking-grade security. Official receipt issued.',
+    pagarYEmitir: 'Pay premium and issue policy',
+    polizaEmitidaExito: 'Policy successfully issued and active!',
+    polizaNumGenerada: 'Generated policy number',
+    verEnGestion: 'View in Policy Management',
+    
+    // Rejection
+    rechazoTitulo: 'Automated underwriting review required',
+    rechazoMotivo: 'Requested amount exceeds automated limit for this profile.',
+    solicitarRevision: 'Request manual underwriter review',
+    solicitudEnviada: 'Review request filed successfully (Ticket #REV-9912).',
+    
+    // Management Tab
+    gTitulo: 'Policy management and lookup',
+    gSubtitulo: 'Lookup, policy records, and claims tracking.',
+    buscarPlaceholder: 'Search by ID number, name, or policy ID...',
+    filtroEstado: 'Status',
+    filtroTodos: 'All statuses',
+    vigente: 'Active',
+    pendienteEstado: 'Pending',
+    rechazada: 'Rejected',
+    colPoliza: 'Policy',
+    colCliente: 'Customer',
+    colRamo: 'Line',
+    colInicio: 'Start date',
+    colPrima: 'Monthly premium',
+    colEstado: 'Status',
+    detallePoliza: 'Selected policy details',
+    tabCoberturas: 'Contracted coverages',
+    tabSiniestros: 'Associated claims',
+    sinSiniestros: 'No claims recorded for this policy.',
+    siniestroItem: 'Claim',
+    fechaReporte: 'Filed on',
+    estadoSiniestro: 'Current status',
+    
+    // Partners Tab
+    sTitulo: 'Banco Aliado Channel · Mortgage Loan',
+    sSubtitulo: 'Simulation of what the banking customer sees when applying online.',
+    simulacionBanco: 'Bank Portal: Approved Loan Application',
+    bancoTexto: 'The customer reviews their mortgage conditions and can include Solventa life insurance in the same flow.',
+    creditoMonto: 'Approved loan amount',
+    cuotaCredito: 'Estimated monthly installment',
+    agregarSeguro: 'Add insurance to loan',
+    masTarde: 'Not right now',
+    ofertaAceptadaExito: '✓ Solventa insurance successfully added to your loan with Banco Aliado.',
+    ofertaDisponible: 'Offer available',
+    ofertaNoDisponible: 'Offer temporarily unavailable',
+    ofertaNoDisponibleTexto: 'We could not load the insurance offer at this moment. You may request it later from online banking.',
+    tiempoResp: 'Service response time',
+  },
+};
+
+const t = (clave, idioma = 'es') => TEXTOS[idioma]?.[clave] ?? TEXTOS['es']?.[clave] ?? clave;
+
+const formatoDinero = (valor, reg = 'CO') => {
+  const r = REGIONES[reg] || REGIONES.CO;
+  return new Intl.NumberFormat(r.locale, {
+    style: 'currency',
+    currency: r.moneda,
+    maximumFractionDigits: 0,
+  }).format(valor);
+};
+
+const formatoFecha = (iso, reg = 'CO', estilo = 'medium') => {
+  const r = REGIONES[reg] || REGIONES.CO;
+  try {
+    return new Intl.DateTimeFormat(r.locale, {
+      dateStyle: estilo,
+      timeStyle: 'short',
+    }).format(new Date(iso));
+  } catch (e) {
+    return iso;
+  }
+};
+
+if (typeof window !== 'undefined') {
+  window.REGIONES = REGIONES;
+  window.TEXTOS = TEXTOS;
+  window.t = t;
+  window.formatoDinero = formatoDinero;
+  window.formatoFecha = formatoFecha;
+}
