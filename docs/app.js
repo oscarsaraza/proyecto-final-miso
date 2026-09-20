@@ -7,6 +7,7 @@ const estado = {
   pantalla: Math.max(0, Number(parametros.get('pantalla') || 0)),
   tema: parametros.get('tema') === 'oscuro' ? 'oscuro' : 'claro',
   dispositivo: parametros.get('dispositivo') === 'android' ? 'android' : 'ios',
+  rolWeb: 'asesor',
 };
 
 /* Medidas reales de los frames. Escritorio 16:10; iPhone 14/15 19,5:9; Android 20:9. */
@@ -47,7 +48,19 @@ function pasos(activo) {
 }
 
 const PANTALLAS_WEB = [
-  { id: 'w1', grupo: 'gAcceso', hu: [], completa: true, cuerpo: () => `
+  { id: 'w1', grupo: 'gAcceso', hu: [], completa: true, cuerpo: () => {
+    const rol = estado.rolWeb || 'asesor';
+    const emailPorRol = {
+      asesor: 'asesor@solventa.co',
+      operaciones: 'operaciones@solventa.co',
+      socio: 'distribucion@bancoaliado.com',
+    };
+    const irPorRol = {
+      asesor: 'w2',
+      operaciones: 'w7',
+      socio: 'w8',
+    };
+    return `
     <div class="acceso-partido">
       <div class="acceso-marca">
         <div>
@@ -56,13 +69,29 @@ const PANTALLAS_WEB = [
         </div>
       </div>
       <div class="acceso-formulario">
-        <h4 style="font-size:var(--t-lg);margin-bottom:var(--e5)">${t('w1t')}</h4>
-        ${campo('usuario', 'f-usuario', 'asesor@solventa.co', 'email')}
+        <h4 style="font-size:var(--t-lg);margin-bottom:var(--e2)">${t('w1t')}</h4>
+        <p class="pista" style="margin-bottom:var(--e4)">${t('w1d')}</p>
+        <div class="campo">
+          <label>${t('tipoUsuario')}</label>
+          <div style="display:flex;gap:var(--e2);margin-bottom:var(--e3);">
+            <button type="button" class="boton ${rol === 'asesor' ? 'primario' : ''}" style="flex:1;font-size:var(--t-xs);padding:var(--e2);" data-rol-doc="asesor">
+              ${ICONOS.usuario(14)} ${t('asesorRol')}
+            </button>
+            <button type="button" class="boton ${rol === 'operaciones' ? 'primario' : ''}" style="flex:1;font-size:var(--t-xs);padding:var(--e2);" data-rol-doc="operaciones">
+              ${ICONOS.buscar(14)} ${t('analistaRol')}
+            </button>
+            <button type="button" class="boton ${rol === 'socio' ? 'primario' : ''}" style="flex:1;font-size:var(--t-xs);padding:var(--e2);" data-rol-doc="socio">
+              ${ICONOS.enchufe(14)} ${t('socioRol')}
+            </button>
+          </div>
+        </div>
+        ${campo('usuario', 'f-usuario', emailPorRol[rol], 'email')}
         ${campo('clave', 'f-clave', '••••••••', 'password')}
         <a href="#" style="color:var(--primario);font-size:var(--t-sm)">${t('olvide')}</a>
-        <div class="acciones">${boton('entrar', { icono: 'llave', ir: 'w2' })}</div>
+        <div class="acciones">${boton('entrar', { icono: 'llave', ir: irPorRol[rol] })}</div>
       </div>
-    </div>` },
+    </div>`;
+  } },
 
   { id: 'w2', grupo: 'gCotizacion', hu: ['HU-WEB-02'], titulo: 'w2tNuevo', desc: 'w2dNuevo', cuerpo: () => `
     ${pasos(0)}
@@ -662,6 +691,8 @@ window.addEventListener('resize', () => {
 });
 
 document.addEventListener('click', (e) => {
+  const rolDoc = e.target.closest('[data-rol-doc]');
+  if (rolDoc) { estado.rolWeb = rolDoc.dataset.rolDoc; pintar(); return; }
   const ir = e.target.closest('[data-ir]');
   if (ir) { navegarA(ir.dataset.ir); return; }
   const canal = e.target.closest('#tab-web, #tab-movil');

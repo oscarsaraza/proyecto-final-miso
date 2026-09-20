@@ -7,9 +7,50 @@
 (function () {
   const urlParams = new URLSearchParams(window.location.search);
 
+  // Catálogo de tipos de usuario / perfiles con discriminación de casos de uso
+  const PERFILES_USUARIOS = {
+    asesor: {
+      id: 'asesor',
+      nombre: 'María F. Ruiz',
+      rolTexto: 'asesorRol',
+      correo: 'asesor@solventa.co',
+      avatar: 'MR',
+      pestanasPermitidas: ['cotizador'],
+      pestanaInicial: 'cotizador',
+      huBadge: 'HU-WEB-01 a 07',
+      descTexto: 'asesorRolDesc',
+      icono: 'usuario',
+    },
+    operaciones: {
+      id: 'operaciones',
+      nombre: 'Carlos E. Mendoza',
+      rolTexto: 'analistaRol',
+      correo: 'operaciones@solventa.co',
+      avatar: 'CM',
+      pestanasPermitidas: ['gestion'],
+      pestanaInicial: 'gestion',
+      huBadge: 'HU-WEB-08 · 09',
+      descTexto: 'analistaRolDesc',
+      icono: 'buscar',
+    },
+    socio: {
+      id: 'socio',
+      nombre: 'Banco Aliado S.A.',
+      rolTexto: 'socioRol',
+      correo: 'distribucion@bancoaliado.com',
+      avatar: 'BA',
+      pestanasPermitidas: ['socios'],
+      pestanaInicial: 'socios',
+      huBadge: 'HU-WEB-10 a 12',
+      descTexto: 'socioRolDesc',
+      icono: 'enchufe',
+    },
+  };
+
   const state = {
     // Autenticación simulada: inicia en false a menos que ya se haya iniciado sesión en la pestaña
     sesionIniciada: window.sessionStorage.getItem('solventa_web_auth') === 'true',
+    rolUsuario: window.sessionStorage.getItem('solventa_web_rol') || 'asesor',
     pestana: urlParams.get('pestana') || 'cotizador',
     paso: Math.min(4, Math.max(1, parseInt(urlParams.get('paso') || '1', 10))),
     idioma: ['es', 'en'].includes(urlParams.get('idioma')) ? urlParams.get('idioma') : 'es',
@@ -53,10 +94,14 @@
       tabDetalle: 'coberturas',
     },
 
-    // Canal Banco Aliado
+    // Canal Banco Aliado (Consola de Socio)
     socio: {
       ofertaDisponible: true,
       ofertaAceptada: false,
+      simularCuotaExcedida: false,
+      idempotencyKey: 'IDEM-COT-2026-992140',
+      reintentoEjecutado: false,
+      tiempoReintento: 45,
     },
   };
 
@@ -140,21 +185,45 @@
       btnTema.setAttribute('aria-label', state.tema === 'oscuro' ? tr('temaClaro') : tr('temaOscuro'));
     }
 
+    const perfil = PERFILES_USUARIOS[state.rolUsuario] || PERFILES_USUARIOS.asesor;
+
+    // Asegurarse de que la pestaña actual esté autorizada para el rol activo
+    if (!perfil.pestanasPermitidas.includes(state.pestana)) {
+      state.pestana = perfil.pestanaInicial;
+    }
+
     if (navTabs) {
       navTabs.style.display = state.sesionIniciada ? 'flex' : 'none';
       document.querySelectorAll('.tab-btn').forEach((btn) => {
         const p = btn.dataset.pestana;
+        const permitida = perfil.pestanasPermitidas.includes(p);
+        btn.style.display = permitida ? 'inline-flex' : 'none';
         btn.classList.toggle('activo', p === state.pestana);
       });
     }
 
     if (perfilUsuario) {
       perfilUsuario.style.display = state.sesionIniciada ? 'flex' : 'none';
+      perfilUsuario.innerHTML = `
+        <div style="text-align:right;">
+          <strong style="display:block;line-height:1.2;">${perfil.nombre}</strong>
+          <span style="color:var(--texto-sec);font-size:11px;">${tr(perfil.rolTexto)}</span>
+          <span class="chip-perfil-hu">${perfil.huBadge}</span>
+        </div>
+        <div class="avatar" title="${perfil.nombre}">${perfil.avatar}</div>
+        <button type="button" class="btn-switch-rol" id="btnCambiarRolWeb" title="${tr('cambiarRol')}">
+          ${window.ICONOS.refrescar ? window.ICONOS.refrescar(12) : ''}
+          <span>${tr('cambiarRol')}</span>
+        </button>
+        <button type="button" class="btn-logout" id="btnCerrarSesionWeb" title="${tr('cerrarSesion')}">${tr('cerrarSesion')}</button>
+      `;
     }
   }
 
-  // --- Vista W1: Autenticación Simulada del Asesor (Fiel al Mockup) ---
+  // --- Vista W1: Autenticación Simulada con Selección de Tipo de Usuario ---
   function renderLogin() {
+    const perfilActual = PERFILES_USUARIOS[state.rolUsuario] || PERFILES_USUARIOS.asesor;
+
     return `
       <div class="login-split">
         <div class="login-panel-marca">
@@ -166,10 +235,33 @@
         <div class="login-panel-form">
           <div class="login-form-box">
             <h2 class="login-form-titulo">${tr('loginFormTitulo')}</h2>
+            <p style="font-size:0.875rem;color:var(--texto-sec);margin:-1.25rem 0 1.5rem;">${tr('loginFormDesc')}</p>
             <form id="formLoginWeb" class="login-formulario-body" onsubmit="return false;">
               <div class="login-campo">
+                <label>${tr('tipoUsuario')}</label>
+                <div class="roles-selector-grid" role="radiogroup" aria-label="${tr('tipoUsuario')}">
+                  ${Object.values(PERFILES_USUARIOS)
+                    .map((p) => {
+                      const activo = state.rolUsuario === p.id;
+                      return `
+                    <button type="button" class="rol-card-btn ${activo ? 'activo' : ''}" data-rol="${p.id}" role="radio" aria-checked="${activo}">
+                      <span class="rol-icono-wrap">${window.ICONOS[p.icono](18)}</span>
+                      <div class="rol-info">
+                        <div class="rol-info-cabecera">
+                          <span class="rol-nombre">${tr(p.rolTexto)}</span>
+                          <span class="rol-badge-hu">${p.huBadge}</span>
+                        </div>
+                        <p class="rol-desc">${tr(p.descTexto)}</p>
+                      </div>
+                    </button>
+                  `;
+                    })
+                    .join('')}
+                </div>
+              </div>
+              <div class="login-campo">
                 <label for="loginUser">${tr('usuarioCorp')}</label>
-                <input id="loginUser" type="email" value="asesor@solventa.co" required autocomplete="username">
+                <input id="loginUser" type="email" value="${perfilActual.correo}" required autocomplete="username">
               </div>
               <div class="login-campo">
                 <label for="loginPass">${tr('clave')}</label>
@@ -182,6 +274,12 @@
                 ${window.ICONOS.llave(16)}
                 <span>${tr('btnEntrar')}</span>
               </button>
+              <div class="login-aviso-movil">
+                <div style="display:flex;align-items:flex-start;gap:8px;">
+                  <span style="flex-shrink:0;color:#0284c7;margin-top:1px;">${window.ICONOS.movil(16)}</span>
+                  <span>${tr('clienteAvisoMovil')}</span>
+                </div>
+              </div>
             </form>
           </div>
         </div>
@@ -221,6 +319,11 @@
   // --- Vista Paso 1: Identificación ---
   function renderPaso1() {
     return `
+      <div class="banner-rol-info">
+        <span>${window.ICONOS.usuario(16)} <strong>${tr('asesorRol')}</strong> · ${tr('asesorRolDesc')}</span>
+        <span class="chip-perfil-hu">HU-WEB-01 a 07</span>
+      </div>
+
       <div class="vista-header">
         <h2>${tr('p1Titulo')}</h2>
         <p>${tr('p1Subtitulo')}</p>
@@ -692,6 +795,11 @@
     const siniestrosDePoliza = polizaActual ? window.SolventaDB.getSiniestrosPorPoliza(polizaActual.id) : [];
 
     return `
+      <div class="banner-rol-info">
+        <span>${window.ICONOS.buscar(16)} <strong>${tr('analistaRol')}</strong> · ${tr('analistaRolDesc')}</span>
+        <span class="chip-perfil-hu">HU-WEB-08 · HU-WEB-09</span>
+      </div>
+
       <div class="vista-header">
         <h2>${tr('gTitulo')}</h2>
         <p>${tr('gSubtitulo')}</p>
@@ -842,11 +950,16 @@
     `;
   }
 
-  // --- Vista Canal Banco Aliado (Experiencia de Usuario del Banco) ---
+  // --- Vista Canal Banco Aliado (Consola de Socio y Simulación de Integración) ---
   function renderSocios() {
     const c = calcularCotizacion();
 
     return `
+      <div class="banner-rol-info">
+        <span>${window.ICONOS.enchufe(16)} <strong>${tr('socioRol')}</strong> · ${tr('socioRolDesc')}</span>
+        <span class="chip-perfil-hu">HU-WEB-10 · HU-WEB-11 · HU-WEB-12</span>
+      </div>
+
       <div class="vista-header">
         <h2>${tr('sTitulo')}</h2>
         <p>${tr('sSubtitulo')}</p>
@@ -881,7 +994,7 @@
                 </div>
               </div>
 
-              <!-- Oferta del seguro Solventa embebida -->
+              <!-- Oferta del seguro Solventa embebida (HU-WEB-10) -->
               ${
                 state.socio.ofertaDisponible
                   ? `
@@ -928,6 +1041,73 @@
         </div>
 
         <aside class="pila">
+          <!-- Consola de Integración API del Socio (HU-WEB-10, HU-WEB-11, HU-WEB-12) -->
+          <section class="panel">
+            <header>
+              <h4>${window.ICONOS.enchufe(18)} Integración API B2B</h4>
+              <span class="chip ok">Canal Socio</span>
+            </header>
+            <div class="contenido pila">
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                  <span style="font-size:11px;color:var(--texto-sec);text-transform:uppercase;font-weight:700;">HU-WEB-10 · Credenciales del Socio</span>
+                  <span class="chip ok" style="font-size:10px;">Autenticado</span>
+                </div>
+                <div style="font-size:11px;font-family:monospace;background:var(--superficie-alt);padding:6px 10px;border-radius:4px;border:1px solid var(--borde);line-height:1.4;">
+                  Client-Id: partner_banco_aliado_01<br>
+                  Authorization: Bearer sec_tok_live_79a2...
+                </div>
+              </div>
+
+              <div style="border-top:1px solid var(--borde);padding-top:var(--e3);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                  <span style="font-size:11px;color:var(--texto-sec);text-transform:uppercase;font-weight:700;">HU-WEB-11 · Idempotencia en Reintentos</span>
+                </div>
+                <p style="font-size:var(--t-xs);color:var(--texto-sec);margin:0 0 6px;">
+                  Reintente solicitudes con clave idempotente sin duplicar registros:
+                </p>
+                <div style="font-size:11px;font-family:monospace;margin-bottom:6px;background:var(--superficie-alt);padding:4px 8px;border-radius:4px;border:1px solid var(--borde);">
+                  Idempotency-Key: ${state.socio.idempotencyKey}
+                </div>
+                <button type="button" class="btn btn-secundario btn-ancho" id="btnReintentarIdem" style="min-height:34px;font-size:12px;">
+                  ${window.ICONOS.refrescar ? window.ICONOS.refrescar(14) : ''} Reintentar cotización (misma clave)
+                </button>
+                ${
+                  state.socio.reintentoEjecutado
+                    ? `<div class="chip ok" style="margin-top:6px;display:block;padding:6px 10px;font-size:11px;line-height:1.4;">
+                        ✓ HTTP 200 OK · Resultado retransmitido sin duplicar registros en base de datos.
+                      </div>`
+                    : ''
+                }
+              </div>
+
+              <div style="border-top:1px solid var(--borde);padding-top:var(--e3);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                  <span style="font-size:11px;color:var(--texto-sec);text-transform:uppercase;font-weight:700;">HU-WEB-12 · Control de Cuota / Rate Limiting</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 8px;">
+                  <span style="font-size:var(--t-xs);color:var(--texto-sec);">Consumo actual:</span>
+                  <span class="chip ${state.socio.simularCuotaExcedida ? 'error' : 'ok'}">
+                    ${state.socio.simularCuotaExcedida ? '501 / 500 req/min (Excedida)' : '482 / 500 req/min (Normal)'}
+                  </span>
+                </div>
+                <button type="button" class="btn ${state.socio.simularCuotaExcedida ? 'btn-primario' : 'btn-secundario'} btn-ancho" id="btnToggleCuota" style="min-height:34px;font-size:12px;">
+                  ${state.socio.simularCuotaExcedida ? 'Restablecer cuota normal' : 'Simular exceso de cuota (HTTP 429)'}
+                </button>
+                ${
+                  state.socio.simularCuotaExcedida
+                    ? `<div class="aviso error" style="margin-top:8px;padding:8px 10px;font-size:11px;line-height:1.4;">
+                        <strong>HTTP 429 Too Many Requests</strong>
+                        <p style="margin:2px 0;">Encabezado recibido: <code>Retry-After: 45s</code>.</p>
+                        <span style="font-size:10px;color:var(--error);display:block;margin-top:2px;">Reintente a partir de: 15:16:30 COT (45 s) sin perder contexto.</span>
+                      </div>`
+                    : ''
+                }
+              </div>
+            </div>
+          </section>
+
+          <!-- Escenario de Disponibilidad de Oferta -->
           <section class="panel">
             <header>
               <h4>Simulación de Escenarios</h4>
@@ -991,14 +1171,37 @@
 
   // --- Enlace de Eventos Interactivos ---
   function enlazarEventos() {
+    // Selección de rol en Login
+    document.querySelectorAll('.rol-card-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const rol = btn.dataset.rol;
+        state.rolUsuario = rol;
+        const perfil = PERFILES_USUARIOS[rol];
+        const inpUser = document.getElementById('loginUser');
+        if (inpUser && perfil) inpUser.value = perfil.correo;
+        document.querySelectorAll('.rol-card-btn').forEach((b) => {
+          b.classList.toggle('activo', b.dataset.rol === rol);
+          b.setAttribute('aria-checked', b.dataset.rol === rol);
+        });
+      });
+    });
+
+    function ejecutarLogin() {
+      const perfil = PERFILES_USUARIOS[state.rolUsuario] || PERFILES_USUARIOS.asesor;
+      state.sesionIniciada = true;
+      window.sessionStorage.setItem('solventa_web_auth', 'true');
+      window.sessionStorage.setItem('solventa_web_rol', state.rolUsuario);
+      state.pestana = perfil.pestanaInicial;
+      if (state.rolUsuario === 'asesor') state.paso = 1;
+      render();
+    }
+
     // Evento de Login
     const formLoginWeb = document.getElementById('formLoginWeb');
     if (formLoginWeb) {
       formLoginWeb.addEventListener('submit', (e) => {
         e.preventDefault();
-        state.sesionIniciada = true;
-        window.sessionStorage.setItem('solventa_web_auth', 'true');
-        render();
+        ejecutarLogin();
       });
     }
 
@@ -1006,9 +1209,7 @@
     if (btnIniciarSesionWeb) {
       btnIniciarSesionWeb.addEventListener('click', (e) => {
         e.preventDefault();
-        state.sesionIniciada = true;
-        window.sessionStorage.setItem('solventa_web_auth', 'true');
-        render();
+        ejecutarLogin();
       });
     }
 
@@ -1017,6 +1218,21 @@
       linkOlvideClave.addEventListener('click', (e) => {
         e.preventDefault();
         alert(tr('recuperarClaveMsg'));
+      });
+    }
+
+    // Evento de Cambio rápido de rol en cabecera
+    const btnCambiarRolWeb = document.getElementById('btnCambiarRolWeb');
+    if (btnCambiarRolWeb) {
+      btnCambiarRolWeb.addEventListener('click', () => {
+        const roles = ['asesor', 'operaciones', 'socio'];
+        const idx = roles.indexOf(state.rolUsuario);
+        const nuevoRol = roles[(idx + 1) % roles.length];
+        state.rolUsuario = nuevoRol;
+        window.sessionStorage.setItem('solventa_web_rol', nuevoRol);
+        const perfil = PERFILES_USUARIOS[nuevoRol];
+        state.pestana = perfil.pestanaInicial;
+        render();
       });
     }
 
@@ -1153,6 +1369,8 @@
     const btnVerEnGestion = document.getElementById('btnVerEnGestion');
     if (btnVerEnGestion) {
       btnVerEnGestion.addEventListener('click', () => {
+        state.rolUsuario = 'operaciones';
+        window.sessionStorage.setItem('solventa_web_rol', 'operaciones');
         state.pestana = 'gestion';
         render();
       });
@@ -1240,6 +1458,22 @@
     if (btnOfertaInactiva) {
       btnOfertaInactiva.addEventListener('click', () => {
         state.socio.ofertaDisponible = false;
+        render();
+      });
+    }
+
+    const btnReintentarIdem = document.getElementById('btnReintentarIdem');
+    if (btnReintentarIdem) {
+      btnReintentarIdem.addEventListener('click', () => {
+        state.socio.reintentoEjecutado = true;
+        render();
+      });
+    }
+
+    const btnToggleCuota = document.getElementById('btnToggleCuota');
+    if (btnToggleCuota) {
+      btnToggleCuota.addEventListener('click', () => {
+        state.socio.simularCuotaExcedida = !state.socio.simularCuotaExcedida;
         render();
       });
     }
