@@ -14,7 +14,8 @@ case "$VERSION" in
 esac
 
 docker compose build --quiet
-mkdir -p resultados && chmod 777 resultados
+DIR_SALIDA="${DIR_SALIDA:-resultados}"
+mkdir -p "$DIR_SALIDA" && chmod 777 "$DIR_SALIDA"
 
 echo "== Corrida $CORRIDA con la configuración $VERSION =="
 docker compose up -d --force-recreate
@@ -30,10 +31,11 @@ sleep 8
 ) &
 guion=$!
 
-docker run --rm -i --network "$RED" -v "$PWD/k6:/scripts" -v "$PWD/resultados:/salida" \
+docker run --rm -i --network "$RED" -v "$PWD/k6:/scripts" -v "$PWD/$DIR_SALIDA:/salida" \
   -e NOMBRE_SALIDA=$VERSION-corrida-$CORRIDA grafana/k6 run --quiet /scripts/carga.js
 
 wait $guion
-docker logs e3-nginx > "resultados/$VERSION-nginx-$CORRIDA.log" 2>&1 || true
+docker logs e3-nginx > "$DIR_SALIDA/$VERSION-nginx-$CORRIDA.log" 2>&1 || true
 docker compose down >/dev/null 2>&1
-echo "Corrida $CORRIDA lista"
+echo "Corrida $CORRIDA lista. Guardada en $DIR_SALIDA/"
+

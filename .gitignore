@@ -1,2 +1,22 @@
 __pycache__/
 *.pyc
+.DS_Store
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+!terraform.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# SSH efímero
+*.pem
+id_rsa_*
+experiments/cloud/evidencias/*
+experiments/e1-latencia/resultados/*
+experiments/e3-continuidad/resultados/*

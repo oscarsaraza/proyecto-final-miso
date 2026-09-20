@@ -1,0 +1,7 @@
+# Configuración de variables de Terraform para Experimentos Solventa en AWS
+aws_region    = "us-east-1"
+instance_type = "c6i.large"
+project_name  = "solventa-experimentos"
+
+# Se puede fijar la IP del operador o dejar 0.0.0.0/0
+# operator_cidr = "190.25.10.45/32"

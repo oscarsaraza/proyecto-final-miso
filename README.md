@@ -17,8 +17,10 @@ Los criterios de interpretación están en [`experiments/CRITERIOS.md`](experime
 | --- | --- | --- |
 | **E1** · Latencia con proveedor degradado | ASR-01 y ASR-02 (HA-01, HA-05) | `experiments/e1-latencia/run.sh` |
 | **E3** · Continuidad ante caída de réplica | ASR-04 (HA-09) | `experiments/e3-continuidad/run.sh <corrida>` |
+| **E1 + E3 en la Nube (AWS)** | Validación en cómputo dedicado (`c6i.large`) | `experiments/cloud/run-experiments.sh` |
 
-Requiere Docker y Docker Compose. El generador de carga (k6) se ejecuta como contenedor, no requiere instalación local.
+Requiere Docker y Docker Compose (o credenciales de AWS y Terraform para ejecución en la nube). El generador de carga (k6) se ejecuta como contenedor, no requiere instalación local.
+
 
 ## Prototipo
 
