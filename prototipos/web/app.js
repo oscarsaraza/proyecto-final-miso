@@ -17,7 +17,6 @@
       avatar: 'MR',
       pestanasPermitidas: ['cotizador'],
       pestanaInicial: 'cotizador',
-      huBadge: 'HU-WEB-01 a 07',
       descTexto: 'asesorRolDesc',
       icono: 'usuario',
     },
@@ -29,7 +28,6 @@
       avatar: 'CM',
       pestanasPermitidas: ['gestion'],
       pestanaInicial: 'gestion',
-      huBadge: 'HU-WEB-08 · 09',
       descTexto: 'analistaRolDesc',
       icono: 'buscar',
     },
@@ -41,7 +39,6 @@
       avatar: 'BA',
       pestanasPermitidas: ['socios'],
       pestanaInicial: 'socios',
-      huBadge: 'HU-WEB-10 a 12',
       descTexto: 'socioRolDesc',
       icono: 'enchufe',
     },
@@ -56,6 +53,7 @@
     idioma: ['es', 'en'].includes(urlParams.get('idioma')) ? urlParams.get('idioma') : 'es',
     region: ['CO', 'MX', 'CL', 'PE'].includes(urlParams.get('region')) ? urlParams.get('region') : 'CO',
     tema: urlParams.get('tema') === 'oscuro' ? 'oscuro' : 'claro',
+    exploradorAbierto: false,
 
     // Formulario de Cliente y Crédito (Paso 1)
     cliente: {
@@ -208,13 +206,8 @@
         <div style="text-align:right;">
           <strong style="display:block;line-height:1.2;">${perfil.nombre}</strong>
           <span style="color:var(--texto-sec);font-size:11px;">${tr(perfil.rolTexto)}</span>
-          <span class="chip-perfil-hu">${perfil.huBadge}</span>
         </div>
         <div class="avatar" title="${perfil.nombre}">${perfil.avatar}</div>
-        <button type="button" class="btn-switch-rol" id="btnCambiarRolWeb" title="${tr('cambiarRol')}">
-          ${window.ICONOS.refrescar ? window.ICONOS.refrescar(12) : ''}
-          <span>${tr('cambiarRol')}</span>
-        </button>
         <button type="button" class="btn-logout" id="btnCerrarSesionWeb" title="${tr('cerrarSesion')}">${tr('cerrarSesion')}</button>
       `;
     }
@@ -249,7 +242,6 @@
                       <div class="rol-info">
                         <div class="rol-info-cabecera">
                           <span class="rol-nombre">${tr(p.rolTexto)}</span>
-                          <span class="rol-badge-hu">${p.huBadge}</span>
                         </div>
                         <p class="rol-desc">${tr(p.descTexto)}</p>
                       </div>
@@ -319,11 +311,6 @@
   // --- Vista Paso 1: Identificación ---
   function renderPaso1() {
     return `
-      <div class="banner-rol-info">
-        <span>${window.ICONOS.usuario(16)} <strong>${tr('asesorRol')}</strong> · ${tr('asesorRolDesc')}</span>
-        <span class="chip-perfil-hu">HU-WEB-01 a 07</span>
-      </div>
-
       <div class="vista-header">
         <h2>${tr('p1Titulo')}</h2>
         <p>${tr('p1Subtitulo')}</p>
@@ -795,11 +782,6 @@
     const siniestrosDePoliza = polizaActual ? window.SolventaDB.getSiniestrosPorPoliza(polizaActual.id) : [];
 
     return `
-      <div class="banner-rol-info">
-        <span>${window.ICONOS.buscar(16)} <strong>${tr('analistaRol')}</strong> · ${tr('analistaRolDesc')}</span>
-        <span class="chip-perfil-hu">HU-WEB-08 · HU-WEB-09</span>
-      </div>
-
       <div class="vista-header">
         <h2>${tr('gTitulo')}</h2>
         <p>${tr('gSubtitulo')}</p>
@@ -950,188 +932,88 @@
     `;
   }
 
-  // --- Vista Canal Banco Aliado (Consola de Socio y Simulación de Integración) ---
+  // --- Vista Canal Banco Aliado (Banca en Línea del Socio Comercial) ---
   function renderSocios() {
     const c = calcularCotizacion();
 
     return `
-      <div class="banner-rol-info">
-        <span>${window.ICONOS.enchufe(16)} <strong>${tr('socioRol')}</strong> · ${tr('socioRolDesc')}</span>
-        <span class="chip-perfil-hu">HU-WEB-10 · HU-WEB-11 · HU-WEB-12</span>
-      </div>
-
       <div class="vista-header">
         <h2>${tr('sTitulo')}</h2>
         <p>${tr('sSubtitulo')}</p>
       </div>
 
-      <div class="dos-columnas">
-        <div class="pila">
-          <section class="panel">
-            <header>
-              <h4>${window.ICONOS.monitor(18)} ${tr('simulacionBanco')}</h4>
-              <span class="chip ok">Banco Aliado · Banca en Línea</span>
-            </header>
-            <div class="contenido">
-              <p style="color:var(--texto-sec);font-size:var(--t-sm);margin:0 0 var(--e4);">${tr('bancoTexto')}</p>
+      <div class="pila" style="max-width: 860px; margin: 0 auto;">
+        <section class="panel">
+          <header>
+            <h4>${window.ICONOS.monitor(18)} ${tr('simulacionBanco')}</h4>
+            <span class="chip ok">Banco Aliado · Banca en Línea</span>
+          </header>
+          <div class="contenido">
+            <p style="color:var(--texto-sec);font-size:var(--t-sm);margin:0 0 var(--e4);">${tr('bancoTexto')}</p>
 
-              <!-- Resumen del crédito en el banco -->
-              <div style="background:var(--superficie-alt);border:1px solid var(--borde);border-radius:var(--r-md);padding:var(--e4);margin-bottom:var(--e4);">
-                <h5 style="margin:0 0 var(--e3);font-size:var(--t-sm);text-transform:uppercase;color:var(--texto-sec);">Condiciones del Crédito Aprobado</h5>
-                <div class="tres-columnas">
-                  <div>
-                    <span style="font-size:11px;color:var(--texto-sec);">${tr('creditoMonto')}:</span>
-                    <strong style="display:block;font-size:var(--t-md);color:var(--primario);">${fmtMoneda(state.cliente.monto)}</strong>
-                  </div>
-                  <div>
-                    <span style="font-size:11px;color:var(--texto-sec);">${tr('plazo')}:</span>
-                    <strong style="display:block;font-size:var(--t-md);">${state.cliente.plazo} meses</strong>
-                  </div>
-                  <div>
-                    <span style="font-size:11px;color:var(--texto-sec);">${tr('cuotaCredito')}:</span>
-                    <strong style="display:block;font-size:var(--t-md);">${fmtMoneda(state.cliente.monto * 0.0096)}</strong>
-                  </div>
+            <!-- Resumen del crédito en el banco -->
+            <div style="background:var(--superficie-alt);border:1px solid var(--borde);border-radius:var(--r-md);padding:var(--e4);margin-bottom:var(--e4);">
+              <h5 style="margin:0 0 var(--e3);font-size:var(--t-sm);text-transform:uppercase;color:var(--texto-sec);">Condiciones del Crédito Aprobado</h5>
+              <div class="tres-columnas">
+                <div>
+                  <span style="font-size:11px;color:var(--texto-sec);">${tr('creditoMonto')}:</span>
+                  <strong style="display:block;font-size:var(--t-md);color:var(--primario);">${fmtMoneda(state.cliente.monto)}</strong>
+                </div>
+                <div>
+                  <span style="font-size:11px;color:var(--texto-sec);">${tr('plazo')}:</span>
+                  <strong style="display:block;font-size:var(--t-md);">${state.cliente.plazo} meses</strong>
+                </div>
+                <div>
+                  <span style="font-size:11px;color:var(--texto-sec);">${tr('cuotaCredito')}:</span>
+                  <strong style="display:block;font-size:var(--t-md);">${fmtMoneda(state.cliente.monto * 0.0096)}</strong>
                 </div>
               </div>
-
-              <!-- Oferta del seguro Solventa embebida (HU-WEB-10) -->
-              ${
-                state.socio.ofertaDisponible
-                  ? `
-                <div style="border:2px solid var(--primario);border-radius:var(--r-md);padding:var(--e4);background:var(--primario-suave);">
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--e2);">
-                    <h4 style="color:var(--primario);margin:0;display:flex;align-items:center;gap:6px;">
-                      ${window.ICONOS.escudo(20)} Seguro de Vida Hipotecario Solventa
-                    </h4>
-                    <span class="chip ok">${tr('ofertaDisponible')}</span>
-                  </div>
-                  <p style="font-size:var(--t-sm);margin:0 0 var(--e3);">
-                    Asegure el desembolso de su vivienda. Cubre el 100% de la deuda en caso de imprevistos sin trámites adicionales.
-                  </p>
-                  <div style="font-size:var(--t-xl);font-weight:800;color:var(--primario);margin-bottom:var(--e3);">
-                    + ${fmtMoneda(c.primaFinal)} <span style="font-size:var(--t-xs);color:var(--texto-sec);font-weight:normal;">/ mes en su cuota</span>
-                  </div>
-                  
-                  ${
-                    state.socio.ofertaAceptada
-                      ? `<div class="chip ok" style="padding:10px 16px;font-size:var(--t-sm);font-weight:700;">${tr('ofertaAceptadaExito')}</div>`
-                      : `<div style="display:flex;gap:var(--e3);">
-                          <button type="button" class="btn btn-primario" id="btnAceptarOfertaSocio">
-                            ${tr('agregarSeguro')}
-                          </button>
-                          <button type="button" class="btn btn-secundario" id="btnRechazarOfertaSocio">
-                            ${tr('masTarde')}
-                          </button>
-                        </div>`
-                  }
-                </div>
-              `
-                  : `
-                <div class="aviso atencion">
-                  ${window.ICONOS.info(24)}
-                  <div>
-                    <strong>${tr('ofertaNoDisponible')}</strong>
-                    <p style="margin:2px 0;">${tr('ofertaNoDisponibleTexto')}</p>
-                  </div>
-                </div>
-              `
-              }
             </div>
-          </section>
-        </div>
 
-        <aside class="pila">
-          <!-- Consola de Integración API del Socio (HU-WEB-10, HU-WEB-11, HU-WEB-12) -->
-          <section class="panel">
-            <header>
-              <h4>${window.ICONOS.enchufe(18)} Integración API B2B</h4>
-              <span class="chip ok">Canal Socio</span>
-            </header>
-            <div class="contenido pila">
-              <div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                  <span style="font-size:11px;color:var(--texto-sec);text-transform:uppercase;font-weight:700;">HU-WEB-10 · Credenciales del Socio</span>
-                  <span class="chip ok" style="font-size:10px;">Autenticado</span>
+            <!-- Oferta del seguro Solventa embebida -->
+            ${
+              state.socio.ofertaDisponible
+                ? `
+              <div style="border:2px solid var(--primario);border-radius:var(--r-md);padding:var(--e4);background:var(--primario-suave);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--e2);">
+                  <h4 style="color:var(--primario);margin:0;display:flex;align-items:center;gap:6px;">
+                    ${window.ICONOS.escudo(20)} Seguro de Vida Hipotecario Solventa
+                  </h4>
+                  <span class="chip ok">${tr('ofertaDisponible')}</span>
                 </div>
-                <div style="font-size:11px;font-family:monospace;background:var(--superficie-alt);padding:6px 10px;border-radius:4px;border:1px solid var(--borde);line-height:1.4;">
-                  Client-Id: partner_banco_aliado_01<br>
-                  Authorization: Bearer sec_tok_live_79a2...
-                </div>
-              </div>
-
-              <div style="border-top:1px solid var(--borde);padding-top:var(--e3);">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                  <span style="font-size:11px;color:var(--texto-sec);text-transform:uppercase;font-weight:700;">HU-WEB-11 · Idempotencia en Reintentos</span>
-                </div>
-                <p style="font-size:var(--t-xs);color:var(--texto-sec);margin:0 0 6px;">
-                  Reintente solicitudes con clave idempotente sin duplicar registros:
+                <p style="font-size:var(--t-sm);margin:0 0 var(--e3);">
+                  Asegure el desembolso de su vivienda. Cubre el 100% de la deuda en caso de imprevistos sin trámites adicionales.
                 </p>
-                <div style="font-size:11px;font-family:monospace;margin-bottom:6px;background:var(--superficie-alt);padding:4px 8px;border-radius:4px;border:1px solid var(--borde);">
-                  Idempotency-Key: ${state.socio.idempotencyKey}
+                <div style="font-size:var(--t-xl);font-weight:800;color:var(--primario);margin-bottom:var(--e3);">
+                  + ${fmtMoneda(c.primaFinal)} <span style="font-size:var(--t-xs);color:var(--texto-sec);font-weight:normal;">/ mes en su cuota</span>
                 </div>
-                <button type="button" class="btn btn-secundario btn-ancho" id="btnReintentarIdem" style="min-height:34px;font-size:12px;">
-                  ${window.ICONOS.refrescar ? window.ICONOS.refrescar(14) : ''} Reintentar cotización (misma clave)
-                </button>
+                
                 ${
-                  state.socio.reintentoEjecutado
-                    ? `<div class="chip ok" style="margin-top:6px;display:block;padding:6px 10px;font-size:11px;line-height:1.4;">
-                        ✓ HTTP 200 OK · Resultado retransmitido sin duplicar registros en base de datos.
+                  state.socio.ofertaAceptada
+                    ? `<div class="chip ok" style="padding:10px 16px;font-size:var(--t-sm);font-weight:700;">${tr('ofertaAceptadaExito')}</div>`
+                    : `<div style="display:flex;gap:var(--e3);">
+                        <button type="button" class="btn btn-primario" id="btnAceptarOfertaSocio">
+                          ${tr('agregarSeguro')}
+                        </button>
+                        <button type="button" class="btn btn-secundario" id="btnRechazarOfertaSocio">
+                          ${tr('masTarde')}
+                        </button>
                       </div>`
-                    : ''
                 }
               </div>
-
-              <div style="border-top:1px solid var(--borde);padding-top:var(--e3);">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                  <span style="font-size:11px;color:var(--texto-sec);text-transform:uppercase;font-weight:700;">HU-WEB-12 · Control de Cuota / Rate Limiting</span>
+            `
+                : `
+              <div class="aviso atencion">
+                ${window.ICONOS.info(24)}
+                <div>
+                  <strong>${tr('ofertaNoDisponible')}</strong>
+                  <p style="margin:2px 0;">${tr('ofertaNoDisponibleTexto')}</p>
                 </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 8px;">
-                  <span style="font-size:var(--t-xs);color:var(--texto-sec);">Consumo actual:</span>
-                  <span class="chip ${state.socio.simularCuotaExcedida ? 'error' : 'ok'}">
-                    ${state.socio.simularCuotaExcedida ? '501 / 500 req/min (Excedida)' : '482 / 500 req/min (Normal)'}
-                  </span>
-                </div>
-                <button type="button" class="btn ${state.socio.simularCuotaExcedida ? 'btn-primario' : 'btn-secundario'} btn-ancho" id="btnToggleCuota" style="min-height:34px;font-size:12px;">
-                  ${state.socio.simularCuotaExcedida ? 'Restablecer cuota normal' : 'Simular exceso de cuota (HTTP 429)'}
-                </button>
-                ${
-                  state.socio.simularCuotaExcedida
-                    ? `<div class="aviso error" style="margin-top:8px;padding:8px 10px;font-size:11px;line-height:1.4;">
-                        <strong>HTTP 429 Too Many Requests</strong>
-                        <p style="margin:2px 0;">Encabezado recibido: <code>Retry-After: 45s</code>.</p>
-                        <span style="font-size:10px;color:var(--error);display:block;margin-top:2px;">Reintente a partir de: 15:16:30 COT (45 s) sin perder contexto.</span>
-                      </div>`
-                    : ''
-                }
               </div>
-            </div>
-          </section>
-
-          <!-- Escenario de Disponibilidad de Oferta -->
-          <section class="panel">
-            <header>
-              <h4>Simulación de Escenarios</h4>
-            </header>
-            <div class="contenido pila">
-              <p style="font-size:var(--t-xs);color:var(--texto-sec);margin:0;">
-                Pruebe cómo reacciona la interfaz del banco ante la disponibilidad del servicio:
-              </p>
-              
-              <div style="display:flex;gap:var(--e2);">
-                <button type="button" class="btn ${state.socio.ofertaDisponible ? 'btn-primario' : 'btn-secundario'}" id="btnOfertaActiva" style="flex:1;min-height:36px;font-size:12px;">
-                  ✓ Oferta disponible
-                </button>
-                <button type="button" class="btn ${!state.socio.ofertaDisponible ? 'btn-primario' : 'btn-secundario'}" id="btnOfertaInactiva" style="flex:1;min-height:36px;font-size:12px;">
-                  ✗ No disponible
-                </button>
-              </div>
-
-              <div style="margin-top:var(--e3);font-size:var(--t-xs);color:var(--texto-sec);line-height:1.6;">
-                <strong>Beneficio para el usuario:</strong> Cuando el servicio de seguro está disponible, se activa con 1 clic en la solicitud. Si no estuviera disponible, el crédito hipotecario continúa su curso normal sin bloquear al cliente.
-              </div>
-            </div>
-          </section>
-        </aside>
+            `
+            }
+          </div>
+        </section>
       </div>
     `;
   }
@@ -1167,6 +1049,7 @@
     }
 
     enlazarEventos();
+    renderExplorador();
   }
 
   // --- Enlace de Eventos Interactivos ---
@@ -1218,21 +1101,6 @@
       linkOlvideClave.addEventListener('click', (e) => {
         e.preventDefault();
         alert(tr('recuperarClaveMsg'));
-      });
-    }
-
-    // Evento de Cambio rápido de rol en cabecera
-    const btnCambiarRolWeb = document.getElementById('btnCambiarRolWeb');
-    if (btnCambiarRolWeb) {
-      btnCambiarRolWeb.addEventListener('click', () => {
-        const roles = ['asesor', 'operaciones', 'socio'];
-        const idx = roles.indexOf(state.rolUsuario);
-        const nuevoRol = roles[(idx + 1) % roles.length];
-        state.rolUsuario = nuevoRol;
-        window.sessionStorage.setItem('solventa_web_rol', nuevoRol);
-        const perfil = PERFILES_USUARIOS[nuevoRol];
-        state.pestana = perfil.pestanaInicial;
-        render();
       });
     }
 
@@ -1487,8 +1355,290 @@
     });
   }
 
+  // --- Herramienta Modal Flotante de Exploración del Prototipo ---
+  function inyectarContenedorExplorador() {
+    let contenedor = document.getElementById('contenedorExplorador');
+    if (!contenedor) {
+      contenedor = document.createElement('div');
+      contenedor.id = 'contenedorExplorador';
+      document.body.appendChild(contenedor);
+    }
+    return contenedor;
+  }
+
+  function renderExplorador() {
+    const contenedor = inyectarContenedorExplorador();
+    const demoConfig = window.SolventaDB ? window.SolventaDB.getDemoConfig() : { modoDegradadoForzado: false, modoRechazoForzado: false };
+
+    contenedor.innerHTML = `
+      <!-- Botón Flotante para Explorar Prototipo -->
+      <button type="button" class="btn-explorador-flotante" id="btnExploradorFlotante" aria-label="${tr('btnExplorador')}">
+        <svg class="icono" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+        </svg>
+        <span>${tr('btnExplorador')}</span>
+        <span class="badge-explorador-tag">PROTOTIPO</span>
+      </button>
+
+      <!-- Modal de Exploración -->
+      <div class="modal-explorador-overlay ${state.exploradorAbierto ? 'abierto' : ''}" id="modalExplorador" role="dialog" aria-modal="true" aria-labelledby="modalExploradorTitulo">
+        <div class="modal-explorador-dialog">
+          <header class="modal-explorador-header">
+            <span class="modal-explorador-badge-prototipo">⚙️ Entorno de Demostración</span>
+            <button type="button" class="modal-explorador-close" id="btnCerrarModalExplorador" aria-label="${tr('exploradorCerrar')}">&times;</button>
+            <h3 class="modal-explorador-title" id="modalExploradorTitulo">${tr('exploradorTitulo')}</h3>
+            <p class="modal-explorador-aviso">${tr('exploradorDesc')}</p>
+          </header>
+
+          <div class="modal-explorador-body">
+            <!-- Bloque 1: Cambio de Perfil / Rol -->
+            <section class="explorador-bloque">
+              <h4 class="explorador-bloque-titulo">
+                ${window.ICONOS.usuario(18)} ${tr('exploradorPerfilActivo')}
+              </h4>
+              <p class="explorador-bloque-desc">${tr('exploradorPerfilDesc')}</p>
+              <div class="explorador-roles-grid">
+                ${Object.values(PERFILES_USUARIOS).map(p => {
+                  const activo = state.sesionIniciada && state.rolUsuario === p.id;
+                  return `
+                    <button type="button" class="explorador-rol-card ${activo ? 'activo' : ''}" data-cambiar-rol="${p.id}">
+                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;width:100%;">
+                        <span class="rol-icono-wrap" style="width:28px;height:28px;margin:0;">${window.ICONOS[p.icono](15)}</span>
+                        <strong style="font-size:0.8125rem;color:var(--texto);">${tr(p.rolTexto)}</strong>
+                      </div>
+                      <p style="font-size:0.75rem;color:var(--texto-sec);margin:0;line-height:1.35;">${tr(p.descTexto)}</p>
+                      ${activo ? `<span class="rol-badge-activo">✓ Perfil activo</span>` : `<span style="font-size:10px;color:var(--primario);margin-top:6px;font-weight:600;">Simular este perfil &rarr;</span>`}
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+            </section>
+
+            <!-- Bloque 2: Integración API B2B y Simulación de Escenarios (Socio Banco Aliado) -->
+            <section class="explorador-bloque">
+              <h4 class="explorador-bloque-titulo">
+                ${window.ICONOS.enchufe(18)} ${tr('exploradorB2BTitulo')}
+              </h4>
+              <p class="explorador-bloque-desc">${tr('exploradorB2BDesc')}</p>
+
+              <div class="pila" style="gap:var(--e3);">
+                <!-- Disponibilidad de la oferta -->
+                <div style="background:var(--superficie);padding:10px 12px;border-radius:6px;border:1px solid var(--borde);">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span style="font-size:12px;font-weight:600;color:var(--texto);">Disponibilidad de la oferta en banca en línea:</span>
+                    <span class="chip ${state.socio.ofertaDisponible ? 'ok' : 'atencion'}" style="font-size:10px;">${state.socio.ofertaDisponible ? 'Disponible' : 'No disponible'}</span>
+                  </div>
+                  <div style="display:flex;gap:8px;">
+                    <button type="button" class="btn ${state.socio.ofertaDisponible ? 'btn-primario' : 'btn-secundario'}" id="btnModalOfertaActiva" style="flex:1;font-size:11px;min-height:30px;">
+                      ✓ Simular oferta disponible
+                    </button>
+                    <button type="button" class="btn ${!state.socio.ofertaDisponible ? 'btn-primario' : 'btn-secundario'}" id="btnModalOfertaInactiva" style="flex:1;font-size:11px;min-height:30px;">
+                      ✗ Simular caída de servicio
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Idempotencia en reintentos -->
+                <div style="background:var(--superficie);padding:10px 12px;border-radius:6px;border:1px solid var(--borde);">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                    <span style="font-size:12px;font-weight:600;color:var(--texto);">Idempotencia en reintentos de cotización:</span>
+                  </div>
+                  <div style="font-size:10px;font-family:monospace;background:var(--superficie-alt);padding:4px 8px;border-radius:4px;border:1px solid var(--borde);margin-bottom:6px;">
+                    Idempotency-Key: ${state.socio.idempotencyKey}
+                  </div>
+                  <button type="button" class="btn btn-secundario btn-ancho" id="btnModalReintentarIdem" style="font-size:11px;min-height:30px;">
+                    ${window.ICONOS.refrescar ? window.ICONOS.refrescar(13) : ''} Probar reintento con misma clave
+                  </button>
+                  ${state.socio.reintentoEjecutado ? `
+                    <div class="chip ok" style="margin-top:6px;display:block;padding:4px 8px;font-size:10px;line-height:1.4;">
+                      ✓ HTTP 200 OK · Cotización retransmitida sin duplicar registros en base de datos.
+                    </div>
+                  ` : ''}
+                </div>
+
+                <!-- Control de cuota / Rate Limiting -->
+                <div style="background:var(--superficie);padding:10px 12px;border-radius:6px;border:1px solid var(--borde);">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                    <span style="font-size:12px;font-weight:600;color:var(--texto);">Control de cuota / Rate Limiting (API B2B):</span>
+                    <span class="chip ${state.socio.simularCuotaExcedida ? 'error' : 'ok'}" style="font-size:10px;">
+                      ${state.socio.simularCuotaExcedida ? '501 / 500 req/min (Excedida)' : '482 / 500 req/min (Normal)'}
+                    </span>
+                  </div>
+                  <button type="button" class="btn ${state.socio.simularCuotaExcedida ? 'btn-primario' : 'btn-secundario'} btn-ancho" id="btnModalToggleCuota" style="font-size:11px;min-height:30px;">
+                    ${state.socio.simularCuotaExcedida ? 'Restablecer cuota normal' : 'Simular exceso de cuota (HTTP 429)'}
+                  </button>
+                  ${state.socio.simularCuotaExcedida ? `
+                    <div class="aviso error" style="margin-top:6px;padding:6px 10px;font-size:11px;line-height:1.4;">
+                      <strong>HTTP 429 Too Many Requests</strong>
+                      <p style="margin:2px 0;">Encabezado recibido: <code>Retry-After: 45s</code>.</p>
+                      <span style="font-size:10px;color:var(--error);">Reintento seguro en 45 segundos sin pérdida de contexto.</span>
+                    </div>
+                  ` : ''}
+                </div>
+
+                <!-- Credenciales del Socio -->
+                <div style="background:var(--superficie);padding:8px 12px;border-radius:6px;border:1px solid var(--borde);">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+                    <span style="font-size:11px;font-weight:600;color:var(--texto-sec);">Credenciales de autenticación B2B:</span>
+                    <span class="chip ok" style="font-size:9px;">Validado</span>
+                  </div>
+                  <div style="font-size:10px;font-family:monospace;color:var(--texto-sec);line-height:1.4;">
+                    Client-Id: partner_banco_aliado_01 | Bearer sec_tok_live_79a2...
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Bloque 3: Simulación de Contingencias (Asesor) -->
+            <section class="explorador-bloque">
+              <h4 class="explorador-bloque-titulo">
+                ⚡ ${tr('exploradorResilienciaTitulo')}
+              </h4>
+              <p class="explorador-bloque-desc">${tr('exploradorResilienciaDesc')}</p>
+
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button type="button" class="btn ${demoConfig.modoDegradadoForzado ? 'btn-primario' : 'btn-secundario'}" id="btnModalToggleDegradado" style="flex:1;min-width:180px;font-size:11px;min-height:32px;">
+                  <span>⚡ Contingencia Open Finance:</span>
+                  <strong style="margin-left:4px;">${demoConfig.modoDegradadoForzado ? 'ACTIVADO' : 'NORMAL'}</strong>
+                </button>
+                <button type="button" class="btn ${demoConfig.modoRechazoForzado ? 'btn-primario' : 'btn-secundario'}" id="btnModalToggleRechazo" style="flex:1;min-width:180px;font-size:11px;min-height:32px;">
+                  <span>🚫 Regla de rechazo:</span>
+                  <strong style="margin-left:4px;">${demoConfig.modoRechazoForzado ? 'FORZADO' : 'NORMAL'}</strong>
+                </button>
+              </div>
+
+              <div style="margin-top:10px;display:flex;justify-content:flex-end;">
+                <button type="button" class="btn btn-secundario" id="btnModalResetDemo" style="font-size:11px;color:var(--error);border-color:rgba(220,38,38,0.3);min-height:30px;">
+                  🔄 Restablecer todos los datos del prototipo
+                </button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    `;
+
+    enlazarEventosExplorador();
+  }
+
+  function enlazarEventosExplorador() {
+    const btnFlotante = document.getElementById('btnExploradorFlotante');
+    const modalOverlay = document.getElementById('modalExplorador');
+    const btnCerrar = document.getElementById('btnCerrarModalExplorador');
+
+    if (btnFlotante) {
+      btnFlotante.addEventListener('click', () => {
+        state.exploradorAbierto = true;
+        renderExplorador();
+      });
+    }
+
+    if (btnCerrar) {
+      btnCerrar.addEventListener('click', () => {
+        state.exploradorAbierto = false;
+        renderExplorador();
+      });
+    }
+
+    if (modalOverlay) {
+      modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) {
+          state.exploradorAbierto = false;
+          renderExplorador();
+        }
+      });
+    }
+
+    // Cambio de rol desde el modal
+    document.querySelectorAll('[data-cambiar-rol]').forEach((card) => {
+      card.addEventListener('click', () => {
+        const nuevoRol = card.dataset.cambiarRol;
+        state.rolUsuario = nuevoRol;
+        state.sesionIniciada = true;
+        window.sessionStorage.setItem('solventa_web_auth', 'true');
+        window.sessionStorage.setItem('solventa_web_rol', nuevoRol);
+        const perfil = PERFILES_USUARIOS[nuevoRol];
+        state.pestana = perfil.pestanaInicial;
+        if (nuevoRol === 'asesor') state.paso = 1;
+        state.exploradorAbierto = false;
+        render();
+      });
+    });
+
+    // Controles B2B en modal
+    const btnModalOfertaActiva = document.getElementById('btnModalOfertaActiva');
+    if (btnModalOfertaActiva) {
+      btnModalOfertaActiva.addEventListener('click', () => {
+        state.socio.ofertaDisponible = true;
+        state.socio.ofertaAceptada = false;
+        render();
+      });
+    }
+
+    const btnModalOfertaInactiva = document.getElementById('btnModalOfertaInactiva');
+    if (btnModalOfertaInactiva) {
+      btnModalOfertaInactiva.addEventListener('click', () => {
+        state.socio.ofertaDisponible = false;
+        render();
+      });
+    }
+
+    const btnModalReintentarIdem = document.getElementById('btnModalReintentarIdem');
+    if (btnModalReintentarIdem) {
+      btnModalReintentarIdem.addEventListener('click', () => {
+        state.socio.reintentoEjecutado = true;
+        render();
+      });
+    }
+
+    const btnModalToggleCuota = document.getElementById('btnModalToggleCuota');
+    if (btnModalToggleCuota) {
+      btnModalToggleCuota.addEventListener('click', () => {
+        state.socio.simularCuotaExcedida = !state.socio.simularCuotaExcedida;
+        render();
+      });
+    }
+
+    // Controles Resiliencia en modal
+    const btnModalToggleDegradado = document.getElementById('btnModalToggleDegradado');
+    if (btnModalToggleDegradado) {
+      btnModalToggleDegradado.addEventListener('click', () => {
+        const cfg = window.SolventaDB.getDemoConfig();
+        window.SolventaDB.setDemoConfig('modoDegradadoForzado', !cfg.modoDegradadoForzado);
+        render();
+      });
+    }
+
+    const btnModalToggleRechazo = document.getElementById('btnModalToggleRechazo');
+    if (btnModalToggleRechazo) {
+      btnModalToggleRechazo.addEventListener('click', () => {
+        const cfg = window.SolventaDB.getDemoConfig();
+        window.SolventaDB.setDemoConfig('modoRechazoForzado', !cfg.modoRechazoForzado);
+        render();
+      });
+    }
+
+    const btnModalResetDemo = document.getElementById('btnModalResetDemo');
+    if (btnModalResetDemo) {
+      btnModalResetDemo.addEventListener('click', () => {
+        if (confirm('¿Desea restablecer todos los datos de demostración a su estado inicial?')) {
+          window.SolventaDB.resetToDefaults();
+          render();
+        }
+      });
+    }
+  }
+
   // --- Inicio Global ---
   function iniciar() {
+    // Escape para cerrar modal
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && state.exploradorAbierto) {
+        state.exploradorAbierto = false;
+        renderExplorador();
+      }
+    });
+
     // Tabs de navegación
     document.querySelectorAll('.tab-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
