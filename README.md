@@ -31,7 +31,7 @@ El proyecto cuenta con un archivo [`docker-compose.yml`](docker-compose.yml) par
 ### Iniciar servicios locales:
 
 ```bash
-docker compose up -d postgres localstack
+docker compose up -d postgres floci
 ```
 
 ---
@@ -145,3 +145,54 @@ mise exec -- adb shell am start -n com.solventa.app/.MainActivity
 ```
 
 ---
+
+## 6. Infraestructura como Código (Terraform)
+
+La topología en AWS está estructurada de forma modular en [`/terraform`](terraform/) implementando alta disponibilidad Multi-AZ (`us-east-1a`, `us-east-1b`):
+
+* **`modules/vpc`**: VPC (`10.0.0.0/16`) con 2 subredes públicas, 2 subredes privadas, Internet Gateway y NAT Gateway.
+* **`modules/alb`**: Application Load Balancer con sondeo activo en `/health` cada 5s y reintentos automáticos (`HA-09`).
+* **`modules/ecs`**: Cluster ECS Fargate con autoscaling dinámico de 2 a 6 instancias según consumo de CPU (`HA-06`).
+* **`modules/rds`**: Base de datos PostgreSQL 16 Multi-AZ con conmutación por error automática y cifrado KMS (`HA-15`).
+* **`modules/storage_events`**: Bucket S3 con versionado y SSE-KMS (`HA-08`) y cola SQS con Dead Letter Queue (DLQ).
+* **`modules/ecr`**: Repositorio de imágenes Docker del backend con escaneo de vulnerabilidades.
+* **`modules/web_hosting`**: Bucket S3 y CDN CloudFront con Origin Access Control (OAC) para el portal web Angular.
+
+### 6.1 Comprobación y Validación Local
+
+```bash
+cd terraform
+terraform init -backend=false
+terraform fmt -check
+terraform validate
+```
+
+### 6.2 Planificación y Ejecución Local contra Floci (Emulador AWS)
+
+Para simular la creación de la infraestructura sin costos de nube utilizando el emulador local [Floci](https://floci.io/aws/) (`http://localhost:4566`):
+
+```bash
+# 1. Levantar el emulador local Floci
+docker compose up -d floci
+
+# 2. Planificar la infraestructura contra el emulador local
+cd terraform
+terraform plan -var-file=environments/local.tfvars
+
+# 3. Desplegar infraestructura localmente (opcional)
+terraform apply -var-file=environments/local.tfvars -auto-approve
+```
+
+---
+
+## 7. Configuración de Secretos en GitHub Actions para Despliegue en AWS
+
+Para que el pipeline de despliegue continuo (`.github/workflows/deploy.yml`) aprovisione y actualice los servicios en AWS al integrar un Pull Request en la rama `main`, deben configurarse los siguientes secretos en el repositorio (**Settings > Secrets and variables > Actions**):
+
+| Secreto                 | Descripción                                                    | Ejemplo                                    |
+| :---------------------- | :------------------------------------------------------------- | :----------------------------------------- |
+| `AWS_ACCESS_KEY_ID`     | Identificador de clave de acceso del usuario IAM de despliegue | `AKIAIOSFODNN7EXAMPLE`                     |
+| `AWS_SECRET_ACCESS_KEY` | Clave de acceso secreta del usuario IAM                        | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
+| `AWS_REGION`            | Región primaria de AWS para el despliegue                      | `us-east-1`                                |
+
+El usuario o rol de IAM debe poseer permisos para gestionar recursos de VPC, ECS Fargate, ALB, RDS, ECR, S3 y SQS.

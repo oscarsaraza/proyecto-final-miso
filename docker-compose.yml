@@ -17,16 +17,15 @@ services:
       timeout: 5s
       retries: 5
 
-  localstack:
-    image: localstack/localstack:3.8
-    container_name: solventa-localstack
+  floci:
+    image: floci/floci:latest
+    container_name: solventa-floci
+    restart: unless-stopped
     ports:
       - "4566:4566"
-    environment:
-      - SERVICES=s3,sqs
-      - AWS_DEFAULT_REGION=us-east-1
     volumes:
-      - localstack_data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+      - floci_data:/app/data
 
   backend:
     build:
@@ -41,15 +40,15 @@ services:
       - PORT=8000
       - DATABASE_URL=postgresql+asyncpg://solventa_user:solventa_password@postgres:5432/solventa
       - AWS_REGION=us-east-1
-      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ENDPOINT_URL=http://floci:4566
       - S3_BUCKET_POLICIES=solventa-policies-dev
       - SQS_QUEUE_EVENTS=solventa-outbox-events-dev
     depends_on:
       postgres:
         condition: service_healthy
-      localstack:
+      floci:
         condition: service_started
 
 volumes:
   pgdata:
-  localstack_data:
+  floci_data:

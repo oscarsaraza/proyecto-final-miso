@@ -1,0 +1,6 @@
+# Configuración de variables para emulación local con Floci (http://localhost:4566)
+environment             = "local"
+project_name            = "solventa"
+aws_region              = "us-east-1"
+use_local_emulator      = true
+local_emulator_endpoint = "http://localhost:4566"
