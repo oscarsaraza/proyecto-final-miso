@@ -1,0 +1,4 @@
+[tools]
+java = "17"
+gradle = "8.10.2"
+android-sdk = "latest"
