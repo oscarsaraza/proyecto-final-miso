@@ -25,14 +25,48 @@ Su arquitectura implementa un **Monolito Modular API-First con Arquitectura Hexa
 El proyecto cuenta con un archivo [`docker-compose.yml`](docker-compose.yml) para ejecutar el backend y sus dependencias en local sin incurrir en costos de AWS:
 
 - **PostgreSQL 16:** Base de datos relacional en `localhost:5432`.
-- **LocalStack:** Emulación local de AWS S3 (almacenamiento de carátulas) y AWS SQS (cola de eventos) en `localhost:4566`.
+- **Floci:** Emulación local de AWS S3 (almacenamiento de carátulas) y AWS SQS (cola de eventos) en `localhost:4566`.
 - **Backend FastAPI:** Ingress y API en `localhost:8000`.
 
-### Iniciar servicios locales:
+### 2.1 Iniciar infraestructura base (Base de datos y AWS local)
 
 ```bash
 docker compose up -d postgres floci
 ```
+
+### 2.2 Ejecución del Backend FastAPI
+
+Existen dos alternativas para levantar el backend en desarrollo local:
+
+#### Opción A: Ejecución nativa con Poetry (Recomendada para desarrollo con recarga activa)
+
+Requiere tener los servicios base (`postgres` y `floci`) iniciados previamente.
+
+```bash
+cd backend
+
+# 1. Instalar dependencias del proyecto
+poetry install
+
+# 2. Iniciar servidor FastAPI con recarga en caliente (hot reload)
+poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+#### Opción B: Ejecución en contenedor con Docker Compose
+
+Levanta automáticamente PostgreSQL, Floci y el contenedor del backend (`solventa-backend`):
+
+```bash
+docker compose up -d
+```
+
+#### Verificación de la API
+
+Una vez iniciado el backend, puede acceder a los siguientes puntos de enlace:
+- **Health Check:** [http://localhost:8000/health](http://localhost:8000/health)
+- **Documentación Swagger UI:** [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Documentación ReDoc:** [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
 
 ---
 
