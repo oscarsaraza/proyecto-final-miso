@@ -11,7 +11,7 @@ Su arquitectura implementa un **Monolito Modular API-First con Arquitectura Hexa
 | Directorio                                | Componente                                                        | Stack Tecnológico                                       |
 | :---------------------------------------- | :---------------------------------------------------------------- | :------------------------------------------------------ |
 | [`/backend`](backend/)                    | Monolito Modular Backend (Core, Rating, Policy, Payments, Claims) | Python 3.12, FastAPI, Poetry, SQLAlchemy, asyncpg       |
-| [`/web`](web/)                            | Portal Web para Asesores Comerciales                              | Angular 18, TypeScript, Jasmine/Karma, Playwright       |
+| [`/web`](web/)                            | Portal Web para Asesores Comerciales                              | Angular 22, TypeScript, Standalone Components, Vitest   |
 | [`/movil`](movil/)                        | Aplicación Móvil para Asegurados                                  | Android, Kotlin, Jetpack Compose, Room (SQLCipher)      |
 | [`/terraform`](terraform/)                | Infraestructura como Código (AWS Multi-AZ)                        | Terraform >= 1.5, AWS Provider (ALB, ECS, RDS, S3, SQS) |
 | [`.github/workflows`](.github/workflows/) | Pipelines de CI/CD                                                | GitHub Actions (CI en cada commit, CD a AWS en `main`)  |
@@ -38,7 +38,7 @@ docker compose up -d postgres localstack
 
 ## 3. Ejecución de Pruebas Automatizadas del Backend (con Poetry)
 
-El backend utiliza **Poetry** para la gestión de dependencias. Toda la configuración de dependencias se encuentra centralizada en [`backend/pyproject.toml`](backend/pyproject.toml).
+El backend utiliza **Poetry** para la gestión estricta de dependencias y entornos virtuales reproducibles. Toda la configuración de dependencias y pruebas se encuentra centralizada en [`backend/pyproject.toml`](backend/pyproject.toml).
 
 ### 3.1 Instalación de Dependencias
 
@@ -76,3 +76,20 @@ poetry install
   ```
 
 ---
+
+## 4. Ejecución de Pruebas del Portal Web (Angular 22)
+
+El frontend web utiliza Angular 22 con **Vitest** como runner de pruebas unitarias ultrarrápido y esbuild para empaquetado de producción.
+
+```bash
+cd web
+
+# 1. Instalar dependencias
+npm install
+
+# 2. Ejecutar pruebas unitarias (modo CI sin watch)
+npm test -- --watch=false
+
+# 3. Compilación de producción
+npm run build
+```
