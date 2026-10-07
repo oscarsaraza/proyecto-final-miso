@@ -150,13 +150,13 @@ mise exec -- adb shell am start -n com.solventa.app/.MainActivity
 
 La topología en AWS está estructurada de forma modular en [`/terraform`](terraform/) implementando alta disponibilidad Multi-AZ (`us-east-1a`, `us-east-1b`):
 
-* **`modules/vpc`**: VPC (`10.0.0.0/16`) con 2 subredes públicas, 2 subredes privadas, Internet Gateway y NAT Gateway.
-* **`modules/alb`**: Application Load Balancer con sondeo activo en `/health` cada 5s y reintentos automáticos (`HA-09`).
-* **`modules/ecs`**: Cluster ECS Fargate con autoscaling dinámico de 2 a 6 instancias según consumo de CPU (`HA-06`).
-* **`modules/rds`**: Base de datos PostgreSQL 16 Multi-AZ con conmutación por error automática y cifrado KMS (`HA-15`).
-* **`modules/storage_events`**: Bucket S3 con versionado y SSE-KMS (`HA-08`) y cola SQS con Dead Letter Queue (DLQ).
-* **`modules/ecr`**: Repositorio de imágenes Docker del backend con escaneo de vulnerabilidades.
-* **`modules/web_hosting`**: Bucket S3 y CDN CloudFront con Origin Access Control (OAC) para el portal web Angular.
+- **`modules/vpc`**: VPC (`10.0.0.0/16`) con 2 subredes públicas, 2 subredes privadas, Internet Gateway y NAT Gateway.
+- **`modules/alb`**: Application Load Balancer con sondeo activo en `/health` cada 5s y reintentos automáticos (`HA-09`).
+- **`modules/ecs`**: Cluster ECS Fargate con autoscaling dinámico de 2 a 6 instancias según consumo de CPU (`HA-06`).
+- **`modules/rds`**: Base de datos PostgreSQL 16 Multi-AZ con conmutación por error automática y cifrado KMS (`HA-15`).
+- **`modules/storage_events`**: Bucket S3 con versionado y SSE-KMS (`HA-08`) y cola SQS con Dead Letter Queue (DLQ).
+- **`modules/ecr`**: Repositorio de imágenes Docker del backend con escaneo de vulnerabilidades.
+- **`modules/web_hosting`**: Bucket S3 y CDN CloudFront con Origin Access Control (OAC) para el portal web Angular.
 
 ### 6.1 Comprobación y Validación Local
 
@@ -185,9 +185,45 @@ terraform apply -var-file=environments/local.tfvars -auto-approve
 
 ---
 
-## 7. Configuración de Secretos en GitHub Actions para Despliegue en AWS
+## 7. Integración y Despliegue Continuo (CI/CD con GitHub Actions)
 
-Para que el pipeline de despliegue continuo (`.github/workflows/deploy.yml`) aprovisione y actualice los servicios en AWS al integrar un Pull Request en la rama `main`, deben configurarse los siguientes secretos en el repositorio (**Settings > Secrets and variables > Actions**):
+El repositorio cuenta con dos workflows automatizados en [`.github/workflows`](.github/workflows/):
+
+### 7.1 Integración Continua (`.github/workflows/ci.yml`)
+
+Se dispara en **cada commit y pull request sin importar la rama** (`push` y `pull_request` en `**`):
+
+1. **`backend-ci`**: Instala Python 3.12 y Poetry, ejecuta la suite de pruebas unitarias y valida cobertura mínima ($\ge 85\%$).
+2. **`web-ci`**: Instala Node.js 22, ejecuta las pruebas unitarias del portal comercial con Vitest y genera el bundle de producción.
+3. **`mobile-ci`**: Configura Java 17 LTS y Gradle, ejecutando `./gradlew testDebugUnitTest` para la aplicación móvil.
+4. **`terraform-ci`**: Inicializa los módulos de Terraform y valida el formato y sintaxis (`fmt -check`, `validate`).
+
+### 7.2 Despliegue Continuo a AWS (`.github/workflows/deploy.yml`)
+
+Se dispara de forma estricta únicamente ante **push / merges a la rama `main`**:
+
+1. **`deploy-infra`**: Ejecuta `terraform apply -auto-approve` para sincronizar la topología AWS Multi-AZ (VPC, ALB, ECS, RDS, S3/SQS).
+2. **`deploy-backend`**: Construye la imagen Docker del backend, la publica en Amazon ECR y actualiza el servicio ECS Fargate con despliegue progresivo.
+3. **`deploy-web`**: Compila los estáticos de Angular 22, los sincroniza con el bucket S3 del portal comercial e invalida la caché de CloudFront.
+
+### 7.3 Despliegue Local Simulado con Floci (`.github/workflows/deploy-local.yml` y `scripts/deploy-local.sh`)
+
+Permite validar de forma integral el flujo de despliegue simulando la arquitectura completa de AWS de producción localmente:
+* **Vía Workflow de GitHub Actions (`act` o manual):** Archivo [`.github/workflows/deploy-local.yml`](.github/workflows/deploy-local.yml) ejecutable mediante `act` o evento `workflow_dispatch`.
+* **Vía Script Local Directo:** Ejecutable en un solo paso desde la terminal:
+  ```bash
+  ./scripts/deploy-local.sh
+  ```
+  El script orquesta de forma automatizada:
+  1. Inicio del emulador Floci (`docker compose up -d floci`).
+  2. Aprovisionamiento de los 46 recursos Multi-AZ con Terraform en Floci (`environments/local.tfvars`).
+  3. Construcción de la imagen Docker de producción del backend (`solventa-backend:local`).
+  4. Compilación del bundle de producción del portal web Angular 22 y sincronización al bucket S3 en Floci (`s3://solventa-web-portal-local`).
+  5. Verificación de salud e integridad de los recursos creados.
+
+### 7.4 Configuración de Secretos en GitHub Actions
+
+Para el funcionamiento del pipeline de despliegue a AWS en la nube (`deploy.yml`), deben configurarse los siguientes secretos en el repositorio (**Settings > Secrets and variables > Actions**):
 
 | Secreto                 | Descripción                                                    | Ejemplo                                    |
 | :---------------------- | :------------------------------------------------------------- | :----------------------------------------- |

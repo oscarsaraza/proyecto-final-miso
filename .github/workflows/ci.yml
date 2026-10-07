@@ -1,0 +1,127 @@
+name: CI - Integración Continua
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 1. Pruebas automatizadas del Monolito Modular Backend
+  backend-ci:
+    name: Backend CI (Pytest & Poetry)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 2.1.1
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cachear entorno virtual de Poetry
+        uses: actions/cache@v4
+        with:
+          path: backend/.venv
+          key: venv-${{ runner.os }}-${{ hashFiles('backend/poetry.lock') }}
+
+      - name: Instalar dependencias con Poetry
+        run: poetry install --no-interaction
+
+      - name: Ejecutar pruebas unitarias y cobertura (pytest)
+        run: poetry run pytest
+
+  # 2. Pruebas automatizadas y compilación del Portal Web
+  web-ci:
+    name: Web CI (Angular 22 & Vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar pruebas unitarias con Vitest
+        run: npm test -- --watch=false
+
+      - name: Compilar aplicación web para producción
+        run: npm run build
+
+  # 3. Pruebas automatizadas de la Aplicación Móvil Android
+  mobile-ci:
+    name: Mobile CI (Android & Gradle)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: movil
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 17 LTS
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Dar permisos de ejecución a gradlew
+        run: chmod +x ./gradlew
+
+      - name: Ejecutar pruebas unitarias de depuración
+        run: ./gradlew testDebugUnitTest
+
+  # 4. Verificación de sintaxis y módulos de Terraform
+  terraform-ci:
+    name: Terraform CI (Lint & Validate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Inicializar módulos de Terraform
+        run: terraform init -backend=false
+
+      - name: Validar formato del código
+        run: terraform fmt -check
+
+      - name: Validar integridad de la configuración
+        run: terraform validate

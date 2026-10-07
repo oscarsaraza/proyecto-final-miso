@@ -1,0 +1,117 @@
+name: CD - Despliegue a AWS
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  # 1. Aprovisionamiento y actualización de infraestructura Multi-AZ con Terraform
+  deploy-infra:
+    name: Despliegue de Infraestructura (Terraform)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar credenciales de AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Configurar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Inicializar Terraform
+        run: terraform init
+
+      - name: Aplicar cambios de infraestructura en AWS
+        run: terraform apply -auto-approve
+
+  # 2. Construcción de contenedor y actualización de servicio ECS Fargate
+  deploy-backend:
+    name: Despliegue del Backend (ECR y ECS Fargate)
+    needs: deploy-infra
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar credenciales de AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Autenticación en Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Construir y etiquetar imagen Docker
+        working-directory: backend
+        run: |
+          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/solventa-backend:latest"
+          docker build -t $IMAGE_URI .
+          docker push $IMAGE_URI
+
+      - name: Actualizar servicio en ECS Fargate
+        run: |
+          aws ecs update-service \
+            --cluster solventa-cluster-production \
+            --service solventa-backend-service-production \
+            --force-new-deployment
+
+  # 3. Compilación y despliegue del Portal Web en S3 + CloudFront
+  deploy-web:
+    name: Despliegue del Portal Web (S3 y CloudFront)
+    needs: deploy-infra
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Compilar aplicación web para producción
+        run: npm run build
+
+      - name: Configurar credenciales de AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Sincronizar archivos estáticos a S3
+        run: |
+          aws s3 sync dist/web/browser s3://solventa-web-portal-production --delete
+
+      - name: Invalidar caché de CloudFront
+        run: |
+          DISTRIBUTION_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Aliases.Items!=null && contains(Aliases.Items, 'solventa') || contains(Origins.Items[0].DomainName, 'solventa-web-portal')].Id | [0]" --output text)
+          if [ "$DISTRIBUTION_ID" != "None" ] && [ -n "$DISTRIBUTION_ID" ]; then
+            aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
+          fi

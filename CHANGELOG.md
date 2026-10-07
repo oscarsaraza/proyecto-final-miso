@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Workflow de Integración Continua en GitHub Actions (`.github/workflows/ci.yml`) ejecutando pruebas automatizadas en cada commit y branch:
+  - `backend-ci`: Python 3.12, Poetry y Pytest con validación de cobertura mínima.
+  - `web-ci`: Node.js 22, npm test con Vitest y build de producción de Angular 22.
+  - `mobile-ci`: Java 17 LTS y Gradle ejecutando `testDebugUnitTest` para Android nativo.
+  - `terraform-ci`: `terraform fmt -check` y `terraform validate`.
+- Workflow de Despliegue Continuo a AWS en GitHub Actions (`.github/workflows/deploy.yml`) ejecutado exclusivamente ante cambios en la rama `main`:
+  - `deploy-infra`: Sincronización de infraestructura Multi-AZ con Terraform.
+  - `deploy-backend`: Compilación y subida de imagen Docker a ECR con despliegue progresivo en ECS Fargate.
+  - `deploy-web`: Despliegue de estáticos de Angular en S3 con invalidación de caché en CloudFront.
+- Workflow de Despliegue Local Simulado (`.github/workflows/deploy-local.yml`) y script de automatización (`scripts/deploy-local.sh`) para ejecutar pruebas de despliegue integrales contra Floci emulando el entorno de producción de AWS sin costos de nube.
 - Infraestructura como Código (IaC) modular en `/terraform` para AWS Multi-AZ (`us-east-1`):
   - Módulo VPC (`10.0.0.0/16`) con subredes públicas y privadas en `us-east-1a` y `us-east-1b`, Internet Gateway y NAT Gateway.
   - Módulo ALB con sondeo activo en `/health` cada 5s y tolerancia a fallos (`HA-09`).

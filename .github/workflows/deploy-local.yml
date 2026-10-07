@@ -1,0 +1,104 @@
+name: CD Local - Despliegue en Emulador Floci
+
+on:
+  workflow_dispatch:
+    inputs:
+      auto_approve:
+        description: 'Aprobar automáticamente cambios de infraestructura'
+        required: false
+        default: 'true'
+        type: string
+
+jobs:
+  # 1. Aprovisionamiento y sincronización de infraestructura en Floci
+  deploy-local-infra:
+    name: Infraestructura Local (Terraform en Floci)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Inicializar Terraform
+        run: terraform init -backend=false
+
+      - name: Aplicar infraestructura en emulador Floci
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_REGION: us-east-1
+          AWS_ENDPOINT_URL: http://localhost:4566
+        run: |
+          terraform apply -var-file=environments/local.tfvars -auto-approve
+
+  # 2. Construcción del contenedor Backend
+  deploy-local-backend:
+    name: Contenedor Backend Local (Docker)
+    needs: deploy-local-infra
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Construir imagen Docker de backend
+        working-directory: backend
+        run: |
+          docker build -t solventa-backend:local .
+
+  # 3. Compilación y despliegue del Portal Web en S3 de Floci
+  deploy-local-web:
+    name: Portal Web Local (S3 en Floci)
+    needs: deploy-local-infra
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Compilar aplicación web
+        run: npm run build
+
+      - name: Sincronizar archivos estáticos con el bucket S3 local
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_REGION: us-east-1
+        run: |
+          aws --endpoint-url=http://localhost:4566 s3 sync dist/web/browser s3://solventa-web-portal-local --delete
+
+  # 4. Verificación de salud y recursos desplegados
+  verify-local-deployment:
+    name: Verificación E2E de Servicios Desplegados
+    needs: [deploy-local-backend, deploy-local-web]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validar recursos activos en Floci
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_REGION: us-east-1
+        run: |
+          echo "=== Buckets S3 en Floci ==="
+          aws --endpoint-url=http://localhost:4566 s3 ls
+          echo "=== Colas SQS en Floci ==="
+          aws --endpoint-url=http://localhost:4566 sqs list-queues
+          echo "=== Estado de Despliegue Local Exitoso ==="
