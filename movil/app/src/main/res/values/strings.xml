@@ -35,7 +35,7 @@
     <string name="auth_otp_sent_debug">Código de prueba (simula el SMS): %1$s</string>
     <string name="auth_submit">Ingresar</string>
     <string name="auth_submitting">Verificando…</string>
-    <string name="auth_error_invalid_credentials">Correo, contraseña o código incorrectos. Intentos restantes: %1$d.</string>
+    <string name="auth_error_invalid_credentials">Correo, contraseña o código incorrectos. Al tercer intento fallido la cuenta se bloquea 15 minutos.</string>
     <string name="auth_error_locked">Cuenta bloqueada por 15 minutos tras 3 intentos fallidos.</string>
     <string name="auth_error_network">No fue posible conectar con Solventa. Revise su conexión e intente de nuevo.</string>
     <string name="auth_back_to_biometrics">Volver al acceso biométrico</string>

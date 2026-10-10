@@ -35,7 +35,6 @@ import com.solventa.app.R
 import com.solventa.app.ui.theme.SolventaTheme
 
 private const val OTP_LENGTH = 6
-private const val MAX_ATTEMPTS = 3
 
 @Composable
 fun AlternativeLoginScreen(
@@ -111,8 +110,7 @@ fun AlternativeLoginScreen(
         form.error?.let { error ->
             Text(
                 text = when (error) {
-                    AlternativeLoginError.INVALID_CREDENTIALS ->
-                        stringResource(R.string.auth_error_invalid_credentials, MAX_ATTEMPTS - uiState.failedAttempts)
+                    AlternativeLoginError.INVALID_CREDENTIALS -> stringResource(R.string.auth_error_invalid_credentials)
                     AlternativeLoginError.ACCOUNT_LOCKED -> stringResource(R.string.auth_error_locked)
                     AlternativeLoginError.NETWORK -> stringResource(R.string.auth_error_network)
                 },
