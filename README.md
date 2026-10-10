@@ -259,10 +259,34 @@ Permite validar de forma integral el flujo de despliegue simulando la arquitectu
 
 Para el funcionamiento del pipeline de despliegue a AWS en la nube (`deploy.yml`), deben configurarse los siguientes secretos en el repositorio (**Settings > Secrets and variables > Actions**):
 
-| Secreto                 | Descripción                                                    | Ejemplo                                    |
-| :---------------------- | :------------------------------------------------------------- | :----------------------------------------- |
-| `AWS_ACCESS_KEY_ID`     | Identificador de clave de acceso del usuario IAM de despliegue | `AKIAIOSFODNN7EXAMPLE`                     |
-| `AWS_SECRET_ACCESS_KEY` | Clave de acceso secreta del usuario IAM                        | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
-| `AWS_REGION`            | Región primaria de AWS para el despliegue                      | `us-east-1`                                |
+| Secreto                 | Requerido | Descripción                                                        | Ejemplo                                    |
+| :---------------------- | :-------: | :----------------------------------------------------------------- | :----------------------------------------- |
+| `AWS_ACCESS_KEY_ID`     | **Sí**    | Identificador de clave de acceso del usuario IAM de despliegue     | `AKIAIOSFODNN7EXAMPLE`                     |
+| `AWS_SECRET_ACCESS_KEY` | **Sí**    | Clave de acceso secreta del usuario IAM                            | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
+| `AWS_REGION`            | Opcional  | Región primaria de AWS para el despliegue (por defecto `us-east-1`)| `us-east-1`                                |
 
-El usuario o rol de IAM debe poseer permisos para gestionar recursos de VPC, ECS Fargate, ALB, RDS, ECR, S3 y SQS.
+> [!NOTE]
+> Para que Terraform y los workflows de GitHub Actions puedan aprovisionar y actualizar la infraestructura sin errores de autorización, debes asociar al usuario de IAM las siguientes **Políticas administradas por AWS (AWS Managed Policies)**:
+> 
+> 1. `AmazonEC2FullAccess` (o `AmazonVPCFullAccess`): Gestión de VPC, subredes, tablas de ruteo, Internet Gateways, NAT Gateways y Security Groups.
+> 2. `ElasticLoadBalancingFullAccess`: Creación y configuración del ALB, Target Groups y Listeners.
+> 3. `AmazonECS_FullAccess`: Gestión del clúster ECS Fargate, tareas, servicios y autoescalado.
+> 4. `AmazonEC2ContainerRegistryFullAccess`: Repositorio ECR, políticas de ciclo de vida e inicio de sesión para push/pull de imágenes Docker.
+> 5. `AmazonRDSFullAccess`: Instancia PostgreSQL 16 Multi-AZ y grupos de subredes de base de datos.
+> 6. `AmazonS3FullAccess`: Buckets de almacenamiento de documentos y portal web, versionado, cifrado y sincronización de estáticos.
+> 7. `AmazonSQSFullAccess`: Colas SQS de eventos y Dead Letter Queues (DLQ).
+> 8. `CloudFrontFullAccess`: Distribución CDN de CloudFront, Origin Access Control (OAC) e invalidación de caché.
+> 9. `CloudWatchLogsFullAccess`: Grupos de logs para los contenedores del backend en Fargate.
+> 10. `IAMFullAccess`: Creación de roles de ejecución y de tarea requeridos por ECS (`execution_role` y `task_role`).
+
+#### Automatización con el Script `setup-aws-secrets.sh`
+
+El repositorio incluye un script interactivo en [`scripts/setup-aws-secrets.sh`](scripts/setup-aws-secrets.sh) que valida las credenciales de IAM contra AWS STS y las sincroniza en GitHub vía GitHub CLI (`gh`):
+
+```bash
+# Ejecución interactiva (solicita Access Key y Secret Key o lee ~/.aws/credentials):
+./scripts/setup-aws-secrets.sh
+
+# O cargando directamente un perfil configurado en AWS CLI:
+./scripts/setup-aws-secrets.sh --profile default
+```
