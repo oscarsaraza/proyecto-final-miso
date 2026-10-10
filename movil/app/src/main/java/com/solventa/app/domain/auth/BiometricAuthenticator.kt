@@ -1,9 +1,11 @@
 package com.solventa.app.domain.auth
 
+import javax.crypto.Cipher
+
 interface BiometricAuthenticator {
     fun checkAvailability(): BiometricAvailability
 
-    suspend fun authenticate(): BiometricResult
+    suspend fun authenticate(cipher: Cipher): BiometricResult
 }
 
 enum class BiometricAvailability {
@@ -13,7 +15,7 @@ enum class BiometricAvailability {
 }
 
 sealed interface BiometricResult {
-    data object Success : BiometricResult
+    class Success(val cipher: Cipher) : BiometricResult
     data object Cancelled : BiometricResult
     data object UseAlternative : BiometricResult
     data object LockedOut : BiometricResult
