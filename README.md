@@ -278,6 +278,10 @@ Para el funcionamiento del pipeline de despliegue a AWS en la nube (`deploy.yml`
 > 8. `CloudFrontFullAccess`: Distribución CDN de CloudFront, Origin Access Control (OAC) e invalidación de caché.
 > 9. `CloudWatchLogsFullAccess`: Grupos de logs para los contenedores del backend en Fargate.
 > 10. `IAMFullAccess`: Creación de roles de ejecución y de tarea requeridos por ECS (`execution_role` y `task_role`).
+> 11. **Política en Línea de Soporte para Servicios Específicos (`SolventaKMSFullPolicy`)**: AWS no provee políticas administradas de acceso total para KMS ni para Application Auto Scaling. El usuario debe poseer una política en línea con permisos:
+>     - `kms:*` (permite a RDS crear "grants" de cifrado con `kms:CreateGrant` y habilitar rotación de llaves).
+>     - `application-autoscaling:*` y `autoscaling:*` (registro de target de autoescalado y etiquetado de recursos con `application-autoscaling:TagResource`).
+>     - `cloudwatch:*` (creación de alarmas métricas vinculadas a las políticas de autoescalado del backend).
 
 #### Automatización con el Script `setup-aws-secrets.sh`
 
