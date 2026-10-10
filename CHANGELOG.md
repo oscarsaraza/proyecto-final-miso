@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Corrección en `backend/Dockerfile` aislando las dependencias en un entorno virtual (`/opt/venv`), configurando el directorio de inicio del usuario `appuser` y adaptando el sondeo de salud (`healthcheck`) para resolver el error `ModuleNotFoundError: No module named 'uvicorn'` al iniciar el backend mediante Docker Compose.
 
 ### Changed
+- `README.md` y `backend/README.md`: ejecución del backend sin Poetry, endpoints de autenticación del asegurado, conexión de la app con el backend local, emulador con huella y nueva guía de pruebas manuales en `docs/GUIA-PRUEBAS-SPRINT1.md`.
 - Actualización de la documentación en `README.md` y `backend/README.md`, sustituyendo la referencia residual de LocalStack por Floci e incorporando instrucciones explícitas para la ejecución del servidor backend mediante Poetry (`uvicorn`) y Docker Compose.
 
 ### Added

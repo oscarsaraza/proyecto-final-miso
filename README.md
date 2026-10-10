@@ -12,11 +12,11 @@ Su arquitectura implementa un **Monolito Modular API-First con Arquitectura Hexa
 | :---------------------------------------- | :---------------------------------------------------------------- | :------------------------------------------------------------ |
 | [`/backend`](backend/)                    | Monolito Modular Backend (Core, Rating, Policy, Payments, Claims) | Python 3.12, FastAPI, Poetry, SQLAlchemy, asyncpg             |
 | [`/web`](web/)                            | Portal Web para Asesores Comerciales                              | Angular 22, TypeScript, Standalone Components, Vitest         |
-| [`/movil`](movil/)                        | Aplicación Móvil para Asegurados                                  | Android, Kotlin 2.0, Jetpack Compose, Room (SQLCipher), JUnit |
+| [`/movil`](movil/)                        | Aplicación Móvil para Asegurados                                  | Android, Kotlin 2.1, Jetpack Compose, BiometricPrompt, Android Keystore, JUnit |
 | [`/terraform`](terraform/)                | Infraestructura como Código (AWS Multi-AZ)                        | Terraform >= 1.5, AWS Provider (ALB, ECS, RDS, S3, SQS)       |
 | [`.github/workflows`](.github/workflows/) | Pipelines de CI/CD                                                | GitHub Actions (CI en cada commit, CD a AWS en `main`)        |
 | [`experiments/`](experiments/)            | Experimentos de arquitectura y validaciones de carga E1 y E3      | Python, k6, AWS Cloud                                         |
-| [`docs/`](docs/)                          | Prototipos de navegación interactivos                             | HTML5, CSS3, JavaScript                                       |
+| [`docs/`](docs/)                          | Prototipos de navegación interactivos y guía de pruebas manuales  | HTML5, CSS3, JavaScript, Markdown                             |
 
 ---
 
@@ -52,6 +52,17 @@ poetry install
 poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+#### Opción A.1: Sin Poetry (entorno virtual con `requirements.txt`)
+
+Útil cuando Poetry no está disponible (por ejemplo, si Windows bloquea `poetry.exe` con Control de aplicaciones inteligente):
+
+```bash
+cd backend
+python -m venv .venv
+.venv/Scripts/python -m pip install -r requirements.txt        # Windows (en Linux/macOS: .venv/bin/python)
+.venv/Scripts/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
 #### Opción B: Ejecución en contenedor con Docker Compose
 
 Levanta automáticamente PostgreSQL, Floci y el contenedor del backend (`solventa-backend`):
@@ -66,6 +77,23 @@ Una vez iniciado el backend, puede acceder a los siguientes puntos de enlace:
 - **Health Check:** [http://localhost:8000/health](http://localhost:8000/health)
 - **Documentación Swagger UI:** [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Documentación ReDoc:** [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+### 2.3 Autenticación del Asegurado (canal móvil)
+
+El BFF expone en `/api/v1/auth` el acceso del asegurado (HU-MOV-02 y HU-MOV-12):
+
+| Endpoint | Descripción | Respuestas |
+| :------- | :---------- | :--------- |
+| `POST /api/v1/auth/otp` | Genera un código de 6 dígitos válido por 5 minutos (simula el SMS). No revela si el correo existe. | `200` |
+| `POST /api/v1/auth/login` | Valida correo, contraseña y código de un solo uso. Al tercer intento fallido bloquea la cuenta 15 minutos. | `200` tokens · `401` credenciales inválidas · `423` cuenta bloqueada |
+| `POST /api/v1/auth/refresh` | Renueva la sesión y rota el refresh token (cada uno se usa una sola vez). | `200` · `401` revocado o vencido |
+| `POST /api/v1/auth/logout` | Revoca el refresh token (lista negra por `jti`). | `204` · `401` token inválido |
+
+En `ENVIRONMENT=development`:
+- `POST /auth/otp` devuelve el código en `debug_code` en lugar de enviar un SMS.
+- Existe un asegurado de prueba: `maria.ruiz@correo.co` / `Solventa2026!`.
+
+En producción ninguno de los dos está disponible.
 
 
 ---
@@ -104,7 +132,7 @@ poetry install
   ```
 
 - **Inspeccionar detalle de pruebas TDD pendientes de Historias de Usuario:**
-  Las pruebas de aceptación técnica de cada historia de usuario (`TC-S1-*`) están estructuradas pero marcadas como `skipped` hasta que la funcionalidad sea codificada en su respectivo sprint. Para visualizar los motivos de omisión:
+  Las pruebas de aceptación técnica de cada historia de usuario (`TC-S1-*`) están estructuradas pero marcadas como `skipped` hasta que la funcionalidad sea codificada en su respectivo sprint. Las de HU-MOV-02 (`TC-S1-10`) y HU-MOV-12 (`TC-S1-12`) ya están implementadas en `tests/unit/test_insured_auth.py`, `tests/unit/test_insured_logout.py` y `tests/integration/test_insured_auth_api.py`. Para visualizar los motivos de omisión:
   ```bash
   poetry run pytest -rs
   ```
@@ -154,14 +182,22 @@ Puede configurar el entorno mediante **`mise`** (CLI) o mediante **Android Studi
 
 - Abra la carpeta `/movil` en Android Studio. El IDE detectará el SDK instalado en el sistema (`$HOME/Library/Android/sdk`) y descargará automáticamente la plataforma Android 35.
 
+#### Opción C: Instalación manual (sin `mise` ni Android Studio)
+
+1. JDK 17 (por ejemplo Temurin 17) con `JAVA_HOME` apuntando a él.
+2. Android SDK command-line tools en `<sdk>/cmdline-tools/latest`, más los paquetes `"platforms;android-35" "build-tools;35.0.0" "platform-tools"` instalados con `sdkmanager`.
+3. `movil/local.properties` con `sdk.dir=<ruta_al_sdk>` (archivo ignorado por git).
+
 ### 5.2 Ejecutar Pruebas Unitarias
 
 ```bash
 cd movil
 
-# Ejecutar pruebas unitarias de depuración
+# Ejecutar pruebas unitarias de depuración (en PowerShell: .\gradlew testDebugUnitTest)
 ./gradlew testDebugUnitTest
 ```
+
+Las pruebas cubren `TC-S1-09` (biometría), `TC-S1-10` (acceso alternativo), `TC-S1-11` (sesión cifrada con Keystore) y `TC-S1-12` (cierre de sesión). En la JVM, el Keystore se sustituye por una llave AES-GCM por software (`FakeSessionCrypto`).
 
 ### 5.3 Compilación y Ejecución en Dispositivo o Emulador
 
@@ -178,9 +214,41 @@ cd movil
 mise exec -- adb shell am start -n com.solventa.app/.MainActivity
 ```
 
+Antes de instalar, espere a que el emulador termine de arrancar: `adb shell getprop sys.boot_completed` debe devolver `1`. Si se instala antes, falla con `NullPointerException ... freeStorage`.
+
+### 5.4 Conexión con el Backend Local
+
+La app consume el BFF en `BuildConfig.API_BASE_URL`, definido en `movil/app/build.gradle.kts`:
+
+- **Emulador:** `http://10.0.2.2:8000/api/v1/` (valor por defecto; `10.0.2.2` es el `localhost` del equipo visto desde el emulador).
+- **Dispositivo físico:** ejecute `adb reverse tcp:8000 tcp:8000` y cambie la URL a `http://localhost:8000/api/v1/`.
+
+El tráfico HTTP sin TLS solo está permitido hacia `10.0.2.2` y `localhost` (`res/xml/network_security_config.xml`); cualquier otro destino exige HTTPS.
+
+### 5.5 Emulador con Huella para Pruebas Biométricas
+
+```bash
+SDK=<ruta_al_sdk>
+$SDK/cmdline-tools/latest/bin/sdkmanager "emulator" "system-images;android-35;google_apis;x86_64"
+$SDK/cmdline-tools/latest/bin/avdmanager create avd -n solventa -k "system-images;android-35;google_apis;x86_64"
+$SDK/emulator/emulator -avd solventa
+
+# Registrar huella: abre el asistente del sistema (PIN 1234 y luego la huella)
+adb shell am start -a android.settings.BIOMETRIC_ENROLL
+adb -e emu finger touch 1     # repetir hasta "Fingerprint added"; también sirve para entrar a la app
+```
+
+Si después de la huella queda una pantalla en blanco (registro de rostro, que el emulador no soporta), ciérrela con `adb shell am force-stop com.android.settings`.
+
 ---
 
-## 6. Infraestructura como Código (Terraform)
+## 6. Guía de Pruebas Manuales
+
+El recorrido paso a paso para probar a mano las historias del Sprint 1 está en [`docs/GUIA-PRUEBAS-SPRINT1.md`](docs/GUIA-PRUEBAS-SPRINT1.md). Indica qué hacer, qué debe pasar y qué tarea y caso cubre cada paso.
+
+---
+
+## 7. Infraestructura como Código (Terraform)
 
 La topología en AWS está estructurada de forma modular en [`/terraform`](terraform/) implementando alta disponibilidad Multi-AZ (`us-east-1a`, `us-east-1b`):
 
@@ -192,7 +260,7 @@ La topología en AWS está estructurada de forma modular en [`/terraform`](terra
 - **`modules/ecr`**: Repositorio de imágenes Docker del backend con escaneo de vulnerabilidades.
 - **`modules/web_hosting`**: Bucket S3 y CDN CloudFront con Origin Access Control (OAC) para el portal web Angular.
 
-### 6.1 Comprobación y Validación Local
+### 7.1 Comprobación y Validación Local
 
 ```bash
 cd terraform
@@ -201,7 +269,7 @@ terraform fmt -check
 terraform validate
 ```
 
-### 6.2 Planificación y Ejecución Local contra Floci (Emulador AWS)
+### 7.2 Planificación y Ejecución Local contra Floci (Emulador AWS)
 
 Para simular la creación de la infraestructura sin costos de nube utilizando el emulador local [Floci](https://floci.io/aws/) (`http://localhost:4566`):
 
@@ -219,11 +287,11 @@ terraform apply -var-file=environments/local.tfvars -auto-approve
 
 ---
 
-## 7. Integración y Despliegue Continuo (CI/CD con GitHub Actions)
+## 8. Integración y Despliegue Continuo (CI/CD con GitHub Actions)
 
 El repositorio cuenta con dos workflows automatizados en [`.github/workflows`](.github/workflows/):
 
-### 7.1 Integración Continua (`.github/workflows/ci.yml`)
+### 8.1 Integración Continua (`.github/workflows/ci.yml`)
 
 Se dispara en **cada commit y pull request sin importar la rama** (`push` y `pull_request` en `**`):
 
@@ -232,7 +300,7 @@ Se dispara en **cada commit y pull request sin importar la rama** (`push` y `pul
 3. **`mobile-ci`**: Configura Java 17 LTS y Gradle, ejecutando `./gradlew testDebugUnitTest` para la aplicación móvil.
 4. **`terraform-ci`**: Inicializa los módulos de Terraform y valida el formato y sintaxis (`fmt -check`, `validate`).
 
-### 7.2 Despliegue Continuo a AWS (`.github/workflows/deploy.yml`)
+### 8.2 Despliegue Continuo a AWS (`.github/workflows/deploy.yml`)
 
 Se dispara de forma estricta únicamente ante **push / merges a la rama `main`**:
 
@@ -240,7 +308,7 @@ Se dispara de forma estricta únicamente ante **push / merges a la rama `main`**
 2. **`deploy-backend`**: Construye la imagen Docker del backend, la publica en Amazon ECR y actualiza el servicio ECS Fargate con despliegue progresivo.
 3. **`deploy-web`**: Compila los estáticos de Angular 22, los sincroniza con el bucket S3 del portal comercial e invalida la caché de CloudFront.
 
-### 7.3 Despliegue Local Simulado con Floci (`.github/workflows/deploy-local.yml` y `scripts/deploy-local.sh`)
+### 8.3 Despliegue Local Simulado con Floci (`.github/workflows/deploy-local.yml` y `scripts/deploy-local.sh`)
 
 Permite validar de forma integral el flujo de despliegue simulando la arquitectura completa de AWS de producción localmente:
 * **Vía Workflow de GitHub Actions (`act` o manual):** Archivo [`.github/workflows/deploy-local.yml`](.github/workflows/deploy-local.yml) ejecutable mediante `act` o evento `workflow_dispatch`.
@@ -255,7 +323,7 @@ Permite validar de forma integral el flujo de despliegue simulando la arquitectu
   4. Compilación del bundle de producción del portal web Angular 22 y sincronización al bucket S3 en Floci (`s3://solventa-web-portal-local`).
   5. Verificación de salud e integridad de los recursos creados.
 
-### 7.4 Configuración de Secretos en GitHub Actions
+### 8.4 Configuración de Secretos en GitHub Actions
 
 Para el funcionamiento del pipeline de despliegue a AWS en la nube (`deploy.yml`), deben configurarse los siguientes secretos en el repositorio (**Settings > Secrets and variables > Actions**):
 
