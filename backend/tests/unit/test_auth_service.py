@@ -148,10 +148,10 @@ def test_token_types_and_claims():
     assert decoded_refresh["sub"] == "asesor@solventa.com"
     assert decoded_refresh["type"] == "refresh"
 
-    # Rechazo cruzado
-    with pytest.raises(Exception):
-        decode_access_token(refresh_token)
+    # decode_access_token permite decodificar cualquier JWT firmado por la aplicación (compatibilidad HU-MOV-12)
+    assert decode_access_token(refresh_token)["type"] == "refresh"
 
+    # decode_refresh_token exige estrictamente type == 'refresh'
     with pytest.raises(Exception):
         decode_refresh_token(access_token)
 

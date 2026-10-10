@@ -167,15 +167,12 @@ def create_refresh_token(
 
 
 def decode_access_token(token: str) -> Dict[str, Any]:
-    """Decodifica y valida un token de acceso JWT."""
-    payload = jwt.decode(
+    """Decodifica y valida un token JWT usando la clave y algoritmo configurados."""
+    return jwt.decode(
         token,
         settings.JWT_SECRET_KEY,
         algorithms=[settings.JWT_ALGORITHM],
     )
-    if payload.get("type") == "refresh":
-        raise jwt.InvalidTokenError("Token de refresco no permitido como token de acceso")
-    return payload
 
 
 def decode_refresh_token(token: str) -> Dict[str, Any]:
@@ -193,7 +190,7 @@ def decode_refresh_token(token: str) -> Dict[str, Any]:
 def require_roles(allowed_roles: List[str]):
     """
     Dependencia de autorización basada en roles (RBAC / HA-13).
-    Valida firma, expiración y claim 'role' en el Bearer token.
+    Valida firma, expiración, tipo de token 'access' y claim 'role' en el Bearer token.
     """
     async def role_checker(
         credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
@@ -216,6 +213,14 @@ def require_roles(allowed_roles: List[str]):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token de acceso inválido",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        token_type = payload.get("type", "access")
+        if token_type == "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token de refresco no permitido como token de acceso",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
