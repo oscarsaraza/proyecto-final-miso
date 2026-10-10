@@ -5,13 +5,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,7 +27,9 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.solventa.app.data.auth.AndroidBiometricAuthenticator
 import com.solventa.app.domain.auth.BiometricAuthenticator
+import com.solventa.app.ui.auth.AlternativeLoginScreen
 import com.solventa.app.ui.auth.AuthViewModel
+import com.solventa.app.ui.auth.BiometricEnrollmentDialog
 import com.solventa.app.ui.auth.BiometricLoginScreen
 import com.solventa.app.ui.theme.SolventaTheme
 
@@ -40,7 +38,10 @@ class MainActivity : FragmentActivity() {
 
     private val authViewModel: AuthViewModel by viewModels {
         viewModelFactory {
-            initializer { AuthViewModel((application as SolventaApplication).sessionRepository) }
+            initializer {
+                val app = application as SolventaApplication
+                AuthViewModel(app.sessionRepository, app.authApi)
+            }
         }
     }
 
@@ -77,9 +78,21 @@ fun SolventaMobileRoot(
         }
     }
 
+    if (uiState.offerBiometricEnrollment) {
+        BiometricEnrollmentDialog(
+            onEnable = { viewModel.enableBiometricUnlock(biometricAuthenticator) },
+            onSkip = viewModel::skipBiometricEnrollment,
+        )
+    }
+
     when {
         uiState.isAuthenticated -> HomePlaceholder(modifier)
-        uiState.showAlternativeAccess -> AlternativeAccessPlaceholder(
+        uiState.showAlternativeAccess -> AlternativeLoginScreen(
+            uiState = uiState,
+            onRequestOtp = viewModel::requestOtp,
+            onSubmit = { email, password, otpCode ->
+                viewModel.authenticateWithPassword(email, password, otpCode, biometricAuthenticator)
+            },
             onBack = viewModel::onBackToBiometrics,
             modifier = modifier,
         )
@@ -89,32 +102,6 @@ fun SolventaMobileRoot(
             onUseAlternative = viewModel::onAlternativeAccessSelected,
             modifier = modifier,
         )
-    }
-}
-
-// Se reemplaza por el formulario de contraseña y código en HU-MOV-02.
-@Composable
-private fun AlternativeAccessPlaceholder(onBack: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            text = stringResource(R.string.auth_alternative_title),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = stringResource(R.string.auth_alternative_pending),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(24.dp))
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(48.dp)) {
-            Text(stringResource(R.string.auth_back_to_biometrics))
-        }
     }
 }
 

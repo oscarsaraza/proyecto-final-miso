@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.core.middleware import TenantContextMiddleware
 from app.bff.experience.router import router as experience_router
 from app.bff.quote_edge.router import router as quote_edge_router
+from app.bff.auth.router import router as auth_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -43,6 +44,7 @@ async def health_check():
 # 4. Registro de Routers BFF
 app.include_router(experience_router, prefix=settings.API_V1_STR)
 app.include_router(quote_edge_router, prefix=settings.API_V1_STR)
+app.include_router(auth_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/", tags=["Root"])

@@ -44,3 +44,14 @@ def test_policy_service_raises_not_implemented():
     req = PolicyIssueRequest(quote_id="Q1", tier="standard", insured_document="123")
     with pytest.raises(NotImplementedError):
         policy_service.issue_policy(req)
+
+
+@pytest.mark.unit
+def test_password_hash_and_verify():
+    """Valida el hash bcrypt de contraseñas compatible con bcrypt 5."""
+    from app.core.security import get_password_hash, verify_password
+
+    hashed = get_password_hash("Solventa2026!")
+    assert hashed.startswith("$2b$")
+    assert verify_password("Solventa2026!", hashed)
+    assert not verify_password("otra-clave", hashed)
