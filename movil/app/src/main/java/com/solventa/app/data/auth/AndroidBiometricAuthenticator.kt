@@ -10,6 +10,7 @@ import com.solventa.app.domain.auth.BiometricAuthenticator
 import com.solventa.app.domain.auth.BiometricAvailability
 import com.solventa.app.domain.auth.BiometricResult
 import kotlinx.coroutines.suspendCancellableCoroutine
+import javax.crypto.Cipher
 import kotlin.coroutines.resume
 
 // Solo biometría de clase 3: es la que permite atar la llave del Keystore (HU-MOV-03).
@@ -20,10 +21,16 @@ class AndroidBiometricAuthenticator(
     override fun checkAvailability(): BiometricAvailability =
         availabilityFromCode(BiometricManager.from(activity).canAuthenticate(BIOMETRIC_STRONG))
 
-    override suspend fun authenticate(): BiometricResult = suspendCancellableCoroutine { continuation ->
+    override suspend fun authenticate(cipher: Cipher): BiometricResult = suspendCancellableCoroutine { continuation ->
         val callback = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                if (continuation.isActive) continuation.resume(BiometricResult.Success)
+                val authenticatedCipher = result.cryptoObject?.cipher
+                val outcome = if (authenticatedCipher != null) {
+                    BiometricResult.Success(authenticatedCipher)
+                } else {
+                    BiometricResult.Error(BiometricPrompt.ERROR_VENDOR)
+                }
+                if (continuation.isActive) continuation.resume(outcome)
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
@@ -42,6 +49,6 @@ class AndroidBiometricAuthenticator(
             .build()
 
         continuation.invokeOnCancellation { prompt.cancelAuthentication() }
-        prompt.authenticate(promptInfo)
+        prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
     }
 }

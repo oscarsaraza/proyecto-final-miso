@@ -1,17 +1,17 @@
 package com.solventa.app.data.local
 
 /**
- * Gestor de persistencia local protegida con SQLCipher (HU-MOV-03 / TC-S1-11).
+ * Gestor de persistencia local protegida con SQLCipher (HU-MOV-05).
  */
 class EncryptedStorageManager {
 
     /**
      * Inicializa base de datos SQLite cifrada con SQLCipher.
      *
-     * Placeholder a ser implementado durante HU-MOV-03.
+     * Placeholder a ser implementado durante HU-MOV-05.
      */
     fun initializeEncryptedDatabase(passphrase: ByteArray) {
-        throw NotImplementedError("HU-MOV-03: Almacén local protegido con SQLCipher pendiente de implementación")
+        throw NotImplementedError("HU-MOV-05: Almacén local protegido con SQLCipher pendiente de implementación")
     }
 
     /**
