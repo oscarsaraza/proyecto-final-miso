@@ -144,6 +144,7 @@ private val BLOCKING_STATUSES = setOf(
     AuthStatus.BIOMETRIC_LOCKED_OUT,
     AuthStatus.NO_STORED_SESSION,
     AuthStatus.SESSION_RESET,
+    AuthStatus.LOGGED_OUT,
 )
 
 @StringRes
@@ -158,6 +159,7 @@ private fun AuthStatus.messageRes(): Int = when (this) {
     AuthStatus.BIOMETRIC_ERROR -> R.string.auth_status_error
     AuthStatus.NO_STORED_SESSION -> R.string.auth_status_no_session
     AuthStatus.SESSION_RESET -> R.string.auth_status_session_reset
+    AuthStatus.LOGGED_OUT -> R.string.auth_status_logged_out
 }
 
 @Preview(showBackground = true)

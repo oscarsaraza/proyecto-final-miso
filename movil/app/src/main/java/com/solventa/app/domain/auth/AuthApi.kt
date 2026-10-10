@@ -3,6 +3,9 @@ package com.solventa.app.domain.auth
 interface AuthApi {
     suspend fun requestOtp(email: String): OtpResult
     suspend fun login(email: String, password: String, otpCode: String): LoginResult
+
+    /** true si el servidor revocó el refresh token. */
+    suspend fun logout(refreshToken: String): Boolean
 }
 
 sealed interface OtpResult {

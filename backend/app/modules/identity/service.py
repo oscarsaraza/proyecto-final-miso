@@ -4,10 +4,12 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, Optional, Set
+
+import jwt
 
 from app.core.config import settings
-from app.core.security import create_access_token, get_password_hash, verify_password
+from app.core.security import create_access_token, decode_access_token, get_password_hash, verify_password
 from app.modules.identity.models import TokenPair
 
 MAX_FAILED_ATTEMPTS = 3
@@ -17,6 +19,10 @@ REFRESH_TOKEN_TTL = timedelta(days=7)
 
 
 class InvalidCredentialsError(Exception):
+    pass
+
+
+class InvalidTokenError(Exception):
     pass
 
 
@@ -48,6 +54,7 @@ class InsuredAuthService:
         self._clock = clock
         self._accounts: Dict[str, InsuredAccount] = {}
         self._otps: Dict[str, OtpChallenge] = {}
+        self._revoked_jtis: Set[str] = set()
 
     def register(self, account: InsuredAccount) -> None:
         self._accounts[account.email.lower()] = account
@@ -83,8 +90,23 @@ class InsuredAuthService:
         account.failed_attempts = 0
         return self._issue_tokens(account)
 
+    def logout(self, refresh_token: str) -> None:
+        """Revoca el refresh token (HU-MOV-12). Repetir el logout no falla."""
+        self._revoked_jtis.add(self._decode_refresh_token(refresh_token)["jti"])
+
+    def refresh(self, refresh_token: str) -> TokenPair:
+        claims = self._decode_refresh_token(refresh_token)
+        if claims["jti"] in self._revoked_jtis:
+            raise InvalidTokenError()
+        account = next((a for a in self._accounts.values() if a.user_id == claims["sub"]), None)
+        if account is None:
+            raise InvalidTokenError()
+        self._revoked_jtis.add(claims["jti"])
+        return self._issue_tokens(account)
+
     def reset_state(self) -> None:
         self._otps.clear()
+        self._revoked_jtis.clear()
         for account in self._accounts.values():
             account.failed_attempts = 0
             account.locked_until = None
@@ -97,6 +119,16 @@ class InsuredAuthService:
             return False
         del self._otps[account.email.lower()]
         return True
+
+    @staticmethod
+    def _decode_refresh_token(token: str) -> dict:
+        try:
+            claims = decode_access_token(token)
+        except jwt.PyJWTError:
+            raise InvalidTokenError()
+        if claims.get("type") != "refresh" or not claims.get("jti"):
+            raise InvalidTokenError()
+        return claims
 
     def _issue_tokens(self, account: InsuredAccount) -> TokenPair:
         access_token = create_access_token(
