@@ -51,6 +51,14 @@ class HttpAuthApi(private val baseUrl: String) : AuthApi {
             }
         }
 
+    override suspend fun logout(refreshToken: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            post("auth/logout", JSONObject().put("refresh_token", refreshToken)).code == HttpURLConnection.HTTP_NO_CONTENT
+        } catch (e: IOException) {
+            false
+        }
+    }
+
     private fun post(path: String, json: JSONObject): HttpResponse {
         val connection = URL(baseUrl + path).openConnection() as HttpURLConnection
         try {

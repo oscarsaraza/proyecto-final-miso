@@ -16,6 +16,7 @@
     <string name="auth_status_locked_out">Demasiados intentos fallidos. Ingrese con contraseña y código.</string>
     <string name="auth_status_no_session">Para activar el acceso biométrico, ingrese primero con contraseña y código.</string>
     <string name="auth_status_session_reset">Por seguridad, la sesión guardada se reinició. Ingrese con contraseña y código.</string>
+    <string name="auth_status_logged_out">Cerró sesión en este teléfono. Para volver a entrar use contraseña y código.</string>
     <string name="auth_status_error">No fue posible verificar su identidad. Intente de nuevo.</string>
 
     <string name="biometric_prompt_title">Ingresar a Solventa</string>
@@ -45,5 +46,13 @@
 
     <!-- Inicio (pendiente) -->
     <string name="home_title">Bienvenido a Solventa</string>
+    <string name="home_title_named">Hola, %1$s</string>
     <string name="home_subtitle">Aquí verá sus pólizas activas.</string>
+
+    <!-- HU-MOV-12: Cierre de sesión -->
+    <string name="logout_button">Cerrar sesión</string>
+    <string name="logout_title">¿Cerrar sesión?</string>
+    <string name="logout_message">Se desvinculará la sesión activa de este teléfono y se borrarán sus credenciales. Para volver a entrar deberá usar contraseña y código.</string>
+    <string name="logout_confirm">Cerrar sesión</string>
+    <string name="logout_cancel">Cancelar</string>
 </resources>
