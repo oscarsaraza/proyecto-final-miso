@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Actualización de la documentación en `README.md` y `backend/README.md`, sustituyendo la referencia residual de LocalStack por Floci e incorporando instrucciones explícitas para la ejecución del servidor backend mediante Poetry (`uvicorn`) y Docker Compose.
 
 ### Added
+- **HU-WEB-04 · Cotización con perfil parcial:**
+  - Backend: si el buró supera 400 ms, cotiza con puntaje neutro y recargo del 4 %, y responde `status="degraded"` con `degradation_reason="TIMEOUT_EXCEEDED"`.
+  - Web: banner ámbar con `role="alert"` para cotizaciones degradadas.
+  - Pruebas TC-S1-06 y Vitest del banner.
 - **HU-MOV-12 · Cierre de sesión seguro y revocación móvil:**
   - Backend: `POST /api/v1/auth/logout` revoca el refresh token (lista negra por `jti`) y `POST /api/v1/auth/refresh` rechaza los revocados y rota el token en cada uso.
   - App: confirmación modal, purga de tokens y llave del Keystore, regreso a la bienvenida y revocación en el servidor (de mejor esfuerzo sin red).
