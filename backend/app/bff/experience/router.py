@@ -97,7 +97,7 @@ async def create_quote(
 async def issue_policy(request: PolicyIssueRequest):
     """Emite la póliza contractual y genera evento outbox (Placeholder para HU-WEB-05)."""
     try:
-        policy_service.issue_policy(request)
+        return policy_service.issue_policy(request)
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
 
