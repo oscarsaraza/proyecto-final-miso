@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Solventa</string>
+
+    <!-- HU-MOV-01: Acceso biométrico -->
+    <string name="auth_biometric_title">Acceso biométrico</string>
+    <string name="auth_biometric_subtitle">Toque el sensor para ingresar</string>
+    <string name="auth_sensor_description">Ingresar con huella o rostro</string>
+    <string name="auth_use_alternative">Ingresar con contraseña y código</string>
+    <string name="auth_status_idle">Sensor biométrico listo</string>
+    <string name="auth_status_authenticating">Verificando su identidad…</string>
+    <string name="auth_status_authenticated">¡Identidad biométrica confirmada!</string>
+    <string name="auth_status_cancelled">Autenticación cancelada. Toque el sensor para intentar de nuevo.</string>
+    <string name="auth_status_unavailable">La biometría no está disponible en este teléfono. Ingrese con contraseña y código.</string>
+    <string name="auth_status_not_enrolled">No hay huella ni rostro registrados en este teléfono. Ingrese con contraseña y código.</string>
+    <string name="auth_status_locked_out">Demasiados intentos fallidos. Ingrese con contraseña y código.</string>
+    <string name="auth_status_error">No fue posible verificar su identidad. Intente de nuevo.</string>
+
+    <string name="biometric_prompt_title">Ingresar a Solventa</string>
+    <string name="biometric_prompt_subtitle">Confirme su identidad con huella o rostro</string>
+    <string name="biometric_prompt_negative">Usar contraseña</string>
+
+    <!-- HU-MOV-02: Acceso alternativo (pendiente) -->
+    <string name="auth_alternative_title">Acceso alternativo</string>
+    <string name="auth_alternative_pending">El ingreso con contraseña y código de seguridad estará disponible próximamente.</string>
+    <string name="auth_back_to_biometrics">Volver al acceso biométrico</string>
+
+    <!-- Inicio (pendiente) -->
+    <string name="home_title">Bienvenido a Solventa</string>
+    <string name="home_subtitle">Aquí verá sus pólizas activas.</string>
+</resources>
