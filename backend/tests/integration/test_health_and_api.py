@@ -63,20 +63,7 @@ async def test_unimplemented_endpoints_return_501(async_client: AsyncClient):
     )
     assert consent_resp.status_code == 501
 
-    # 3. Cotización (HU-WEB-03)
-    quote_resp = await async_client.post(
-        "/api/v1/experience/quotes",
-        headers=auth_headers,
-        json={
-            "document_type": "CC",
-            "document_number": "1020304050",
-            "birth_date": "1990-05-15",
-            "insured_amount": 100000000.0,
-        },
-    )
-    assert quote_resp.status_code == 501
-
-    # 4. Emisión de póliza (HU-WEB-05)
+    # 3. Emisión de póliza (HU-WEB-05)
     policy_resp = await async_client.post(
         "/api/v1/experience/policies",
         headers=auth_headers,
@@ -88,7 +75,7 @@ async def test_unimplemented_endpoints_return_501(async_client: AsyncClient):
     )
     assert policy_resp.status_code == 501
 
-    # 5. Pago (HU-WEB-06)
+    # 4. Pago (HU-WEB-06)
     pay_headers = {**auth_headers, "Idempotency-Key": "key-123"}
     pay_resp = await async_client.post(
         "/api/v1/experience/payments/charge",
@@ -107,8 +94,8 @@ async def test_unimplemented_endpoints_return_501(async_client: AsyncClient):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_quote_edge_unauthorized_and_unimplemented(async_client: AsyncClient):
-    """Valida canal quote-edge B2B: 401 si falta X-Partner-Id, y 501 al invocar servicio no implementado."""
+async def test_quote_edge_requiere_socio_y_cotiza(async_client: AsyncClient):
+    """Valida canal quote-edge B2B: 401 si falta X-Partner-Id y cotización con la cabecera."""
     quote_payload = {
         "document_type": "CC",
         "document_number": "1020304050",
@@ -119,10 +106,38 @@ async def test_quote_edge_unauthorized_and_unimplemented(async_client: AsyncClie
     resp_no_header = await async_client.post("/api/v1/quote-edge/quotes", json=quote_payload)
     assert resp_no_header.status_code == 401
 
-    # Con cabecera -> 501
+    # Con cabecera -> 200 (motor de tarifa de HU-WEB-03)
     resp_with_header = await async_client.post(
         "/api/v1/quote-edge/quotes",
         headers={"X-Partner-Id": "banco-aliado-1"},
         json=quote_payload,
     )
-    assert resp_with_header.status_code == 501
+    assert resp_with_header.status_code == 200
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_hu_web_03_cotizacion_con_desglose_de_la_prima(async_client: AsyncClient):
+    """HU-WEB-03: la cotización del canal web trae el aporte en pesos de cada factor."""
+    from app.core.security import create_access_token
+
+    advisor_token = create_access_token(subject="asesor@solventa.com", role="advisor")
+    auth_headers = {"Authorization": f"Bearer {advisor_token}"}
+
+    response = await async_client.post(
+        "/api/v1/experience/quotes",
+        headers=auth_headers,
+        json={
+            "document_type": "CC",
+            "document_number": "1020304050",
+            "birth_date": "1990-05-15",
+            "insured_amount": 100000000.0,
+            "occupation_risk": 2,
+        },
+    )
+
+    assert response.status_code == 200
+    tiers = response.json()["tiers"]
+    assert len(tiers) == 3
+    for tier in tiers:
+        assert sum(factor["amount"] for factor in tier["breakdown"]) == tier["monthly_premium"]

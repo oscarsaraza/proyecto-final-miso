@@ -28,11 +28,19 @@ class QuoteRequest(BaseModel):
     occupation_risk: int = Field(default=1, ge=1, le=5)
 
 
+class PremiumFactor(BaseModel):
+    code: str = Field(..., json_schema_extra={"example": "age"})
+    label: str = Field(..., json_schema_extra={"example": "Ajuste por edad"})
+    multiplier: float = Field(..., description="Multiplicador aplicado; 1.0 en la tarifa base")
+    amount: float = Field(..., description="Aporte en pesos a la prima mensual; negativo si la reduce")
+
+
 class QuoteTierDetail(BaseModel):
     tier: PlanTier
     monthly_premium: float
     annual_premium: float
     coverages: List[Coverage]
+    breakdown: List[PremiumFactor] = Field(default_factory=list)
 
 
 class QuoteResponse(BaseModel):
