@@ -36,6 +36,19 @@ import { PremiumBreakdownComponent } from './premium-breakdown/premium-breakdown
 
       @if (selectedTierDetail(); as tier) {
         <div class="quote-result">
+          @if (quote()!.status === 'degraded') {
+            <div class="partial-profile-banner" role="alert">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M10.3 4.3L2.6 17.5A2 2 0 004.3 20.5h15.4a2 2 0 001.7-3L13.7 4.3a2 2 0 00-3.4 0z" />
+                <path d="M12 9v4M12 16.5h.01" />
+              </svg>
+              <div>
+                <strong>Cotización calculada con perfil parcial por latencia en proveedores de scoring</strong>
+                <p>La tarifa aplica la tabla base conservadora y podrá reajustarse o ratificarse en la suscripción definitiva.</p>
+              </div>
+            </div>
+          }
           <div class="tier-tabs" role="tablist" aria-label="Planes cotizados">
             @for (option of quote()!.tiers; track option.tier) {
               <button
@@ -116,6 +129,23 @@ import { PremiumBreakdownComponent } from './premium-breakdown/premium-breakdown
       margin-top: 24px;
       display: grid;
       gap: 12px;
+    }
+    .partial-profile-banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 16px;
+      border: 1px solid rgba(180, 83, 9, 0.25);
+      border-radius: 8px;
+      background: #fdf4e7;
+      color: #b45309;
+      font-size: 0.8125rem;
+    }
+    .partial-profile-banner svg {
+      flex: none;
+    }
+    .partial-profile-banner p {
+      margin: 4px 0 0;
     }
     .tier-tabs {
       display: flex;
