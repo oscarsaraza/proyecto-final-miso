@@ -148,7 +148,7 @@ backend/.venv/bin/python -c "from app.core.security import generate_totp; print(
 *(Opcionalmente, puede registrar la clave `JBSWY3DPEHPK3PXP` en aplicaciones como Google Authenticator o Authy).*
 
 > [!NOTE]
-> **Seguridad y Bloqueo Temporal:** Tras acumular 3 intentos fallidos consecutivos de autenticación, la cuenta se bloquea por 15 minutos (HTTP 423 Locked).
+> **Seguridad y Bloqueo Temporal:** Tras acumular 5 intentos fallidos consecutivos de autenticación, la cuenta se bloquea por 15 minutos (HTTP 423 Locked).
 
 ### 4.3 Pruebas Automatizadas y Compilación
 

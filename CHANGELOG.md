@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Implementación integral de la historia de usuario **HU-WEB-13: Login y Sesión del Asesor Comercial en el Portal Web**:
   - Modelo relacional `UserDB` en SQLAlchemy con hash seguro bcrypt (`HA-06`) y esquemas Pydantic para endpoints de autenticación y renovación de sesión.
   - Implementación de segundo factor TOTP conforme a RFC 6238 en Python nativo con tolerancia temporal de $\pm 30$ segundos (`HA-06`).
-  - Mitigación de fuerza bruta y enumeración de cuentas mediante bloqueo temporal de 15 minutos (HTTP 423 Locked) tras 3 intentos fallidos consecutivos, y mensaje de error genérico.
+  - Mitigación de fuerza bruta y enumeración de cuentas mediante bloqueo temporal de 15 minutos (HTTP 423 Locked) tras 5 intentos fallidos consecutivos, y mensaje de error genérico.
   - Endpoints BFF `/api/v1/experience/auth/login` y `/api/v1/experience/auth/refresh` con generación de tokens JWT (`access_token` con expiración de 15 min y `refresh_token` de 7 días).
   - Control de acceso por roles RBAC (`HA-13`) mediante la dependencia `require_roles(["advisor"])` asegurando los endpoints comerciales del portal.
   - Inicialización de tablas y siembra del usuario asesor comercial semilla (`asesor@solventa.com` / `SuperSecreta2026*`) mediante gestor de ciclo de vida `lifespan` en FastAPI.

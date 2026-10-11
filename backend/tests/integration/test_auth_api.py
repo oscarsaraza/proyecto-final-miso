@@ -66,35 +66,29 @@ async def test_login_invalid_credentials_returns_401(async_client: AsyncClient):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_login_lockout_after_3_attempts_returns_423(async_client: AsyncClient):
-    """Valida bloqueo temporal tras acumular 3 intentos fallidos consecutivos (Criterio 2)."""
+async def test_login_lockout_after_5_attempts_returns_423(async_client: AsyncClient):
+    """Valida bloqueo temporal tras acumular 5 intentos fallidos consecutivos (Criterio 2 - Issue #111)."""
     valid_totp = generate_totp(DEFAULT_SEED_TOTP_SECRET)
 
-    # Intento 1
-    r1 = await async_client.post(
-        "/api/v1/experience/auth/login",
-        json={"username": DEFAULT_SEED_USERNAME, "password": "Wrong1*", "totp_code": valid_totp},
-    )
-    assert r1.status_code == 401
+    # Intentos 1 a 4 -> 401
+    for attempt in range(1, 5):
+        resp = await async_client.post(
+            "/api/v1/experience/auth/login",
+            json={"username": DEFAULT_SEED_USERNAME, "password": f"Wrong{attempt}*", "totp_code": valid_totp},
+        )
+        assert resp.status_code == 401
 
-    # Intento 2
-    r2 = await async_client.post(
+    # Intento 5 -> HTTP 423 Locked
+    r5 = await async_client.post(
         "/api/v1/experience/auth/login",
-        json={"username": DEFAULT_SEED_USERNAME, "password": "Wrong2*", "totp_code": valid_totp},
+        json={"username": DEFAULT_SEED_USERNAME, "password": "Wrong5*", "totp_code": valid_totp},
     )
-    assert r2.status_code == 401
-
-    # Intento 3 -> HTTP 423 Locked
-    r3 = await async_client.post(
-        "/api/v1/experience/auth/login",
-        json={"username": DEFAULT_SEED_USERNAME, "password": "Wrong3*", "totp_code": valid_totp},
-    )
-    assert r3.status_code == 423
-    assert "Cuenta bloqueada por seguridad" in r3.json()["detail"]
-    assert "15 minutos" in r3.json()["detail"]
+    assert r5.status_code == 423
+    assert "Cuenta bloqueada por seguridad" in r5.json()["detail"]
+    assert "15 minutos" in r5.json()["detail"]
 
     # Intento adicional con credenciales válidas sigue bloqueado
-    r4 = await async_client.post(
+    r_locked = await async_client.post(
         "/api/v1/experience/auth/login",
         json={
             "username": DEFAULT_SEED_USERNAME,
@@ -102,7 +96,7 @@ async def test_login_lockout_after_3_attempts_returns_423(async_client: AsyncCli
             "totp_code": valid_totp,
         },
     )
-    assert r4.status_code == 423
+    assert r_locked.status_code == 423
 
 
 @pytest.mark.integration

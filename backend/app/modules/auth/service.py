@@ -86,7 +86,7 @@ class AuthService:
     ) -> UserDB:
         """
         Valida credenciales y código 2FA TOTP con política de bloqueo:
-        - Si la cuenta acumula 3 intentos fallidos consecutivos, se bloquea por 15 minutos (HTTP 423).
+        - Si la cuenta acumula 5 intentos fallidos consecutivos, se bloquea por 15 minutos (HTTP 423).
         - Si las credenciales o código 2FA son incorrectos, retorna mensaje unificado (HTTP 401).
         - Si es exitoso, resetea el contador de intentos fallidos.
         """

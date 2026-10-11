@@ -235,47 +235,37 @@ async def test_authenticate_user_invalid_credentials_returns_unified_401(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_account_lockout_after_3_consecutive_failed_attempts(
+async def test_account_lockout_after_5_consecutive_failed_attempts(
     auth_service: AuthService, session: InMemorySessionTestDouble
 ):
-    """Valida bloqueo temporal de 15 minutos (HTTP 423) al acumular 3 intentos fallidos consecutivos."""
+    """Valida bloqueo temporal de 15 minutos (HTTP 423) al acumular 5 intentos fallidos consecutivos (Issue #111)."""
     user = await auth_service.seed_default_users(session)
     valid_totp = generate_totp(user.totp_secret)
 
-    # Intento 1 fallido -> 401
-    with pytest.raises(HTTPException) as exc_1:
-        await auth_service.authenticate_user(
-            session=session,
-            username=DEFAULT_SEED_USERNAME,
-            password="WrongPassword1*",
-            totp_code=valid_totp,
-        )
-    assert exc_1.value.status_code == 401
-    assert user.failed_attempts == 1
+    # Intentos 1 a 4 fallidos -> 401
+    for attempt in range(1, 5):
+        with pytest.raises(HTTPException) as exc:
+            await auth_service.authenticate_user(
+                session=session,
+                username=DEFAULT_SEED_USERNAME,
+                password=f"WrongPassword{attempt}*",
+                totp_code=valid_totp,
+            )
+        assert exc.value.status_code == 401
+        assert user.failed_attempts == attempt
 
-    # Intento 2 fallido -> 401
-    with pytest.raises(HTTPException) as exc_2:
+    # Intento 5 fallido -> 423 Locked
+    with pytest.raises(HTTPException) as exc_5:
         await auth_service.authenticate_user(
             session=session,
             username=DEFAULT_SEED_USERNAME,
-            password="WrongPassword2*",
+            password="WrongPassword5*",
             totp_code=valid_totp,
         )
-    assert exc_2.value.status_code == 401
-    assert user.failed_attempts == 2
-
-    # Intento 3 fallido -> 423 Locked
-    with pytest.raises(HTTPException) as exc_3:
-        await auth_service.authenticate_user(
-            session=session,
-            username=DEFAULT_SEED_USERNAME,
-            password="WrongPassword3*",
-            totp_code=valid_totp,
-        )
-    assert exc_3.value.status_code == 423
-    assert "Cuenta bloqueada por seguridad" in exc_3.value.detail
-    assert "15 minutos" in exc_3.value.detail
-    assert user.failed_attempts == 3
+    assert exc_5.value.status_code == 423
+    assert "Cuenta bloqueada por seguridad" in exc_5.value.detail
+    assert "15 minutos" in exc_5.value.detail
+    assert user.failed_attempts == 5
     assert user.locked_until is not None
 
     # Intentos subsiguientes mientras está bloqueado (incluso con credenciales válidas) -> 423
