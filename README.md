@@ -139,9 +139,13 @@ poetry install
 
 ---
 
-## 4. Ejecución de Pruebas del Portal Web (Angular 22)
+## 4. Portal Web para Asesores Comerciales (Angular 22)
 
-El frontend web utiliza Angular 22 con **Vitest** como runner de pruebas unitarias ultrarrápido y esbuild para empaquetado de producción.
+El portal web para asesores comerciales (`/web`) está desarrollado en Angular 22 con Standalone Components, **Vitest** como runner de pruebas unitarias ultrarrápido y esbuild para empaquetado de producción.
+
+### 4.1 Ejecución en Entorno Local
+
+Para iniciar el servidor de desarrollo con proxy inverso hacia el backend en `localhost:8000`:
 
 ```bash
 cd web
@@ -149,10 +153,40 @@ cd web
 # 1. Instalar dependencias
 npm install
 
-# 2. Ejecutar pruebas unitarias (modo CI sin watch)
+# 2. Iniciar servidor de desarrollo con proxy
+npm start
+```
+
+La aplicación estará disponible en [http://localhost:4200/](http://localhost:4200/).
+
+### 4.2 Autenticación y Acceso del Asesor Comercial (HU-WEB-13)
+
+El sistema cuenta con un usuario asesor semilla configurado para pruebas de desarrollo:
+
+- **Usuario (Email):** `asesor@solventa.com`
+- **Contraseña:** `SuperSecreta2026*`
+- **Secreto TOTP (Base32):** `JBSWY3DPEHPK3PXP`
+
+Para obtener el código TOTP dinámico de 6 dígitos válido en cualquier momento (ventana de $\pm 30$ segundos según RFC 6238):
+
+```bash
+backend/.venv/bin/python -c "from app.core.security import generate_totp; print('TOTP actual:', generate_totp('JBSWY3DPEHPK3PXP'))"
+```
+
+*(Opcionalmente, puede registrar la clave `JBSWY3DPEHPK3PXP` en aplicaciones como Google Authenticator o Authy).*
+
+> [!NOTE]
+> **Seguridad y Bloqueo Temporal:** Tras acumular 5 intentos fallidos consecutivos de autenticación, la cuenta se bloquea por 15 minutos (HTTP 423 Locked).
+
+### 4.3 Pruebas Automatizadas y Compilación
+
+```bash
+cd web
+
+# 1. Ejecutar pruebas unitarias (modo CI sin watch)
 npm test -- --watch=false
 
-# 3. Compilación de producción
+# 2. Compilación de producción
 npm run build
 ```
 
@@ -327,10 +361,38 @@ Permite validar de forma integral el flujo de despliegue simulando la arquitectu
 
 Para el funcionamiento del pipeline de despliegue a AWS en la nube (`deploy.yml`), deben configurarse los siguientes secretos en el repositorio (**Settings > Secrets and variables > Actions**):
 
-| Secreto                 | Descripción                                                    | Ejemplo                                    |
-| :---------------------- | :------------------------------------------------------------- | :----------------------------------------- |
-| `AWS_ACCESS_KEY_ID`     | Identificador de clave de acceso del usuario IAM de despliegue | `AKIAIOSFODNN7EXAMPLE`                     |
-| `AWS_SECRET_ACCESS_KEY` | Clave de acceso secreta del usuario IAM                        | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
-| `AWS_REGION`            | Región primaria de AWS para el despliegue                      | `us-east-1`                                |
+| Secreto                 | Requerido | Descripción                                                        | Ejemplo                                    |
+| :---------------------- | :-------: | :----------------------------------------------------------------- | :----------------------------------------- |
+| `AWS_ACCESS_KEY_ID`     | **Sí**    | Identificador de clave de acceso del usuario IAM de despliegue     | `AKIAIOSFODNN7EXAMPLE`                     |
+| `AWS_SECRET_ACCESS_KEY` | **Sí**    | Clave de acceso secreta del usuario IAM                            | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
+| `AWS_REGION`            | Opcional  | Región primaria de AWS para el despliegue (por defecto `us-east-1`)| `us-east-1`                                |
 
-El usuario o rol de IAM debe poseer permisos para gestionar recursos de VPC, ECS Fargate, ALB, RDS, ECR, S3 y SQS.
+> [!NOTE]
+> Para que Terraform y los workflows de GitHub Actions puedan aprovisionar y actualizar la infraestructura sin errores de autorización, debes asociar al usuario de IAM las siguientes **Políticas administradas por AWS (AWS Managed Policies)**:
+> 
+> 1. `AmazonEC2FullAccess` (o `AmazonVPCFullAccess`): Gestión de VPC, subredes, tablas de ruteo, Internet Gateways, NAT Gateways y Security Groups.
+> 2. `ElasticLoadBalancingFullAccess`: Creación y configuración del ALB, Target Groups y Listeners.
+> 3. `AmazonECS_FullAccess`: Gestión del clúster ECS Fargate, tareas, servicios y autoescalado.
+> 4. `AmazonEC2ContainerRegistryFullAccess`: Repositorio ECR, políticas de ciclo de vida e inicio de sesión para push/pull de imágenes Docker.
+> 5. `AmazonRDSFullAccess`: Instancia PostgreSQL 16 Multi-AZ y grupos de subredes de base de datos.
+> 6. `AmazonS3FullAccess`: Buckets de almacenamiento de documentos y portal web, versionado, cifrado y sincronización de estáticos.
+> 7. `AmazonSQSFullAccess`: Colas SQS de eventos y Dead Letter Queues (DLQ).
+> 8. `CloudFrontFullAccess`: Distribución CDN de CloudFront, Origin Access Control (OAC) e invalidación de caché.
+> 9. `CloudWatchLogsFullAccess`: Grupos de logs para los contenedores del backend en Fargate.
+> 10. `IAMFullAccess`: Creación de roles de ejecución y de tarea requeridos por ECS (`execution_role` y `task_role`).
+> 11. **Política en Línea de Soporte para Servicios Específicos (`SolventaKMSFullPolicy`)**: AWS no provee políticas administradas de acceso total para KMS ni para Application Auto Scaling. El usuario debe poseer una política en línea con permisos:
+>     - `kms:*` (permite a RDS crear "grants" de cifrado con `kms:CreateGrant` y habilitar rotación de llaves).
+>     - `application-autoscaling:*` y `autoscaling:*` (registro de target de autoescalado y etiquetado de recursos con `application-autoscaling:TagResource`).
+>     - `cloudwatch:*` (creación de alarmas métricas vinculadas a las políticas de autoescalado del backend).
+
+#### Automatización con el Script `setup-aws-secrets.sh`
+
+El repositorio incluye un script interactivo en [`scripts/setup-aws-secrets.sh`](scripts/setup-aws-secrets.sh) que valida las credenciales de IAM contra AWS STS y las sincroniza en GitHub vía GitHub CLI (`gh`):
+
+```bash
+# Ejecución interactiva (solicita Access Key y Secret Key o lee ~/.aws/credentials):
+./scripts/setup-aws-secrets.sh
+
+# O cargando directamente un perfil configurado en AWS CLI:
+./scripts/setup-aws-secrets.sh --profile default
+```
