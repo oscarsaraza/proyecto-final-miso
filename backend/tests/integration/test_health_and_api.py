@@ -30,17 +30,15 @@ async def test_root_endpoint(async_client: AsyncClient):
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_unimplemented_endpoints_return_501(async_client: AsyncClient):
-    """Valida que los endpoints de historias de usuario no implementadas retornen HTTP 501 Not Implemented."""
-    # 1. Login asesor (HU-WEB-13)
-    login_resp = await async_client.post(
-        "/api/v1/experience/auth/login",
-        json={"username": "test@solventa.com", "password": "SecretPassword123!", "totp_code": "123456"},
-    )
-    assert login_resp.status_code == 501
+    """Valida que los endpoints de historias protegidas retornen HTTP 501 Not Implemented con rol advisor."""
+    from app.core.security import create_access_token
+    advisor_token = create_access_token(subject="asesor@solventa.com", role="advisor")
+    auth_headers = {"Authorization": f"Bearer {advisor_token}"}
 
-    # 2. Validación de cliente (HU-WEB-02)
+    # 1. Validación de cliente (HU-WEB-02)
     client_resp = await async_client.post(
         "/api/v1/experience/clients/validate",
+        headers=auth_headers,
         json={
             "document_type": "CC",
             "document_number": "1020304050",
@@ -53,9 +51,10 @@ async def test_unimplemented_endpoints_return_501(async_client: AsyncClient):
     )
     assert client_resp.status_code == 501
 
-    # 3. Consentimiento (HU-WEB-01)
+    # 2. Consentimiento (HU-WEB-01)
     consent_resp = await async_client.post(
         "/api/v1/experience/consent",
+        headers=auth_headers,
         json={
             "document_number": "1020304050",
             "otp_code": "123456",
@@ -64,9 +63,10 @@ async def test_unimplemented_endpoints_return_501(async_client: AsyncClient):
     )
     assert consent_resp.status_code == 501
 
-    # 5. Emisión de póliza (HU-WEB-05)
+    # 3. Emisión de póliza (HU-WEB-05)
     policy_resp = await async_client.post(
         "/api/v1/experience/policies",
+        headers=auth_headers,
         json={
             "quote_id": "QUO-1",
             "tier": "standard",
@@ -75,10 +75,11 @@ async def test_unimplemented_endpoints_return_501(async_client: AsyncClient):
     )
     assert policy_resp.status_code == 501
 
-    # 6. Pago (HU-WEB-06)
+    # 4. Pago (HU-WEB-06)
+    pay_headers = {**auth_headers, "Idempotency-Key": "key-123"}
     pay_resp = await async_client.post(
         "/api/v1/experience/payments/charge",
-        headers={"Idempotency-Key": "key-123"},
+        headers=pay_headers,
         json={
             "quote_id": "QUO-1",
             "policy_number": "POL-1",
@@ -118,8 +119,14 @@ async def test_quote_edge_requiere_socio_y_cotiza(async_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_hu_web_03_cotizacion_con_desglose_de_la_prima(async_client: AsyncClient):
     """HU-WEB-03: la cotización del canal web trae el aporte en pesos de cada factor."""
+    from app.core.security import create_access_token
+
+    advisor_token = create_access_token(subject="asesor@solventa.com", role="advisor")
+    auth_headers = {"Authorization": f"Bearer {advisor_token}"}
+
     response = await async_client.post(
         "/api/v1/experience/quotes",
+        headers=auth_headers,
         json={
             "document_type": "CC",
             "document_number": "1020304050",

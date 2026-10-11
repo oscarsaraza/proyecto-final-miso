@@ -20,16 +20,56 @@
 }
 
 .logo-text {
-  font-size: 20px;
+  font-family: inherit;
+  font-size: 1.25rem;
   font-weight: 700;
   color: #38bdf8;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.02em;
 }
 
 .logo-sub {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: #94a3b8;
-  font-weight: 400;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.header-nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.user-greeting {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #cbd5e1;
+  letter-spacing: -0.005em;
+}
+
+.user-greeting strong {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.btn-logout {
+  font-family: inherit;
+  background: transparent;
+  border: 1px solid #475569;
+  color: #cbd5e1;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-logout:hover {
+  background: #1e293b;
+  border-color: #64748b;
+  color: #ffffff;
 }
 
 .env-badge {
@@ -37,8 +77,9 @@
   color: #38bdf8;
   padding: 4px 10px;
   border-radius: 9999px;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .main-content {
