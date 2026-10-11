@@ -5,7 +5,13 @@
       <span class="logo-sub">Seguros Digitales</span>
     </div>
     <div class="header-nav">
-      <span class="env-badge">Portal Asesores</span>
+      <ng-container *ngIf="currentSession() as session; else defaultBadge">
+        <span class="user-greeting">Asesor: <strong>{{ session.advisorName }}</strong></span>
+        <button type="button" class="btn-logout" (click)="logout()">Cerrar sesión</button>
+      </ng-container>
+      <ng-template #defaultBadge>
+        <span class="env-badge">Portal Asesores</span>
+      </ng-template>
     </div>
   </div>
 </header>
