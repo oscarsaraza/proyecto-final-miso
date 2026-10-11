@@ -2,11 +2,18 @@
 from fastapi import APIRouter, HTTPException, status
 
 from app.core.config import settings
-from app.modules.identity.models import InsuredLoginRequest, OtpRequest, OtpResponse, TokenPair
+from app.modules.identity.models import (
+    InsuredLoginRequest,
+    OtpRequest,
+    OtpResponse,
+    RefreshTokenRequest,
+    TokenPair,
+)
 from app.modules.identity.service import (
     OTP_TTL,
     AccountLockedError,
     InvalidCredentialsError,
+    InvalidTokenError,
     insured_auth_service,
 )
 
@@ -37,3 +44,19 @@ async def login(request: InsuredLoginRequest):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Correo, contraseña o código incorrectos.",
         )
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(request: RefreshTokenRequest):
+    try:
+        insured_auth_service.logout(request.refresh_token)
+    except InvalidTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token de sesión inválido.")
+
+
+@router.post("/refresh", response_model=TokenPair)
+async def refresh(request: RefreshTokenRequest):
+    try:
+        return insured_auth_service.refresh(request.refresh_token)
+    except InvalidTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sesión revocada o vencida.")

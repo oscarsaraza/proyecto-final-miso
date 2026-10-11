@@ -5,9 +5,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +34,7 @@ import com.solventa.app.ui.auth.AlternativeLoginScreen
 import com.solventa.app.ui.auth.AuthViewModel
 import com.solventa.app.ui.auth.BiometricEnrollmentDialog
 import com.solventa.app.ui.auth.BiometricLoginScreen
+import com.solventa.app.ui.auth.LogoutConfirmationDialog
 import com.solventa.app.ui.theme.SolventaTheme
 
 // BiometricPrompt requiere una FragmentActivity para mostrar el diálogo del sistema.
@@ -85,8 +89,16 @@ fun SolventaMobileRoot(
         )
     }
 
+    if (uiState.showLogoutConfirmation) {
+        LogoutConfirmationDialog(onConfirm = viewModel::confirmLogout, onDismiss = viewModel::cancelLogout)
+    }
+
     when {
-        uiState.isAuthenticated -> HomePlaceholder(modifier)
+        uiState.isAuthenticated -> HomePlaceholder(
+            fullName = uiState.fullName,
+            onLogout = viewModel::requestLogout,
+            modifier = modifier,
+        )
         uiState.showAlternativeAccess -> AlternativeLoginScreen(
             uiState = uiState,
             onRequestOtp = viewModel::requestOtp,
@@ -107,7 +119,7 @@ fun SolventaMobileRoot(
 
 // Se reemplaza por la billetera de pólizas en HU-MOV-04.
 @Composable
-private fun HomePlaceholder(modifier: Modifier = Modifier) {
+private fun HomePlaceholder(fullName: String?, onLogout: () -> Unit, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -116,7 +128,7 @@ private fun HomePlaceholder(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = stringResource(R.string.home_title),
+            text = fullName?.let { stringResource(R.string.home_title_named, it) } ?: stringResource(R.string.home_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
         )
@@ -124,5 +136,9 @@ private fun HomePlaceholder(modifier: Modifier = Modifier) {
             text = stringResource(R.string.home_subtitle),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Spacer(Modifier.height(32.dp))
+        OutlinedButton(onClick = onLogout) {
+            Text(stringResource(R.string.logout_button))
+        }
     }
 }

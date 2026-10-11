@@ -27,6 +27,7 @@ enum class AuthStatus {
     BIOMETRIC_ERROR,
     NO_STORED_SESSION,
     SESSION_RESET,
+    LOGGED_OUT,
 }
 
 enum class AlternativeLoginError {
@@ -51,6 +52,7 @@ data class AuthUiState(
     val alternativeLogin: AlternativeLoginState = AlternativeLoginState(),
     val offerBiometricEnrollment: Boolean = false,
     val fullName: String? = null,
+    val showLogoutConfirmation: Boolean = false,
 )
 
 /**
@@ -212,10 +214,21 @@ class AuthViewModel(
         }
     }
 
-    /**
-     * Cierre de sesión seguro y borrado de secretos (Placeholder para HU-MOV-12 / TC-S1-12).
-     */
-    fun logout() {
-        throw NotImplementedError("HU-MOV-12: Cierre de sesión seguro pendiente de implementación")
+    fun requestLogout() {
+        if (_uiState.value.isAuthenticated) _uiState.update { it.copy(showLogoutConfirmation = true) }
+    }
+
+    fun cancelLogout() {
+        _uiState.update { it.copy(showLogoutConfirmation = false) }
+    }
+
+    // Primero se purga lo local; la revocación en el servidor es de mejor esfuerzo si no hay red.
+    fun confirmLogout() {
+        val refreshToken = sessionRepository.activeSession?.refreshToken
+        sessionRepository.clear()
+        _uiState.value = AuthUiState(status = AuthStatus.LOGGED_OUT)
+        if (refreshToken != null) {
+            viewModelScope.launch { authApi.logout(refreshToken) }
+        }
     }
 }

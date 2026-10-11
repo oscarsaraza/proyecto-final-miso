@@ -56,3 +56,37 @@ async def test_tc_s1_10_codigo_con_formato_invalido_responde_422(async_client: A
     )
 
     assert response.status_code == 422
+
+
+async def login(client: AsyncClient) -> dict:
+    code = await request_code(client)
+    response = await client.post("/api/v1/auth/login", json={"email": EMAIL, "password": PASSWORD, "otp_code": code})
+    return response.json()
+
+
+@pytest.mark.integration
+async def test_tc_s1_12_logout_revoca_la_sesion(async_client: AsyncClient):
+    tokens = await login(async_client)
+
+    logout = await async_client.post("/api/v1/auth/logout", json={"refresh_token": tokens["refresh_token"]})
+    refresh = await async_client.post("/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+
+    assert logout.status_code == 204
+    assert refresh.status_code == 401
+
+
+@pytest.mark.integration
+async def test_tc_s1_12_refresh_sin_logout_renueva_tokens(async_client: AsyncClient):
+    tokens = await login(async_client)
+
+    response = await async_client.post("/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+
+    assert response.status_code == 200
+    assert response.json()["access_token"]
+
+
+@pytest.mark.integration
+async def test_tc_s1_12_logout_con_token_invalido_responde_401(async_client: AsyncClient):
+    response = await async_client.post("/api/v1/auth/logout", json={"refresh_token": "no-es-un-jwt"})
+
+    assert response.status_code == 401

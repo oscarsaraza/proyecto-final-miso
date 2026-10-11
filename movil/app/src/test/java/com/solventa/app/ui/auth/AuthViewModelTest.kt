@@ -20,7 +20,6 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -325,12 +324,92 @@ class AuthViewModelTest {
         assertEquals(1, authApi.loginCount)
     }
 
+    // TC-S1-12: cierre de sesión seguro y revocación (HU-MOV-12)
+
+    private fun loggedIn() {
+        viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator())
+        assertTrue(viewModel.uiState.value.isAuthenticated)
+    }
+
     @Test
-    fun `logout debe lanzar NotImplementedError antes de HU-MOV-12`() {
-        val exception = assertThrows(NotImplementedError::class.java) {
-            viewModel.logout()
-        }
-        assertTrue(exception.message?.contains("HU-MOV-12") == true)
+    fun `TC-S1-12 cerrar sesion pide confirmacion antes de borrar nada`() {
+        loggedIn()
+
+        viewModel.requestLogout()
+
+        assertTrue(viewModel.uiState.value.showLogoutConfirmation)
+        assertTrue(viewModel.uiState.value.isAuthenticated)
+        assertTrue(repository.hasStoredSession())
+    }
+
+    @Test
+    fun `TC-S1-12 cancelar la confirmacion conserva la sesion`() {
+        loggedIn()
+        viewModel.requestLogout()
+
+        viewModel.cancelLogout()
+
+        assertFalse(viewModel.uiState.value.showLogoutConfirmation)
+        assertTrue(viewModel.uiState.value.isAuthenticated)
+        assertEquals(tokens, repository.activeSession)
+    }
+
+    @Test
+    fun `TC-S1-12 confirmar purga tokens, llave y sesion en memoria`() {
+        loggedIn()
+        viewModel.requestLogout()
+
+        viewModel.confirmLogout()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isAuthenticated)
+        assertEquals(AuthStatus.LOGGED_OUT, state.status)
+        assertFalse(state.showLogoutConfirmation)
+        assertFalse(repository.hasStoredSession())
+        assertNull(repository.activeSession)
+        assertNull(crypto.key)
+    }
+
+    @Test
+    fun `TC-S1-12 confirmar revoca el refresh token en el servidor`() {
+        loggedIn()
+
+        viewModel.requestLogout()
+        viewModel.confirmLogout()
+
+        assertEquals(tokens.refreshToken, authApi.lastRevokedToken)
+    }
+
+    @Test
+    fun `TC-S1-12 sin red igual purga las credenciales locales`() {
+        authApi.logoutResult = false
+        loggedIn()
+
+        viewModel.requestLogout()
+        viewModel.confirmLogout()
+
+        assertFalse(repository.hasStoredSession())
+        assertFalse(viewModel.uiState.value.isAuthenticated)
+    }
+
+    @Test
+    fun `TC-S1-12 despues de cerrar sesion la biometria ya no da acceso`() {
+        loggedIn()
+        viewModel.requestLogout()
+        viewModel.confirmLogout()
+        val authenticator = FakeBiometricAuthenticator()
+
+        viewModel.authenticateWithBiometrics(authenticator)
+
+        assertEquals(AuthStatus.NO_STORED_SESSION, viewModel.uiState.value.status)
+        assertEquals(0, authenticator.promptCount)
+    }
+
+    @Test
+    fun `TC-S1-12 sin sesion activa no se ofrece cerrar sesion`() {
+        viewModel.requestLogout()
+
+        assertFalse(viewModel.uiState.value.showLogoutConfirmation)
     }
 
     private val newTokens = SessionTokens("new.access.jwt", "new-refresh")
@@ -352,6 +431,15 @@ class AuthViewModelTest {
         override suspend fun login(email: String, password: String, otpCode: String): LoginResult {
             loginCount++
             return pendingLogin?.await() ?: loginResult
+        }
+
+        var logoutResult = true
+        var lastRevokedToken: String? = null
+            private set
+
+        override suspend fun logout(refreshToken: String): Boolean {
+            lastRevokedToken = refreshToken
+            return logoutResult
         }
     }
 
