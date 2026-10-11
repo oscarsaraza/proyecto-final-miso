@@ -33,8 +33,28 @@ jobs:
         with:
           terraform_version: 1.10.5
 
-      - name: Inicializar Terraform
-        run: terraform init
+      - name: Inicializar Terraform con Backend Remoto (S3)
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          STATE_BUCKET="solventa-tfstate-${ACCOUNT_ID}"
+          REGION="${{ secrets.AWS_REGION || 'us-east-1' }}"
+
+          echo "Verificando/creando bucket de estado de Terraform: $STATE_BUCKET..."
+          if ! aws s3api head-bucket --bucket "$STATE_BUCKET" 2>/dev/null; then
+            if [ "$REGION" = "us-east-1" ]; then
+              aws s3api create-bucket --bucket "$STATE_BUCKET" --region "$REGION"
+            else
+              aws s3api create-bucket --bucket "$STATE_BUCKET" --region "$REGION" \
+                --create-bucket-configuration LocationConstraint="$REGION"
+            fi
+            aws s3api put-bucket-versioning --bucket "$STATE_BUCKET" \
+              --versioning-configuration Status=Enabled
+          fi
+
+          terraform init \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="key=production/terraform.tfstate" \
+            -backend-config="region=${REGION}"
 
       - name: Aplicar cambios de infraestructura en AWS
         run: terraform apply -auto-approve
