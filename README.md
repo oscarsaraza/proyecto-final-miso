@@ -111,9 +111,13 @@ poetry install
 
 ---
 
-## 4. Ejecución de Pruebas del Portal Web (Angular 22)
+## 4. Portal Web para Asesores Comerciales (Angular 22)
 
-El frontend web utiliza Angular 22 con **Vitest** como runner de pruebas unitarias ultrarrápido y esbuild para empaquetado de producción.
+El portal web para asesores comerciales (`/web`) está desarrollado en Angular 22 con Standalone Components, **Vitest** como runner de pruebas unitarias ultrarrápido y esbuild para empaquetado de producción.
+
+### 4.1 Ejecución en Entorno Local
+
+Para iniciar el servidor de desarrollo con proxy inverso hacia el backend en `localhost:8000`:
 
 ```bash
 cd web
@@ -121,10 +125,40 @@ cd web
 # 1. Instalar dependencias
 npm install
 
-# 2. Ejecutar pruebas unitarias (modo CI sin watch)
+# 2. Iniciar servidor de desarrollo con proxy
+npm start
+```
+
+La aplicación estará disponible en [http://localhost:4200/](http://localhost:4200/).
+
+### 4.2 Autenticación y Acceso del Asesor Comercial (HU-WEB-13)
+
+El sistema cuenta con un usuario asesor semilla configurado para pruebas de desarrollo:
+
+- **Usuario (Email):** `asesor@solventa.com`
+- **Contraseña:** `SuperSecreta2026*`
+- **Secreto TOTP (Base32):** `JBSWY3DPEHPK3PXP`
+
+Para obtener el código TOTP dinámico de 6 dígitos válido en cualquier momento (ventana de $\pm 30$ segundos según RFC 6238):
+
+```bash
+backend/.venv/bin/python -c "from app.core.security import generate_totp; print('TOTP actual:', generate_totp('JBSWY3DPEHPK3PXP'))"
+```
+
+*(Opcionalmente, puede registrar la clave `JBSWY3DPEHPK3PXP` en aplicaciones como Google Authenticator o Authy).*
+
+> [!NOTE]
+> **Seguridad y Bloqueo Temporal:** Tras acumular 3 intentos fallidos consecutivos de autenticación, la cuenta se bloquea por 15 minutos (HTTP 423 Locked).
+
+### 4.3 Pruebas Automatizadas y Compilación
+
+```bash
+cd web
+
+# 1. Ejecutar pruebas unitarias (modo CI sin watch)
 npm test -- --watch=false
 
-# 3. Compilación de producción
+# 2. Compilación de producción
 npm run build
 ```
 

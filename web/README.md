@@ -4,13 +4,15 @@ This project was generated using [Angular CLI](https://github.com/angular/angula
 
 ## Development server
 
-To start a local development server, run:
+Para iniciar el servidor de desarrollo local con proxy inverso conectado al backend FastAPI en `localhost:8000`:
 
 ```bash
-ng serve
+npm start
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+La aplicación estará disponible en `http://localhost:4200/`.
+
+Para consultar las credenciales de prueba del asesor comercial (`HU-WEB-13`), política de bloqueo y generación de tokens 2FA (TOTP), consulte la [Sección 4.2 del README principal](../README.md#42-autenticación-y-acceso-del-asesor-comercial-hu-web-13).
 
 ## Code scaffolding
 
