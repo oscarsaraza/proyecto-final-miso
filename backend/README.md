@@ -41,6 +41,8 @@ En desarrollo, `/auth/otp` devuelve el código en `debug_code` y existe el asegu
 
 ## 2. Pruebas Automatizadas
 
+Las pruebas que guardan cotizaciones usan PostgreSQL (`docker compose up -d postgres`) y crean su propia base, `solventa_test`.
+
 ```bash
 poetry run pytest
 # o, sin Poetry:

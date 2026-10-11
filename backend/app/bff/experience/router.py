@@ -81,10 +81,11 @@ async def submit_consent(consent: ConsentRequest):
 async def create_quote(
     request: QuoteRequest,
     simulated_delay: float = 0.0,
+    db: AsyncSession = Depends(get_db_session),
 ):
-    """Calcula la cotización en memoria; si el buró supera el timeout, la entrega degradada con perfil parcial."""
+    """Calcula y guarda la cotización; si el buró supera el timeout, la entrega degradada con perfil parcial."""
     try:
-        return await rating_service.calculate_quote(request, simulated_bureau_delay=simulated_delay)
+        return await rating_service.create_quote(db, request, simulated_bureau_delay=simulated_delay)
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
 

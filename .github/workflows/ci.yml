@@ -17,6 +17,20 @@ jobs:
   backend-ci:
     name: Backend CI (Pytest & Poetry)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: solventa
+          POSTGRES_USER: solventa_user
+          POSTGRES_PASSWORD: solventa_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U solventa_user -d solventa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: backend
