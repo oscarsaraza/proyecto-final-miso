@@ -141,3 +141,29 @@ async def test_hu_web_03_cotizacion_con_desglose_de_la_prima(async_client: Async
     assert len(tiers) == 3
     for tier in tiers:
         assert sum(factor["amount"] for factor in tier["breakdown"]) == tier["monthly_premium"]
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_hu_web_04_cotizacion_degradada_por_timeout_del_buro(async_client: AsyncClient):
+    """HU-WEB-04: si el buró supera los 400 ms, el canal web responde 200 con la cotización degradada."""
+    from app.core.security import create_access_token
+
+    advisor_token = create_access_token(subject="asesor@solventa.com", role="advisor")
+    auth_headers = {"Authorization": f"Bearer {advisor_token}"}
+
+    response = await async_client.post(
+        "/api/v1/experience/quotes",
+        headers=auth_headers,
+        params={"simulated_delay": 0.45},
+        json={
+            "document_type": "CC",
+            "document_number": "1020304050",
+            "birth_date": "1990-05-15",
+            "insured_amount": 100000000.0,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "degraded"
+    assert response.json()["degradation_reason"] == "TIMEOUT_EXCEEDED"

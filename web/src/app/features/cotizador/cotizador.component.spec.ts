@@ -6,6 +6,24 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
   let component: CotizadorComponent;
   let fixture: ComponentFixture<CotizadorComponent>;
 
+  const tier = (name: QuoteTier['tier'], premium: number): QuoteTier => ({
+    tier: name,
+    monthly_premium: premium,
+    annual_premium: premium * 12,
+    coverages: [],
+    breakdown: [{ code: 'base_rate', label: 'Tarifa base actuarial', multiplier: 1, amount: premium }],
+  });
+
+  const quote: QuoteResponse = {
+    quote_id: 'QUO-1',
+    document_number: '1020304050',
+    status: 'active',
+    score_applied: 700,
+    tiers: [tier('basic', 20_000), tier('standard', 27_000), tier('premium', 36_000)],
+    created_at: '2026-10-09T00:00:00Z',
+    expires_at: '2026-10-24T00:00:00Z',
+  };
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [CotizadorComponent]
@@ -32,24 +50,6 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
   });
 
   describe('desglose de la prima (HU-WEB-03)', () => {
-    const tier = (name: QuoteTier['tier'], premium: number): QuoteTier => ({
-      tier: name,
-      monthly_premium: premium,
-      annual_premium: premium * 12,
-      coverages: [],
-      breakdown: [{ code: 'base_rate', label: 'Tarifa base actuarial', multiplier: 1, amount: premium }],
-    });
-
-    const quote: QuoteResponse = {
-      quote_id: 'QUO-1',
-      document_number: '1020304050',
-      status: 'active',
-      score_applied: 700,
-      tiers: [tier('basic', 20_000), tier('standard', 27_000), tier('premium', 36_000)],
-      created_at: '2026-10-09T00:00:00Z',
-      expires_at: '2026-10-24T00:00:00Z',
-    };
-
     const total = () => (fixture.nativeElement as HTMLElement).querySelector('[data-testid="total"]')?.textContent;
 
     it('no muestra el desglose sin cotización', () => {
@@ -73,6 +73,25 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
 
       expect(total()).toContain('36.000');
       expect(tabs[2].getAttribute('aria-selected')).toBe('true');
+    });
+  });
+
+  describe('perfil parcial (HU-WEB-04)', () => {
+    const banner = () => (fixture.nativeElement as HTMLElement).querySelector('[role="alert"]');
+
+    it('no muestra el aviso con una cotización completa', () => {
+      component.quote.set(quote);
+      fixture.detectChanges();
+
+      expect(banner()).toBeNull();
+    });
+
+    it('avisa que la cotización degradada usa perfil parcial y puede reajustarse', () => {
+      component.quote.set({ ...quote, status: 'degraded', degradation_reason: 'TIMEOUT_EXCEEDED' });
+      fixture.detectChanges();
+
+      expect(banner()?.textContent).toContain('Cotización calculada con perfil parcial por latencia en proveedores de scoring');
+      expect(banner()?.textContent).toContain('podrá reajustarse');
     });
   });
 });
