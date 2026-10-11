@@ -1,6 +1,9 @@
-import { Component, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
+import { AuthService } from '../../core/auth/auth.service';
 
 @Component({
   selector: 'app-login',
@@ -13,6 +16,16 @@ import { FormsModule } from '@angular/forms';
         <h2>Iniciar Sesión en Solventa</h2>
         <p class="subtitle">Acceso corporativo seguro con autenticación de dos factores (2FA).</p>
 
+        <div
+          *ngIf="errorMessage()"
+          class="alert-box"
+          [class.alert-danger]="!isLocked()"
+          [class.alert-locked]="isLocked()"
+          role="alert"
+        >
+          {{ errorMessage() }}
+        </div>
+
         <form (ngSubmit)="onSubmit()" #loginForm="ngForm">
           <div class="form-group">
             <label for="username">Usuario Corporativo</label>
@@ -23,6 +36,7 @@ import { FormsModule } from '@angular/forms';
               [(ngModel)]="username"
               required
               placeholder="asesor@solventa.com"
+              [disabled]="loading()"
             />
           </div>
 
@@ -35,6 +49,7 @@ import { FormsModule } from '@angular/forms';
               [(ngModel)]="password"
               required
               placeholder="••••••••••••"
+              [disabled]="loading()"
             />
           </div>
 
@@ -48,17 +63,14 @@ import { FormsModule } from '@angular/forms';
               [(ngModel)]="totpCode"
               required
               placeholder="123456"
+              [disabled]="loading()"
             />
           </div>
 
-          <button type="submit" class="btn-primary" [disabled]="!loginForm.valid">
-            Ingresar al Cotizador
+          <button type="submit" class="btn-primary" [disabled]="!loginForm.valid || loading()">
+            {{ loading() ? 'Iniciando sesión...' : 'Ingresar al Cotizador' }}
           </button>
         </form>
-
-        <div *ngIf="noticeMessage()" class="notice">
-          {{ noticeMessage() }}
-        </div>
       </div>
     </div>
   `,
@@ -100,6 +112,24 @@ import { FormsModule } from '@angular/forms';
         font-size: 14px;
         margin: 0 0 24px;
       }
+      .alert-box {
+        padding: 12px 14px;
+        border-radius: 8px;
+        font-size: 13px;
+        margin-bottom: 20px;
+        line-height: 1.4;
+      }
+      .alert-danger {
+        background: #fee2e2;
+        border: 1px solid #f87171;
+        color: #991b1b;
+      }
+      .alert-locked {
+        background: #fff1f2;
+        border: 1px solid #f43f5e;
+        color: #881337;
+        font-weight: 500;
+      }
       .form-group {
         margin-bottom: 16px;
         display: flex;
@@ -122,6 +152,10 @@ import { FormsModule } from '@angular/forms';
       input:focus {
         border-color: #0284c7;
       }
+      input:disabled {
+        background: #f1f5f9;
+        cursor: not-allowed;
+      }
       .btn-primary {
         width: 100%;
         padding: 12px;
@@ -133,6 +167,7 @@ import { FormsModule } from '@angular/forms';
         font-weight: 600;
         cursor: pointer;
         margin-top: 8px;
+        transition: background-color 0.2s;
       }
       .btn-primary:hover {
         background: #0369a1;
@@ -141,29 +176,66 @@ import { FormsModule } from '@angular/forms';
         background: #94a3b8;
         cursor: not-allowed;
       }
-      .notice {
-        margin-top: 16px;
-        padding: 12px;
-        background: #f8fafc;
-        border: 1px dashed #94a3b8;
-        border-radius: 8px;
-        font-size: 13px;
-        color: #475569;
-        text-align: center;
-      }
     `,
   ],
 })
 export class LoginComponent {
+  private readonly authService = inject(AuthService);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+
   username = '';
   password = '';
   totpCode = '';
-  noticeMessage = signal<string>('');
+
+  loading = signal<boolean>(false);
+  errorMessage = signal<string>('');
+  isLocked = signal<boolean>(false);
 
   onSubmit(): void {
-    // Placeholder para HU-WEB-13
-    this.noticeMessage.set(
-      'Funcionalidad de autenticación 2FA pendiente de implementación en HU-WEB-13.',
-    );
+    if (!this.username || !this.password || !this.totpCode) {
+      return;
+    }
+
+    this.errorMessage.set('');
+    this.isLocked.set(false);
+    this.loading.set(true);
+
+    this.authService
+      .login({
+        username: this.username,
+        password: this.password,
+        totpCode: this.totpCode,
+      })
+      .subscribe({
+        next: () => {
+          this.loading.set(false);
+          const returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/cotizador';
+          this.router.navigateByUrl(returnUrl);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.loading.set(false);
+          if (err?.status === 423) {
+            this.isLocked.set(true);
+            this.errorMessage.set(
+              err.error?.detail ||
+                'Cuenta bloqueada por seguridad tras múltiples intentos fallidos. Intente nuevamente en 15 minutos.',
+            );
+          } else if (err?.status === 401) {
+            this.isLocked.set(false);
+            this.errorMessage.set(
+              err?.error?.detail ||
+                'Credenciales o código de verificación inválidos',
+            );
+          } else {
+            this.isLocked.set(false);
+            this.errorMessage.set(
+              typeof err?.error?.detail === 'string'
+                ? err.error.detail
+                : 'Error de comunicación con el servidor. Verifique la conexión.',
+            );
+          }
+        },
+      });
   }
 }

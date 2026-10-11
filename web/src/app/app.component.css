@@ -32,6 +32,40 @@
   font-weight: 400;
 }
 
+.header-nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.user-greeting {
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.user-greeting strong {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.btn-logout {
+  background: transparent;
+  border: 1px solid #475569;
+  color: #cbd5e1;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-logout:hover {
+  background: #1e293b;
+  border-color: #64748b;
+  color: #ffffff;
+}
+
 .env-badge {
   background: rgba(56, 189, 248, 0.15);
   color: #38bdf8;
