@@ -94,30 +94,37 @@ import { AuthService } from '../../core/auth/auth.service';
       }
       .badge {
         display: inline-block;
-        background: #e0f2fe;
-        color: #0369a1;
+        background: #e8f3f8;
+        color: #0b5474;
         padding: 4px 10px;
         border-radius: 9999px;
-        font-size: 12px;
+        font-size: 0.75rem;
         font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
         margin-bottom: 12px;
       }
       h2 {
         margin: 0 0 8px;
         color: #0f172a;
-        font-size: 22px;
+        font-size: 1.75rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.25;
       }
       .subtitle {
         color: #64748b;
-        font-size: 14px;
+        font-size: 0.875rem;
+        line-height: 1.5;
         margin: 0 0 24px;
       }
       .alert-box {
         padding: 12px 14px;
         border-radius: 8px;
-        font-size: 13px;
+        font-size: 0.8125rem;
+        font-weight: 500;
         margin-bottom: 20px;
-        line-height: 1.4;
+        line-height: 1.45;
       }
       .alert-danger {
         background: #fee2e2;
@@ -137,40 +144,50 @@ import { AuthService } from '../../core/auth/auth.service';
         gap: 6px;
       }
       label {
-        font-size: 13px;
-        font-weight: 500;
-        color: #334155;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #1e293b;
+        letter-spacing: -0.005em;
       }
       input {
-        padding: 10px 14px;
+        font-family: inherit;
+        font-size: 0.9375rem;
+        color: #0f172a;
+        padding: 11px 14px;
         border: 1px solid #cbd5e1;
         border-radius: 8px;
-        font-size: 14px;
         outline: none;
-        transition: border-color 0.2s;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      }
+      input::placeholder {
+        color: #94a1b2;
+        font-size: 0.875rem;
       }
       input:focus {
-        border-color: #0284c7;
+        border-color: #0b5474;
+        box-shadow: 0 0 0 3px rgba(11, 84, 116, 0.14);
       }
       input:disabled {
         background: #f1f5f9;
         cursor: not-allowed;
       }
       .btn-primary {
+        font-family: inherit;
         width: 100%;
-        padding: 12px;
-        background: #0284c7;
+        padding: 13px;
+        background: #0b5474;
         color: #ffffff;
         border: none;
         border-radius: 8px;
-        font-size: 15px;
+        font-size: 0.9375rem;
         font-weight: 600;
+        letter-spacing: -0.005em;
         cursor: pointer;
         margin-top: 8px;
-        transition: background-color 0.2s;
+        transition: background-color 0.15s ease;
       }
       .btn-primary:hover {
-        background: #0369a1;
+        background: #083f58;
       }
       .btn-primary:disabled {
         background: #94a3b8;
