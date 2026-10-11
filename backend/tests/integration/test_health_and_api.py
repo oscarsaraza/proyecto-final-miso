@@ -63,19 +63,7 @@ async def test_unimplemented_endpoints_return_501(async_client: AsyncClient):
     )
     assert consent_resp.status_code == 501
 
-    # 3. Emisión de póliza (HU-WEB-05)
-    policy_resp = await async_client.post(
-        "/api/v1/experience/policies",
-        headers=auth_headers,
-        json={
-            "quote_id": "QUO-1",
-            "tier": "standard",
-            "insured_document": "1020304050",
-        },
-    )
-    assert policy_resp.status_code == 501
-
-    # 4. Pago (HU-WEB-06)
+    # 3. Pago (HU-WEB-06)
     pay_headers = {**auth_headers, "Idempotency-Key": "key-123"}
     pay_resp = await async_client.post(
         "/api/v1/experience/payments/charge",
