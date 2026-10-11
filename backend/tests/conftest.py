@@ -4,6 +4,7 @@ from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.core.database import get_db_session
 from app.core.middleware import idempotency_store
+from app.modules.identity.service import insured_auth_service
 from app.modules.auth.service import auth_service
 
 
@@ -46,8 +47,10 @@ class InMemorySessionTestDouble:
 def clean_stores():
     """Limpia los estados en memoria antes de cada test."""
     idempotency_store.clear()
+    insured_auth_service.reset_state()
     yield
     idempotency_store.clear()
+    insured_auth_service.reset_state()
 
 
 @pytest.fixture(autouse=True)

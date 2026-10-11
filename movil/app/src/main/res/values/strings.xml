@@ -22,10 +22,26 @@
     <string name="biometric_prompt_subtitle">Confirme su identidad con huella o rostro</string>
     <string name="biometric_prompt_negative">Usar contraseña</string>
 
-    <!-- HU-MOV-02: Acceso alternativo (pendiente) -->
+    <!-- HU-MOV-02: Acceso alternativo -->
     <string name="auth_alternative_title">Acceso alternativo</string>
-    <string name="auth_alternative_pending">El ingreso con contraseña y código de seguridad estará disponible próximamente.</string>
+    <string name="auth_alternative_subtitle">Ingrese con su correo y valide con el código de un solo uso.</string>
+    <string name="auth_email">Correo electrónico</string>
+    <string name="auth_password">Contraseña</string>
+    <string name="auth_otp">Código de seguridad (SMS)</string>
+    <string name="auth_otp_send">Enviar código</string>
+    <string name="auth_otp_resend">Reenviar</string>
+    <string name="auth_otp_sent">Enviamos un código por SMS. Vence en 5 minutos.</string>
+    <string name="auth_otp_sent_debug">Código de prueba (simula el SMS): %1$s</string>
+    <string name="auth_submit">Ingresar</string>
+    <string name="auth_submitting">Verificando…</string>
+    <string name="auth_error_invalid_credentials">Correo, contraseña o código incorrectos. Al tercer intento fallido la cuenta se bloquea 15 minutos.</string>
+    <string name="auth_error_locked">Cuenta bloqueada por 15 minutos tras 3 intentos fallidos.</string>
+    <string name="auth_error_network">No fue posible conectar con Solventa. Revise su conexión e intente de nuevo.</string>
     <string name="auth_back_to_biometrics">Volver al acceso biométrico</string>
+    <string name="auth_enroll_title">¿Activar ingreso con huella o rostro?</string>
+    <string name="auth_enroll_message">La próxima vez entrará en segundos. Su sesión quedará cifrada en el almacén protegido del teléfono.</string>
+    <string name="auth_enroll_confirm">Activar</string>
+    <string name="auth_enroll_skip">Ahora no</string>
 
     <!-- Inicio (pendiente) -->
     <string name="home_title">Bienvenido a Solventa</string>

@@ -12,6 +12,7 @@ import bcrypt
 import jwt
 from app.core.config import settings
 
+# bcrypt directo: passlib 1.7.4 falla con bcrypt >= 4.1 al detectar el "wrap bug".
 security_bearer = HTTPBearer(auto_error=False)
 
 

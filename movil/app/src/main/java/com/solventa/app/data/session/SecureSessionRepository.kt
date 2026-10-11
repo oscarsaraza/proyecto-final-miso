@@ -11,6 +11,10 @@ class SecureSessionRepository(
     var activeSession: SessionTokens? = null
         private set
 
+    fun startSession(tokens: SessionTokens) {
+        activeSession = tokens
+    }
+
     fun hasStoredSession(): Boolean = store.read() != null
 
     fun encryptionCipher(): Cipher = crypto.encryptionCipher()

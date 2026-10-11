@@ -3,9 +3,12 @@ package com.solventa.app.ui.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.solventa.app.data.session.SecureSessionRepository
+import com.solventa.app.domain.auth.AuthApi
 import com.solventa.app.domain.auth.BiometricAuthenticator
 import com.solventa.app.domain.auth.BiometricAvailability
 import com.solventa.app.domain.auth.BiometricResult
+import com.solventa.app.domain.auth.LoginResult
+import com.solventa.app.domain.auth.OtpResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,12 +29,28 @@ enum class AuthStatus {
     SESSION_RESET,
 }
 
+enum class AlternativeLoginError {
+    INVALID_CREDENTIALS,
+    ACCOUNT_LOCKED,
+    NETWORK,
+}
+
+data class AlternativeLoginState(
+    val isSubmitting: Boolean = false,
+    val otpSent: Boolean = false,
+    val debugOtpCode: String? = null,
+    val error: AlternativeLoginError? = null,
+)
+
 data class AuthUiState(
     val isAuthenticated: Boolean = false,
     val failedAttempts: Int = 0,
     val isLocked: Boolean = false,
     val status: AuthStatus = AuthStatus.IDLE,
     val showAlternativeAccess: Boolean = false,
+    val alternativeLogin: AlternativeLoginState = AlternativeLoginState(),
+    val offerBiometricEnrollment: Boolean = false,
+    val fullName: String? = null,
 )
 
 /**
@@ -39,6 +58,7 @@ data class AuthUiState(
  */
 class AuthViewModel(
     private val sessionRepository: SecureSessionRepository,
+    private val authApi: AuthApi,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AuthUiState())
@@ -108,11 +128,88 @@ class AuthViewModel(
         _uiState.update { it.copy(showAlternativeAccess = false, status = AuthStatus.IDLE) }
     }
 
-    /**
-     * Acceso alternativo por PIN de respaldo con bloqueo a los 3 intentos (Placeholder para HU-MOV-02 / TC-S1-10).
-     */
-    fun authenticateWithPin(pin: String) {
-        throw NotImplementedError("HU-MOV-02: Acceso alternativo por PIN pendiente de implementación")
+    fun requestOtp(email: String) {
+        viewModelScope.launch {
+            val result = authApi.requestOtp(email.trim())
+            _uiState.update { state ->
+                val form = when (result) {
+                    is OtpResult.Sent -> state.alternativeLogin.copy(otpSent = true, debugOtpCode = result.debugCode, error = null)
+                    OtpResult.Failed -> state.alternativeLogin.copy(error = AlternativeLoginError.NETWORK)
+                }
+                state.copy(alternativeLogin = form)
+            }
+        }
+    }
+
+    fun authenticateWithPassword(
+        email: String,
+        password: String,
+        otpCode: String,
+        authenticator: BiometricAuthenticator,
+    ) {
+        val current = _uiState.value
+        if (current.isLocked || current.alternativeLogin.isSubmitting) return
+
+        _uiState.update { it.copy(alternativeLogin = it.alternativeLogin.copy(isSubmitting = true, error = null)) }
+        viewModelScope.launch {
+            val result = authApi.login(email.trim(), password, otpCode.trim())
+            val canEnrollBiometrics = result is LoginResult.Success &&
+                authenticator.checkAvailability() == BiometricAvailability.AVAILABLE
+            if (result is LoginResult.Success) sessionRepository.startSession(result.tokens)
+
+            _uiState.update { state ->
+                val form = state.alternativeLogin.copy(isSubmitting = false)
+                when (result) {
+                    is LoginResult.Success -> state.copy(
+                        alternativeLogin = form,
+                        failedAttempts = 0,
+                        fullName = result.fullName,
+                        offerBiometricEnrollment = canEnrollBiometrics,
+                        isAuthenticated = !canEnrollBiometrics,
+                        status = if (canEnrollBiometrics) state.status else AuthStatus.AUTHENTICATED,
+                    )
+                    LoginResult.InvalidCredentials -> state.copy(
+                        alternativeLogin = form.copy(error = AlternativeLoginError.INVALID_CREDENTIALS),
+                        failedAttempts = state.failedAttempts + 1,
+                    )
+                    LoginResult.Locked -> state.copy(
+                        alternativeLogin = form.copy(error = AlternativeLoginError.ACCOUNT_LOCKED),
+                        isLocked = true,
+                    )
+                    LoginResult.NetworkError -> state.copy(
+                        alternativeLogin = form.copy(error = AlternativeLoginError.NETWORK),
+                    )
+                }
+            }
+        }
+    }
+
+    // Activar la biometría cifra la sesión con la llave del Keystore (HU-MOV-03).
+    fun enableBiometricUnlock(authenticator: BiometricAuthenticator) {
+        val tokens = sessionRepository.activeSession ?: return finishLogin()
+        viewModelScope.launch {
+            try {
+                val result = authenticator.authenticate(sessionRepository.encryptionCipher())
+                if (result is BiometricResult.Success) sessionRepository.save(tokens, result.cipher)
+            } catch (e: Exception) {
+                sessionRepository.clear()
+                sessionRepository.startSession(tokens)
+            }
+            finishLogin()
+        }
+    }
+
+    fun skipBiometricEnrollment() = finishLogin()
+
+    private fun finishLogin() {
+        _uiState.update {
+            it.copy(
+                offerBiometricEnrollment = false,
+                isAuthenticated = true,
+                status = AuthStatus.AUTHENTICATED,
+                showAlternativeAccess = false,
+            )
+        }
     }
 
     /**
