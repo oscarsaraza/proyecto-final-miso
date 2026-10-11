@@ -2,6 +2,7 @@ package com.solventa.app.ui.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.solventa.app.data.session.SecureSessionRepository
 import com.solventa.app.domain.auth.BiometricAuthenticator
 import com.solventa.app.domain.auth.BiometricAvailability
 import com.solventa.app.domain.auth.BiometricResult
@@ -10,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import javax.crypto.Cipher
 
 enum class AuthStatus {
     IDLE,
@@ -20,6 +22,8 @@ enum class AuthStatus {
     BIOMETRIC_NOT_ENROLLED,
     BIOMETRIC_LOCKED_OUT,
     BIOMETRIC_ERROR,
+    NO_STORED_SESSION,
+    SESSION_RESET,
 }
 
 data class AuthUiState(
@@ -33,7 +37,9 @@ data class AuthUiState(
 /**
  * ViewModel de autenticación biométrica y acceso alternativo (HU-MOV-01, HU-MOV-02, HU-MOV-12).
  */
-class AuthViewModel : ViewModel() {
+class AuthViewModel(
+    private val sessionRepository: SecureSessionRepository,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
@@ -54,21 +60,45 @@ class AuthViewModel : ViewModel() {
             BiometricAvailability.AVAILABLE -> Unit
         }
 
+        if (!sessionRepository.hasStoredSession()) {
+            _uiState.update { it.copy(status = AuthStatus.NO_STORED_SESSION) }
+            return
+        }
+        val cipher = sessionRepository.decryptionCipher()
+        if (cipher == null) {
+            _uiState.update { it.copy(status = AuthStatus.SESSION_RESET) }
+            return
+        }
+
         _uiState.update { it.copy(status = AuthStatus.AUTHENTICATING) }
         viewModelScope.launch {
-            val result = authenticator.authenticate()
+            val result = authenticator.authenticate(cipher)
+            val status = when (result) {
+                is BiometricResult.Success -> unlockSession(result.cipher)
+                BiometricResult.Cancelled -> AuthStatus.CANCELLED
+                BiometricResult.UseAlternative -> AuthStatus.IDLE
+                BiometricResult.LockedOut -> AuthStatus.BIOMETRIC_LOCKED_OUT
+                BiometricResult.Unavailable -> AuthStatus.BIOMETRIC_UNAVAILABLE
+                is BiometricResult.Error -> AuthStatus.BIOMETRIC_ERROR
+            }
             _uiState.update { state ->
-                when (result) {
-                    BiometricResult.Success -> state.copy(isAuthenticated = true, status = AuthStatus.AUTHENTICATED)
-                    BiometricResult.Cancelled -> state.copy(status = AuthStatus.CANCELLED)
-                    BiometricResult.UseAlternative -> state.copy(status = AuthStatus.IDLE, showAlternativeAccess = true)
-                    BiometricResult.LockedOut -> state.copy(status = AuthStatus.BIOMETRIC_LOCKED_OUT)
-                    BiometricResult.Unavailable -> state.copy(status = AuthStatus.BIOMETRIC_UNAVAILABLE)
-                    is BiometricResult.Error -> state.copy(status = AuthStatus.BIOMETRIC_ERROR)
-                }
+                state.copy(
+                    status = status,
+                    isAuthenticated = status == AuthStatus.AUTHENTICATED,
+                    showAlternativeAccess = state.showAlternativeAccess || result is BiometricResult.UseAlternative,
+                )
             }
         }
     }
+
+    private fun unlockSession(authenticatedCipher: Cipher): AuthStatus =
+        try {
+            sessionRepository.unlock(authenticatedCipher)
+            AuthStatus.AUTHENTICATED
+        } catch (e: Exception) {
+            sessionRepository.clear()
+            AuthStatus.SESSION_RESET
+        }
 
     fun onAlternativeAccessSelected() {
         _uiState.update { it.copy(showAlternativeAccess = true) }

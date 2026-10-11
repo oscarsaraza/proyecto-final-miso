@@ -142,6 +142,8 @@ private val BLOCKING_STATUSES = setOf(
     AuthStatus.BIOMETRIC_UNAVAILABLE,
     AuthStatus.BIOMETRIC_NOT_ENROLLED,
     AuthStatus.BIOMETRIC_LOCKED_OUT,
+    AuthStatus.NO_STORED_SESSION,
+    AuthStatus.SESSION_RESET,
 )
 
 @StringRes
@@ -154,6 +156,8 @@ private fun AuthStatus.messageRes(): Int = when (this) {
     AuthStatus.BIOMETRIC_NOT_ENROLLED -> R.string.auth_status_not_enrolled
     AuthStatus.BIOMETRIC_LOCKED_OUT -> R.string.auth_status_locked_out
     AuthStatus.BIOMETRIC_ERROR -> R.string.auth_status_error
+    AuthStatus.NO_STORED_SESSION -> R.string.auth_status_no_session
+    AuthStatus.SESSION_RESET -> R.string.auth_status_session_reset
 }
 
 @Preview(showBackground = true)

@@ -27,6 +27,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.solventa.app.data.auth.AndroidBiometricAuthenticator
 import com.solventa.app.domain.auth.BiometricAuthenticator
 import com.solventa.app.ui.auth.AuthViewModel
@@ -36,7 +38,11 @@ import com.solventa.app.ui.theme.SolventaTheme
 // BiometricPrompt requiere una FragmentActivity para mostrar el diálogo del sistema.
 class MainActivity : FragmentActivity() {
 
-    private val authViewModel: AuthViewModel by viewModels()
+    private val authViewModel: AuthViewModel by viewModels {
+        viewModelFactory {
+            initializer { AuthViewModel((application as SolventaApplication).sessionRepository) }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

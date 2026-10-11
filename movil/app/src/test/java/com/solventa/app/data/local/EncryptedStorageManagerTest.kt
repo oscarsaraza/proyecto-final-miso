@@ -23,10 +23,10 @@ class EncryptedStorageManagerTest {
     }
 
     @Test
-    fun `initializeEncryptedDatabase debe lanzar NotImplementedError antes de HU-MOV-03`() {
+    fun `initializeEncryptedDatabase debe lanzar NotImplementedError antes de HU-MOV-05`() {
         val exception = assertThrows(NotImplementedError::class.java) {
             storageManager.initializeEncryptedDatabase("passphrase".toByteArray())
         }
-        assertTrue(exception.message?.contains("HU-MOV-03") == true)
+        assertTrue(exception.message?.contains("HU-MOV-05") == true)
     }
 }
