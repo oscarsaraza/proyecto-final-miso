@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Corrección en `backend/Dockerfile` aislando las dependencias en un entorno virtual (`/opt/venv`), configurando el directorio de inicio del usuario `appuser` y adaptando el sondeo de salud (`healthcheck`) para resolver el error `ModuleNotFoundError: No module named 'uvicorn'` al iniciar el backend mediante Docker Compose.
 
 ### Changed
+- Actualización de apariencia del Portal Web (`web`) con el sistema de diseño del prototipo (`prototipos/web`).
+- Configuración de persistencia de estado para Terraform mediante Remote Backend en Amazon S3 en el workflow de despliegue (`.github/workflows/deploy.yml`) y `terraform/versions.tf`, garantizando que `terraform.tfstate` persista entre runners efímeros de GitHub Actions.
+- Actualización de archivo `README.md` con permisos adicionales requeridos para el despliegue con el workflow de CD desde Github (`application-autoscaling`, `cloudwatch`, `kms`).
 - Actualización de la documentación en `README.md` y `backend/README.md`, sustituyendo la referencia residual de LocalStack por Floci e incorporando instrucciones explícitas para la ejecución del servidor backend mediante Poetry (`uvicorn`) y Docker Compose.
 
 ### Added
@@ -24,6 +27,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Puerto `BiometricAuthenticator` e implementación con `BiometricPrompt` restringida a biometría fuerte (`BIOMETRIC_STRONG`).
   - Manejo de sensor ausente, sin huella o rostro registrados, cancelación y bloqueo por intentos, orientando al acceso alternativo (HU-MOV-02).
   - Pruebas unitarias TC-S1-09 sobre `AuthViewModel` y el mapeo de códigos de `BiometricPrompt`.
+- **HU-WEB-03 · Desglose explicativo de la prima:**
+  - Backend: `calculate_quote` calcula en memoria los planes básico, estándar y premium con el aporte en pesos de la tarifa base y de los ajustes por edad, ocupación, historial de pago y plan; la suma del desglose es exactamente la prima mensual. El buró usa un puntaje neutro hasta HU-WEB-04.
+  - Web: `QuoteService` contra `POST /api/v1/experience/quotes`, componente `app-premium-breakdown` con recargos, descuentos y multiplicadores, y selector de plan en el cotizador.
+  - Pruebas TC-S1-05 en el motor de tarifa y pruebas Vitest del desglose, el servicio y el cotizador.
+- Implementación integral de la historia de usuario **HU-WEB-13: Login y Sesión del Asesor Comercial en el Portal Web**:
+  - Modelo relacional `UserDB` en SQLAlchemy con hash seguro bcrypt (`HA-06`) y esquemas Pydantic para endpoints de autenticación y renovación de sesión.
+  - Implementación de segundo factor TOTP conforme a RFC 6238 en Python nativo con tolerancia temporal de $\pm 30$ segundos (`HA-06`).
+  - Mitigación de fuerza bruta y enumeración de cuentas mediante bloqueo temporal de 15 minutos (HTTP 423 Locked) tras 5 intentos fallidos consecutivos, y mensaje de error genérico.
+  - Endpoints BFF `/api/v1/experience/auth/login` y `/api/v1/experience/auth/refresh` con generación de tokens JWT (`access_token` con expiración de 15 min y `refresh_token` de 7 días).
+  - Control de acceso por roles RBAC (`HA-13`) mediante la dependencia `require_roles(["advisor"])` asegurando los endpoints comerciales del portal.
+  - Inicialización de tablas y siembra del usuario asesor comercial semilla (`asesor@solventa.com` / `SuperSecreta2026*`) mediante gestor de ciclo de vida `lifespan` en FastAPI.
+  - Servicio Angular `AuthService` con señales reactivas (`signal`), almacenamiento seguro en `sessionStorage` y métodos `login`, `refreshToken` e `isAuthenticated`.
+  - Interceptor HTTP `jwtInterceptor` con inyección de cabecera Bearer y renovación silenciosa transparente ante errores 401.
+  - Guard de rutas `authGuard` protegiendo `/cotizador` con redirección a `/login` preservando `returnUrl`.
+  - Formulario reactivo `LoginComponent` con manejo visual de estados de carga, error 401 y bloqueo 423.
+  - Barra de navegación en `AppComponent` con visualización del nombre del asesor autenticado y acción de cierre de sesión (`logout`).
+  - Configuración de proxy inverso de desarrollo (`web/proxy.conf.json`) para reenvío automático de `/api` hacia `localhost:8000`.
+- Script de automatización [`scripts/setup-aws-secrets.sh`](scripts/setup-aws-secrets.sh) para ingreso interactivo o lectura de perfil de AWS CLI, verificación de identidad con AWS STS y sincronización desatendida de credenciales IAM de AWS hacia GitHub Actions usando GitHub CLI (`gh`).
 - Workflow de Integración Continua en GitHub Actions (`.github/workflows/ci.yml`) ejecutando pruebas automatizadas en cada commit y branch:
   - `backend-ci`: Python 3.12, Poetry y Pytest con validación de cobertura mínima.
   - `web-ci`: Node.js 22, npm test con Vitest y build de producción de Angular 22.

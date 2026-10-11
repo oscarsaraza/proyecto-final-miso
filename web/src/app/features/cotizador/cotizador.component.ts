@@ -1,10 +1,12 @@
-import { Component } from '@angular/core';
+import { Component, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { PlanTier, QuoteResponse } from '../../core/models/quote.model';
+import { PremiumBreakdownComponent } from './premium-breakdown/premium-breakdown.component';
 
 @Component({
   selector: 'app-cotizador',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, PremiumBreakdownComponent],
   template: `
     <div class="cotizador-container">
       <div class="cotizador-header">
@@ -31,6 +33,26 @@ import { CommonModule } from '@angular/common';
           <li><strong>HU-WEB-06:</strong> Pago con garantía de idempotencia.</li>
         </ul>
       </div>
+
+      @if (selectedTierDetail(); as tier) {
+        <div class="quote-result">
+          <div class="tier-tabs" role="tablist" aria-label="Planes cotizados">
+            @for (option of quote()!.tiers; track option.tier) {
+              <button
+                type="button"
+                role="tab"
+                class="tier-tab"
+                [class.active]="option.tier === selectedTier()"
+                [attr.aria-selected]="option.tier === selectedTier()"
+                (click)="selectedTier.set(option.tier)"
+              >
+                {{ tierLabels[option.tier] }}
+              </button>
+            }
+          </div>
+          <app-premium-breakdown [tier]="tier" />
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -42,11 +64,15 @@ import { CommonModule } from '@angular/common';
     .cotizador-header h1 {
       margin: 0 0 6px;
       color: #0f172a;
-      font-size: 26px;
+      font-size: 1.625rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
     }
     .cotizador-header p {
       margin: 0 0 24px;
       color: #64748b;
+      font-size: 0.875rem;
+      line-height: 1.55;
     }
     .steps-progress {
       display: flex;
@@ -58,12 +84,13 @@ import { CommonModule } from '@angular/common';
       padding: 8px 16px;
       background: #f1f5f9;
       border-radius: 20px;
-      font-size: 13px;
+      font-size: 0.8125rem;
       color: #64748b;
-      font-weight: 500;
+      font-weight: 600;
+      letter-spacing: -0.005em;
     }
     .step.active {
-      background: #0284c7;
+      background: #0b5474;
       color: #ffffff;
     }
     .content-card {
@@ -76,12 +103,55 @@ import { CommonModule } from '@angular/common';
     .content-card h3 {
       margin-top: 0;
       color: #1e293b;
+      font-size: 1.125rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .content-card p {
+      font-size: 0.875rem;
+      color: #64748b;
+      margin-bottom: 12px;
+    }
+    .quote-result {
+      margin-top: 24px;
+      display: grid;
+      gap: 12px;
+    }
+    .tier-tabs {
+      display: flex;
+      gap: 8px;
+    }
+    .tier-tab {
+      padding: 8px 16px;
+      border: 1px solid #e2e8f0;
+      border-radius: 20px;
+      background: #fff;
+      color: #475569;
+      cursor: pointer;
+    }
+    .tier-tab.active {
+      background: #0b5474;
+      border-color: #0b5474;
+      color: #fff;
     }
     .content-card ul {
       padding-left: 20px;
       color: #475569;
-      line-height: 1.8;
+      font-size: 0.875rem;
+      line-height: 1.75;
     }
   `]
 })
-export class CotizadorComponent {}
+export class CotizadorComponent {
+  // HU-WEB-02 asigna la cotización devuelta por QuoteService.
+  readonly quote = signal<QuoteResponse | null>(null);
+  readonly selectedTier = signal<PlanTier>('standard');
+  readonly selectedTierDetail = computed(
+    () => this.quote()?.tiers.find((tier) => tier.tier === this.selectedTier()) ?? null,
+  );
+  readonly tierLabels: Record<PlanTier, string> = {
+    basic: 'Básico',
+    standard: 'Estándar',
+    premium: 'Premium',
+  };
+}
