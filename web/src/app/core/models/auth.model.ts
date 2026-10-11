@@ -12,6 +12,7 @@ export interface UserSession {
   role: string;
   advisorName: string;
   expiresIn?: number;
+  expiresAt?: number;
 }
 
 export interface LoginResponseDto {

@@ -92,21 +92,29 @@ export class AuthService {
   }
 
   /**
-   * Determina si existe una sesión válida en memoria
+   * Determina si existe una sesión válida no expirada en memoria
    */
   isAuthenticated(): boolean {
     const session = this._currentSession();
-    return session !== null && !!session.accessToken;
+    if (!session || !session.accessToken) {
+      return false;
+    }
+    if (session.expiresAt && Date.now() >= session.expiresAt) {
+      return false;
+    }
+    return true;
   }
 
   private mapDtoToSession(dto: LoginResponseDto): UserSession {
+    const expiresIn = dto.expires_in || 900;
     return {
       accessToken: dto.access_token,
       refreshToken: dto.refresh_token,
       tokenType: dto.token_type || 'bearer',
       role: dto.role,
       advisorName: dto.advisor_name,
-      expiresIn: dto.expires_in,
+      expiresIn: expiresIn,
+      expiresAt: Date.now() + expiresIn * 1000,
     };
   }
 

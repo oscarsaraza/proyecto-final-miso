@@ -3,7 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
 import { AuthService } from './auth.service';
-import { LoginResponseDto, UserCredentials } from '../models/auth.model';
+import { LoginResponseDto, UserCredentials, UserSession } from '../models/auth.model';
 
 describe('AuthService (HU-WEB-13)', () => {
   let service: AuthService;
@@ -34,6 +34,33 @@ describe('AuthService (HU-WEB-13)', () => {
   it('debe inicializarse sin sesión activa cuando sessionStorage está vacío', () => {
     expect(service.isAuthenticated()).toBe(false);
     expect(service.currentSession()).toBeNull();
+  });
+
+  it('debe considerar no autenticado cuando el token ha expirado', () => {
+    const expiredSession: UserSession = {
+      accessToken: 'expired-access-token',
+      refreshToken: 'valid-refresh-token',
+      tokenType: 'bearer',
+      role: 'advisor',
+      advisorName: 'Carlos Asesor',
+      expiresIn: 900,
+      expiresAt: Date.now() - 5000,
+    };
+    sessionStorage.setItem('solventa_advisor_session', JSON.stringify(expiredSession));
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        AuthService,
+      ],
+    });
+
+    const freshService = TestBed.inject(AuthService);
+    expect(freshService.isAuthenticated()).toBe(false);
+    expect(freshService.currentSession()?.refreshToken).toBe('valid-refresh-token');
   });
 
   it('debe autenticar al asesor comercial y guardar la sesión en memoria y sessionStorage', () => {
