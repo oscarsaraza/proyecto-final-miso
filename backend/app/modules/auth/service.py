@@ -91,11 +91,7 @@ class AuthService:
         - Si es exitoso, resetea el contador de intentos fallidos.
         """
         user = await self.get_user_by_username(session, username)
-        if not user and username.strip().lower() == DEFAULT_SEED_USERNAME:
-            try:
-                user = await self.seed_default_users(session)
-            except Exception:
-                user = None
+        
 
         # Mensaje de error unificado de seguridad
         invalid_credentials_exc = HTTPException(
