@@ -46,7 +46,8 @@ class QuoteTierDetail(BaseModel):
 class QuoteResponse(BaseModel):
     quote_id: str
     document_number: str
-    status: str = Field(..., description="'active' o 'degraded' (cuando se activa fallback)")
+    status: str = Field(..., description="'active' o 'degraded' si el buró no respondió a tiempo")
+    degradation_reason: Optional[str] = Field(None, description="'TIMEOUT_EXCEEDED' cuando status es 'degraded'")
     score_applied: float
     tiers: List[QuoteTierDetail]
     created_at: str

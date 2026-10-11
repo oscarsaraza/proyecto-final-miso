@@ -1,4 +1,4 @@
-"""Motor actuarial de cotización en memoria con desglose de la prima por factor (HU-WEB-03 / ESC-SEG-06)."""
+"""Motor actuarial en memoria: desglose de la prima por factor y degradación por latencia del buró (HU-WEB-03, HU-WEB-04)."""
 import asyncio
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -18,6 +18,8 @@ from app.modules.rating.models import (
 BASE_MONTHLY_RATE = 0.0002736
 QUOTE_VALIDITY = timedelta(days=15)
 NEUTRAL_SCORE = 700
+# Recargo de la cotización con perfil parcial, el mismo de los prototipos web.
+PARTIAL_PROFILE_SURCHARGE = 1.04
 
 AGE_BANDS: List[Tuple[int, float]] = [(30, 0.92), (40, 1.0), (50, 1.18), (200, 1.42)]
 OCCUPATION_MULTIPLIERS = {1: 1.0, 2: 1.1, 3: 1.25, 4: 1.45, 5: 1.7}
@@ -28,7 +30,7 @@ ScoreProvider = Callable[[QuoteRequest, float], Awaitable[int]]
 
 
 async def neutral_score_provider(request: QuoteRequest, simulated_delay: float) -> int:
-    """Sustituto del buró hasta HU-WEB-04, que agrega el timeout y la degradación."""
+    """Sustituto del buró: devuelve el puntaje neutro tras el retardo simulado."""
     if simulated_delay > 0:
         await asyncio.sleep(simulated_delay)
     return NEUTRAL_SCORE
@@ -52,6 +54,7 @@ def build_breakdown(
     occupation_risk: int,
     score: int,
     tier: PlanTier,
+    partial_profile: bool = False,
 ) -> List[PremiumFactor]:
     """Cada factor aporta lo que su multiplicador agrega sobre el subtotal acumulado; la suma es la prima."""
     base = round(insured_amount * BASE_MONTHLY_RATE)
@@ -61,6 +64,8 @@ def build_breakdown(
         ("payment_history", "Ajuste por historial de pago", score_multiplier(score)),
         ("plan", f"Ajuste por plan {tier.value}", TIER_MULTIPLIERS[tier]),
     ]
+    if partial_profile:
+        steps.append(("partial_profile", "Recargo por perfil parcial", PARTIAL_PROFILE_SURCHARGE))
     breakdown = [PremiumFactor(code="base_rate", label="Tarifa base actuarial", multiplier=1.0, amount=base)]
     subtotal = float(base)
     for code, label, multiplier in steps:
@@ -101,12 +106,18 @@ class RatingService:
         request: QuoteRequest,
         simulated_bureau_delay: float = 0.0,
     ) -> QuoteResponse:
-        score = await self._score_provider(request, simulated_bureau_delay)
+        try:
+            score = await asyncio.wait_for(self._score_provider(request, simulated_bureau_delay), self.bureau_timeout)
+            degradation_reason = None
+        except TimeoutError:
+            score, degradation_reason = NEUTRAL_SCORE, "TIMEOUT_EXCEEDED"
         age = age_on(date.fromisoformat(request.birth_date), self._today())
 
         tiers = []
         for tier in PlanTier:
-            breakdown = build_breakdown(request.insured_amount, age, request.occupation_risk, score, tier)
+            breakdown = build_breakdown(
+                request.insured_amount, age, request.occupation_risk, score, tier, partial_profile=bool(degradation_reason)
+            )
             monthly = float(sum(factor.amount for factor in breakdown))
             tiers.append(
                 QuoteTierDetail(
@@ -122,7 +133,8 @@ class RatingService:
         return QuoteResponse(
             quote_id=f"QUO-{uuid.uuid4().hex[:12].upper()}",
             document_number=request.document_number,
-            status="active",
+            status="degraded" if degradation_reason else "active",
+            degradation_reason=degradation_reason,
             score_applied=score,
             tiers=tiers,
             created_at=created_at.isoformat(),
