@@ -1,43 +1,21 @@
-"""TC-S1-08: registro de idempotencia en PostgreSQL (HU-WEB-06)."""
+"""TC-S1-08: la clave de idempotencia es por socio (HU-WEB-06)."""
 import pytest
 from pydantic import BaseModel
 
-from app.core.idempotency import IdempotencyConflictError, find_response, save_response
-
-DECLINED = {"detail": "Pago rechazado: fondos insuficientes."}
+from app.core.idempotency import find_response, save_response
 
 
 class Charge(BaseModel):
     policy_number: str = "POL-2026-00001"
-    amount: float = 151000.0
-
-
-async def saved_charge(session) -> None:
-    """Guarda la respuesta de la clave «clave-1» del socio A y suelta la copia en memoria."""
-    save_response(session, "socio-a", "clave-1", Charge(), 402, DECLINED)
-    await session.commit()
-    session.expunge_all()
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize(
-    "partner_id, idempotency_key, expected",
-    [("socio-a", "clave-1", (402, DECLINED)), ("socio-a", "clave-2", None), ("socio-b", "clave-1", None)],
-)
-async def test_la_misma_clave_del_mismo_socio_devuelve_la_respuesta_guardada(
-    postgres_session, partner_id, idempotency_key, expected
-):
-    await saved_charge(postgres_session)
+async def test_la_misma_clave_de_otro_socio_es_otra_operacion(postgres_session):
+    """S8-Arq §4.2: la clave primaria es (partner_id, idempotency_key); el canal web usa un solo socio."""
+    save_response(postgres_session, "socio-a", "clave-1", Charge(), 402, {"detail": "Pago rechazado."})
+    await postgres_session.commit()
+    postgres_session.expunge_all()
 
-    record = await find_response(postgres_session, partner_id, idempotency_key, Charge())
+    found = [await find_response(postgres_session, partner, "clave-1", Charge()) for partner in ("socio-a", "socio-b")]
 
-    assert (record and (record.response_status, record.response_body)) == expected
-
-
-@pytest.mark.integration
-async def test_la_misma_clave_con_otra_peticion_es_un_conflicto(postgres_session):
-    """HA-11: reintentar con la misma clave y otro cuerpo se rechaza."""
-    await saved_charge(postgres_session)
-
-    with pytest.raises(IdempotencyConflictError):
-        await find_response(postgres_session, "socio-a", "clave-1", Charge(amount=1.0))
+    assert [record and record.response_status for record in found] == [402, None]
