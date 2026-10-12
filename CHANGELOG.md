@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Actualización de la documentación en `README.md` y `backend/README.md`, sustituyendo la referencia residual de LocalStack por Floci e incorporando instrucciones explícitas para la ejecución del servidor backend mediante Poetry (`uvicorn`) y Docker Compose.
 
 ### Added
+- **HU-WEB-05 · Aceptar la cotización y emitir la póliza:**
+  - Backend: guarda cada cotización y emite la póliza `POL-YYYY-XXXXX` con un año de vigencia y su evento `PolicyIssued` en el outbox, en una sola transacción; repetir la emisión devuelve la misma póliza y una cotización vencida responde 409.
+  - Web: botón «Emitir póliza» con la confirmación, y aviso de cotización vencida con «Recotizar con datos actuales».
+  - Pruebas TC-S1-07 contra PostgreSQL, ahora también en el CI, y Vitest de la emisión.
 - **HU-WEB-04 · Cotización con perfil parcial:**
   - Backend: si el buró supera 400 ms, cotiza con puntaje neutro y recargo del 4 %, y responde `status="degraded"` con `degradation_reason="TIMEOUT_EXCEEDED"`.
   - Web: banner ámbar con `role="alert"` para cotizaciones degradadas.
