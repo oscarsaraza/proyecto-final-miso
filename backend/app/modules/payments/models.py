@@ -1,9 +1,12 @@
 """Modelos de datos para cobro y transacciones financieras."""
-import uuid
-from pydantic import BaseModel, Field
-from typing import Optional
-from sqlalchemy import Column, DateTime, Float, ForeignKey, String, UniqueConstraint
+from datetime import datetime
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Sequence, String, UniqueConstraint
 from app.core.database import Base
+
+# Consecutivo global del recibo REC-YYYY-XXXXX.
+RECEIPT_NUMBER_SEQ = Sequence("receipt_number_seq", metadata=Base.metadata)
 
 
 class PaymentTransactionDB(Base):
@@ -11,7 +14,7 @@ class PaymentTransactionDB(Base):
     __tablename__ = "payment_transactions"
     __table_args__ = (UniqueConstraint("partner_id", "idempotency_key"),)
 
-    transaction_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    transaction_id = Column(String(36), primary_key=True)
     partner_id = Column(String(64), nullable=False)
     idempotency_key = Column(String(128), nullable=False)
     policy_number = Column(String(16), ForeignKey("policies.policy_number"), nullable=False)
@@ -25,19 +28,23 @@ class PaymentTransactionDB(Base):
 
 
 class PaymentChargeRequest(BaseModel):
-    quote_id: str
     policy_number: str
-    amount: float = Field(..., gt=0)
+    amount: float = Field(..., gt=0, description="Primera prima mensual del plan emitido")
     currency: str = Field(default="COP")
-    payment_method: str = Field(..., json_schema_extra={"example": "PSE"})
-    token_or_account: str = Field(..., json_schema_extra={"example": "bank_code_1022"})
+    payment_method: Literal["PSE", "CARD"]
+    token_or_account: str = Field(
+        ..., pattern=r"^tok_\w+$", description="Token de la pasarela; nunca el número de la tarjeta (HA-15)",
+        json_schema_extra={"example": "tok_pse_bancolombia"},
+    )
 
 
 class PaymentReceipt(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     transaction_id: str
     idempotency_key: str
     policy_number: str
     amount: float
     status: str = Field(default="APPROVED")
     receipt_number: str
-    created_at: str
+    created_at: datetime

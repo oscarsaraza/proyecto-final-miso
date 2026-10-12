@@ -42,14 +42,14 @@ async def find_response(
 
 def save_response(
     session: AsyncSession, partner_id: str, idempotency_key: str, request: BaseModel, status: int, body: dict
-) -> None:
+) -> IdempotencyRecordDB:
     """Agrega la respuesta a la transacción en curso, para que se confirme junto con el efecto de la operación."""
-    session.add(
-        IdempotencyRecordDB(
-            partner_id=partner_id,
-            idempotency_key=idempotency_key,
-            request_hash=request_hash(request),
-            response_status=status,
-            response_body=body,
-        )
+    record = IdempotencyRecordDB(
+        partner_id=partner_id,
+        idempotency_key=idempotency_key,
+        request_hash=request_hash(request),
+        response_status=status,
+        response_body=body,
     )
+    session.add(record)
+    return record
