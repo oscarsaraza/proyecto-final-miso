@@ -82,7 +82,7 @@ async def create_quote(
     request: QuoteRequest,
     simulated_delay: float = 0.0,
 ):
-    """Calcula la cotización en memoria con fallback protector (Placeholder para HU-WEB-03 y HU-WEB-04)."""
+    """Calcula la cotización en memoria; si el buró supera el timeout, la entrega degradada con perfil parcial."""
     try:
         return await rating_service.calculate_quote(request, simulated_bureau_delay=simulated_delay)
     except NotImplementedError as exc:

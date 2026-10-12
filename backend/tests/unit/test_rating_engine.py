@@ -1,4 +1,5 @@
 """Pruebas del motor actuarial de cotización y degradación (TC-S1-05, TC-S1-06)."""
+import asyncio
 import time
 from datetime import date
 
@@ -31,6 +32,7 @@ def make_request(**overrides) -> QuoteRequest:
 
 def make_service(score: int = 700) -> RatingService:
     async def fixed_score(request, delay):
+        await asyncio.sleep(delay)
         return score
 
     return RatingService(score_provider=fixed_score, today=lambda: TODAY)
@@ -125,8 +127,26 @@ def test_tc_s1_05_calculo_en_memoria_es_inmediato():
 
 
 @pytest.mark.unit
-@pytest.mark.skip(reason="TDD: Se habilitará al implementar HU-WEB-04 (Degradación elegante)")
-@pytest.mark.asyncio
-async def test_rating_fallback_on_bureau_timeout():
-    """TC-S1-06: Valida que ante retardo > 400ms del buró se active degradación elegante (ASR-02 / HA-02)."""
-    pass
+@pytest.mark.parametrize("delay, status, reason", [(0.35, "active", None), (0.45, "degraded", "TIMEOUT_EXCEEDED")])
+async def test_tc_s1_06_degrada_solo_si_el_buro_supera_400_ms(delay, status, reason):
+    quote = await make_service().calculate_quote(make_request(), simulated_bureau_delay=delay)
+
+    assert (quote.status, quote.degradation_reason) == (status, reason)
+
+
+@pytest.mark.unit
+async def test_tc_s1_06_cotizacion_degradada_con_perfil_conservador_sin_esperar_al_buro():
+    """TC-S1-06: con el buró caído responde al vencer el timeout, con puntaje neutro y recargo del 4 % (ASR-02)."""
+    neutral = await make_service(score=700).calculate_quote(make_request())
+
+    start = time.perf_counter()
+    degraded = await make_service(score=820).calculate_quote(make_request(), simulated_bureau_delay=5)
+    elapsed = time.perf_counter() - start
+
+    assert elapsed < 0.5
+    assert degraded.score_applied == 700
+    for before, after in zip(neutral.tiers, degraded.tiers):
+        surcharge = after.breakdown[-1]
+        assert (surcharge.code, surcharge.multiplier) == ("partial_profile", 1.04)
+        assert after.monthly_premium == before.monthly_premium + round(before.monthly_premium * 0.04)
+        assert sum(f.amount for f in after.breakdown) == after.monthly_premium

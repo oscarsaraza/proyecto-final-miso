@@ -36,6 +36,7 @@ export interface QuoteResponse {
   quote_id: string;
   document_number: string;
   status: 'active' | 'degraded';
+  degradation_reason?: 'TIMEOUT_EXCEEDED' | null;
   score_applied: number;
   tiers: QuoteTier[];
   created_at: string;
