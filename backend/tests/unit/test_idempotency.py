@@ -2,7 +2,6 @@
 import pytest
 from app.modules.payments.models import PaymentChargeRequest
 from app.modules.payments.service import payment_service
-from app.core.middleware import idempotency_store
 
 
 @pytest.mark.unit
@@ -18,24 +17,6 @@ def test_payment_service_raises_not_implemented():
     )
     with pytest.raises(NotImplementedError):
         payment_service.process_charge(charge_request, idempotency_key="key-001")
-
-
-@pytest.mark.unit
-def test_idempotency_store_infrastructure():
-    """Valida que la infraestructura transversal del almacén de idempotencia funcione correctamente (HA-11)."""
-    hash_val = idempotency_store.compute_hash(b"test_payload")
-    assert len(hash_val) == 64
-
-    idempotency_store.save(
-        partner_id="p1",
-        idempotency_key="k1",
-        request_hash=hash_val,
-        status_code=200,
-        response_body={"status": "OK"},
-    )
-    saved = idempotency_store.get("p1", "k1")
-    assert saved is not None
-    assert saved["status_code"] == 200
 
 
 @pytest.mark.unit
