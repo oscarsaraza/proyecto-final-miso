@@ -3,8 +3,6 @@ import pytest
 from app.core.config import settings
 from app.core.security import create_access_token, decode_access_token
 from app.core.middleware import tenant_context
-from app.modules.policy.service import policy_service
-from app.modules.policy.models import PolicyIssueRequest
 
 
 @pytest.mark.unit
@@ -36,14 +34,6 @@ def test_tenant_contextvar():
     assert tenant_context.get() == "banco-aliado-1"
     tenant_context.reset(token)
     assert tenant_context.get() is None
-
-
-@pytest.mark.unit
-def test_policy_service_raises_not_implemented():
-    """Valida que policy_service lance NotImplementedError antes de implementar HU-WEB-05."""
-    req = PolicyIssueRequest(quote_id="Q1", tier="standard", insured_document="123")
-    with pytest.raises(NotImplementedError):
-        policy_service.issue_policy(req)
 
 
 @pytest.mark.unit

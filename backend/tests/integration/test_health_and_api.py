@@ -63,19 +63,7 @@ async def test_unimplemented_endpoints_return_501(async_client: AsyncClient):
     )
     assert consent_resp.status_code == 501
 
-    # 3. Emisión de póliza (HU-WEB-05)
-    policy_resp = await async_client.post(
-        "/api/v1/experience/policies",
-        headers=auth_headers,
-        json={
-            "quote_id": "QUO-1",
-            "tier": "standard",
-            "insured_document": "1020304050",
-        },
-    )
-    assert policy_resp.status_code == 501
-
-    # 4. Pago (HU-WEB-06)
+    # 3. Pago (HU-WEB-06)
     pay_headers = {**auth_headers, "Idempotency-Key": "key-123"}
     pay_resp = await async_client.post(
         "/api/v1/experience/payments/charge",
@@ -117,7 +105,7 @@ async def test_quote_edge_requiere_socio_y_cotiza(async_client: AsyncClient):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_hu_web_03_cotizacion_con_desglose_de_la_prima(async_client: AsyncClient):
+async def test_hu_web_03_cotizacion_con_desglose_de_la_prima(async_client: AsyncClient, postgres_session):
     """HU-WEB-03: la cotización del canal web trae el aporte en pesos de cada factor."""
     from app.core.security import create_access_token
 
@@ -145,7 +133,7 @@ async def test_hu_web_03_cotizacion_con_desglose_de_la_prima(async_client: Async
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_hu_web_04_cotizacion_degradada_por_timeout_del_buro(async_client: AsyncClient):
+async def test_hu_web_04_cotizacion_degradada_por_timeout_del_buro(async_client: AsyncClient, postgres_session):
     """HU-WEB-04: si el buró supera los 400 ms, el canal web responde 200 con la cotización degradada."""
     from app.core.security import create_access_token
 
@@ -167,3 +155,34 @@ async def test_hu_web_04_cotizacion_degradada_por_timeout_del_buro(async_client:
     assert response.status_code == 200
     assert response.json()["status"] == "degraded"
     assert response.json()["degradation_reason"] == "TIMEOUT_EXCEEDED"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_hu_web_05_la_cotizacion_queda_guardada_con_su_traza(async_client: AsyncClient, postgres_session):
+    """HU-WEB-05 / HA-17: la cotización devuelta queda guardada tal cual, con la traza de su degradación."""
+    from datetime import datetime
+    from app.core.security import create_access_token
+    from app.modules.rating.models import QuoteDB
+
+    advisor_token = create_access_token(subject="asesor@solventa.com", role="advisor")
+    response = await async_client.post(
+        "/api/v1/experience/quotes",
+        headers={"Authorization": f"Bearer {advisor_token}"},
+        params={"simulated_delay": 0.45},
+        json={
+            "document_type": "CC",
+            "document_number": "1020304050",
+            "birth_date": "1990-05-15",
+            "insured_amount": 100000000.0,
+        },
+    )
+
+    quote = response.json()
+    saved = await postgres_session.get(QuoteDB, quote["quote_id"])
+    assert (saved.document_number, saved.status, saved.degradation_reason, saved.score_applied, saved.tiers) == (
+        quote["document_number"], "degraded", "TIMEOUT_EXCEEDED", quote["score_applied"], quote["tiers"]
+    )
+    assert (saved.created_at, saved.expires_at) == (
+        datetime.fromisoformat(quote["created_at"]), datetime.fromisoformat(quote["expires_at"])
+    )

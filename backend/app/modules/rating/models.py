@@ -2,6 +2,8 @@
 from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel, Field
+from sqlalchemy import JSON, Column, DateTime, Float, String
+from app.core.database import Base
 
 
 class PlanTier(str, Enum):
@@ -52,3 +54,17 @@ class QuoteResponse(BaseModel):
     tiers: List[QuoteTierDetail]
     created_at: str
     expires_at: str
+
+
+class QuoteDB(Base):
+    """Cotización calculada, con su traza de degradación; la emisión comprueba aquí su vigencia (HU-WEB-05)."""
+    __tablename__ = "quotes"
+
+    quote_id = Column(String(16), primary_key=True)
+    document_number = Column(String, nullable=False)
+    status = Column(String(16), nullable=False)
+    degradation_reason = Column(String(32), nullable=True)
+    score_applied = Column(Float, nullable=False)
+    tiers = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)

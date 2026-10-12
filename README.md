@@ -119,6 +119,8 @@ poetry install
 
   _(La configuración de `pyproject.toml` incluye automáticamente los flags `--verbose --cov=app --cov-report=term-missing`)._
 
+  Las pruebas que guardan cotizaciones usan PostgreSQL (`docker compose up -d postgres`) y crean su propia base, `solventa_test`.
+
 - **Ejecutar únicamente pruebas unitarias:**
 
   ```bash
