@@ -5,6 +5,7 @@ import { finalize } from 'rxjs';
 import { PolicyRecord } from '../../core/models/policy.model';
 import { PlanTier, QuoteResponse } from '../../core/models/quote.model';
 import { PolicyService } from '../../core/policies/policy.service';
+import { PaymentStepComponent } from './payment-step/payment-step.component';
 import { PremiumBreakdownComponent } from './premium-breakdown/premium-breakdown.component';
 
 interface Emission {
@@ -15,7 +16,7 @@ interface Emission {
 @Component({
   selector: 'app-cotizador',
   standalone: true,
-  imports: [CommonModule, PremiumBreakdownComponent],
+  imports: [CommonModule, PaymentStepComponent, PremiumBreakdownComponent],
   template: `
     <div class="cotizador-container">
       <div class="cotizador-header">
@@ -88,6 +89,7 @@ interface Emission {
                 </p>
               </div>
             </div>
+            <app-payment-step [policy]="policy" />
           } @else if (emission().error === 'expired') {
             <div class="notice notice-error" role="alert">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
@@ -175,45 +177,6 @@ interface Emission {
       margin-top: 24px;
       display: grid;
       gap: 12px;
-    }
-    .notice {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 12px 16px;
-      border: 1px solid;
-      border-radius: 8px;
-      font-size: 0.8125rem;
-    }
-    .notice svg {
-      flex: none;
-    }
-    .notice p {
-      margin: 4px 0 0;
-    }
-    .notice button {
-      margin-top: 8px;
-      padding: 6px 12px;
-      border: 1px solid currentColor;
-      border-radius: 6px;
-      background: #fff;
-      color: inherit;
-      cursor: pointer;
-    }
-    .notice-warning {
-      border-color: rgba(180, 83, 9, 0.25);
-      background: #fdf4e7;
-      color: #b45309;
-    }
-    .notice-success {
-      border-color: rgba(21, 128, 61, 0.25);
-      background: #e9f7ee;
-      color: #15803d;
-    }
-    .notice-error {
-      border-color: rgba(185, 28, 28, 0.25);
-      background: #fdeeee;
-      color: #b91c1c;
     }
     .issue-button {
       padding: 12px 16px;
