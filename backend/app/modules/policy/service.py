@@ -1,14 +1,74 @@
-"""Servicio de emisión contractual y outbox transaccional (Placeholder para HU-WEB-05)."""
-from app.modules.policy.models import PolicyIssueRequest, PolicyRecord
+"""Emisión de pólizas: una por cotización vigente, con su evento PolicyIssued en el outbox (HU-WEB-05)."""
+from datetime import datetime, timezone
+from typing import Callable, Optional
+
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.outbox import OutboxMessageDB
+from app.modules.policy.models import POLICY_NUMBER_SEQ, PolicyDB, PolicyIssueRequest, PolicyRecord
+from app.modules.rating.models import QuoteDB
+
+
+class QuoteNotFoundError(Exception):
+    pass
+
+
+class QuoteExpiredError(Exception):
+    pass
+
+
+def one_year_after(moment: datetime) -> datetime:
+    """Mismo día y hora del año siguiente; el 29 de febrero pasa al 28."""
+    try:
+        return moment.replace(year=moment.year + 1)
+    except ValueError:
+        return moment.replace(year=moment.year + 1, day=28)
 
 
 class PolicyService:
-    def issue_policy(self, request: PolicyIssueRequest) -> PolicyRecord:
-        """Emite póliza de forma atómica y genera evento outbox (HU-WEB-05 / TC-S1-07).
+    """Emisión atómica e idempotente: una sola póliza por cotización (HU-WEB-05, HA-11)."""
 
-        A ser implementado durante HU-WEB-05.
-        """
-        raise NotImplementedError("issue_policy pendiente de implementación en HU-WEB-05")
+    def __init__(self, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
+        self.now = now
+
+    async def issue_policy(self, session: AsyncSession, request: PolicyIssueRequest) -> PolicyRecord:
+        """Emite la póliza de la cotización; si ya existe, la devuelve aunque la cotización haya vencido."""
+        quote = await session.get(QuoteDB, request.quote_id)
+        if quote is None:
+            raise QuoteNotFoundError()
+        policy = await self.find_by_quote(session, quote.quote_id) or await self.create(session, quote, request)
+        return PolicyRecord.model_validate(policy)
+
+    async def find_by_quote(self, session: AsyncSession, quote_id: str) -> Optional[PolicyDB]:
+        return await session.scalar(select(PolicyDB).where(PolicyDB.quote_id == quote_id))
+
+    async def create(self, session: AsyncSession, quote: QuoteDB, request: PolicyIssueRequest) -> PolicyDB:
+        """Guarda la póliza y su evento en una transacción; si otra petición ganó la carrera, devuelve la suya."""
+        issued_at = self.now()
+        if quote.expires_at <= issued_at:
+            raise QuoteExpiredError()
+        sequence = await session.scalar(select(POLICY_NUMBER_SEQ.next_value()))
+        policy = await session.scalar(
+            insert(PolicyDB)
+            .values(
+                policy_number=f"POL-{issued_at.year}-{sequence:05d}",
+                quote_id=quote.quote_id,
+                insured_document=quote.document_number,
+                beneficiaries=request.beneficiaries,
+                conditions=next(tier for tier in quote.tiers if tier["tier"] == request.tier),
+                issued_at=issued_at,
+                valid_until=one_year_after(issued_at),
+            )
+            .on_conflict_do_nothing(index_elements=["quote_id"])
+            .returning(PolicyDB)
+        )
+        if policy:
+            payload = PolicyRecord.model_validate(policy).model_dump(mode="json")
+            session.add(OutboxMessageDB(aggregate_id=policy.policy_number, event_type="PolicyIssued", payload=payload))
+        await session.commit()
+        return policy or await self.find_by_quote(session, quote.quote_id)
 
 
 policy_service = PolicyService()

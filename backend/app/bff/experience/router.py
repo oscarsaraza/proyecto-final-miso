@@ -12,7 +12,7 @@ from app.modules.profile.service import profile_service
 from app.modules.rating.models import QuoteRequest, QuoteResponse
 from app.modules.rating.service import rating_service
 from app.modules.policy.models import PolicyIssueRequest, PolicyRecord
-from app.modules.policy.service import policy_service
+from app.modules.policy.service import QuoteExpiredError, QuoteNotFoundError, policy_service
 from app.modules.payments.models import PaymentChargeRequest, PaymentReceipt
 from app.modules.payments.service import payment_service
 
@@ -81,10 +81,11 @@ async def submit_consent(consent: ConsentRequest):
 async def create_quote(
     request: QuoteRequest,
     simulated_delay: float = 0.0,
+    db: AsyncSession = Depends(get_db_session),
 ):
-    """Calcula la cotización en memoria; si el buró supera el timeout, la entrega degradada con perfil parcial."""
+    """Calcula y guarda la cotización; si el buró supera el timeout, la entrega degradada con perfil parcial."""
     try:
-        return await rating_service.calculate_quote(request, simulated_bureau_delay=simulated_delay)
+        return await rating_service.create_quote(db, request, simulated_bureau_delay=simulated_delay)
     except NotImplementedError as exc:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
 
@@ -94,12 +95,20 @@ async def create_quote(
     response_model=PolicyRecord,
     dependencies=[Depends(require_roles(["advisor"]))],
 )
-async def issue_policy(request: PolicyIssueRequest):
-    """Emite la póliza contractual y genera evento outbox (Placeholder para HU-WEB-05)."""
+async def issue_policy(
+    request: PolicyIssueRequest,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Emite la póliza de una cotización vigente; repetir la emisión devuelve la misma póliza (HU-WEB-05)."""
     try:
-        return policy_service.issue_policy(request)
-    except NotImplementedError as exc:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+        return await policy_service.issue_policy(db, request)
+    except QuoteNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="La cotización no existe.")
+    except QuoteExpiredError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La cotización venció: recalcule la tarifa con datos actuales.",
+        )
 
 
 @router.post(

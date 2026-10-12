@@ -10,6 +10,9 @@ from app.bff.experience.router import router as experience_router
 from app.bff.quote_edge.router import router as quote_edge_router
 from app.bff.auth.router import router as auth_router
 from app.modules.auth.models import UserDB  # noqa: F401 - registrar tablas en Base.metadata
+from app.modules.rating.models import QuoteDB  # noqa: F401 - registrar tablas en Base.metadata
+from app.modules.policy.models import PolicyDB  # noqa: F401 - registrar tablas en Base.metadata
+from app.core.outbox import OutboxMessageDB  # noqa: F401 - registrar tablas en Base.metadata
 from app.modules.auth.service import auth_service
 
 

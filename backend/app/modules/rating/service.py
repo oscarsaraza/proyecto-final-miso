@@ -1,14 +1,17 @@
-"""Motor actuarial en memoria: desglose de la prima por factor y degradación por latencia del buró (HU-WEB-03, HU-WEB-04)."""
+"""Motor actuarial: desglose de la prima, degradación por latencia del buró y registro de cotizaciones (HU-WEB-03 a 05)."""
 import asyncio
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Awaitable, Callable, List, Tuple
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.modules.rating.models import (
     Coverage,
     PlanTier,
     PremiumFactor,
+    QuoteDB,
     QuoteRequest,
     QuoteResponse,
     QuoteTierDetail,
@@ -140,6 +143,29 @@ class RatingService:
             created_at=created_at.isoformat(),
             expires_at=(created_at + QUOTE_VALIDITY).isoformat(),
         )
+
+    async def create_quote(
+        self,
+        session: AsyncSession,
+        request: QuoteRequest,
+        simulated_bureau_delay: float = 0.0,
+    ) -> QuoteResponse:
+        """Calcula la cotización y la guarda para que la emisión compruebe su vigencia (HU-WEB-05, HA-17)."""
+        quote = await self.calculate_quote(request, simulated_bureau_delay)
+        session.add(
+            QuoteDB(
+                quote_id=quote.quote_id,
+                document_number=quote.document_number,
+                status=quote.status,
+                degradation_reason=quote.degradation_reason,
+                score_applied=quote.score_applied,
+                tiers=[tier.model_dump(mode="json") for tier in quote.tiers],
+                created_at=datetime.fromisoformat(quote.created_at),
+                expires_at=datetime.fromisoformat(quote.expires_at),
+            )
+        )
+        await session.commit()
+        return quote
 
 
 rating_service = RatingService()

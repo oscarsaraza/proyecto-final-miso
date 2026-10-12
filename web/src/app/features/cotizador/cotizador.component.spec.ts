@@ -1,4 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { PolicyRecord } from '../../core/models/policy.model';
 import { QuoteResponse, QuoteTier } from '../../core/models/quote.model';
 import { CotizadorComponent } from './cotizador.component';
 
@@ -26,7 +29,8 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [CotizadorComponent]
+      imports: [CotizadorComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
 
     fixture = TestBed.createComponent(CotizadorComponent);
@@ -92,6 +96,80 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
 
       expect(banner()?.textContent).toContain('Cotización calculada con perfil parcial por latencia en proveedores de scoring');
       expect(banner()?.textContent).toContain('podrá reajustarse');
+    });
+  });
+
+  describe('emisión de la póliza (HU-WEB-05)', () => {
+    const policy: PolicyRecord = {
+      policy_number: 'POL-2026-00001',
+      quote_id: 'QUO-1',
+      insured_document: '1020304050',
+      conditions: tier('premium', 36_000),
+      status: 'ISSUED',
+      issued_at: '2026-10-11T12:00:00Z',
+      valid_until: '2027-10-11T12:00:00Z',
+    };
+    let http: HttpTestingController;
+    const page = () => fixture.nativeElement as HTMLElement;
+    const button = (label: string) =>
+      [...page().querySelectorAll('button')].find((candidate) => candidate.textContent?.trim() === label);
+    const issue = () => {
+      button('Emitir póliza')!.click();
+      fixture.detectChanges();
+      return http.expectOne('/api/v1/experience/policies');
+    };
+
+    beforeEach(() => {
+      http = TestBed.inject(HttpTestingController);
+      component.quote.set(quote);
+      fixture.detectChanges();
+    });
+
+    afterEach(() => http.verify());
+
+    it('emite el plan elegido y confirma el número y la vigencia', () => {
+      component.selectedTier.set('premium');
+      fixture.detectChanges();
+
+      const call = issue();
+      expect(call.request.body).toEqual({ quote_id: 'QUO-1', tier: 'premium' });
+      expect(button('Emitir póliza')!.disabled).toBe(true);
+      call.flush(policy);
+      fixture.detectChanges();
+
+      expect(page().querySelector('[role="status"]')?.textContent?.replace(/\s+/g, ' ')).toContain(
+        'Póliza emitida POL-2026-00001 Plan Premium · vigente del 11/10/2026 al 11/10/2027',
+      );
+      expect(button('Emitir póliza')).toBeUndefined();
+    });
+
+    it('si la cotización venció pide recotizar, y recotizar limpia la cotización', () => {
+      issue().flush({ detail: 'La cotización venció' }, { status: 409, statusText: 'Conflict' });
+      fixture.detectChanges();
+
+      expect(page().querySelector('[role="alert"]')?.textContent).toContain('La cotización venció');
+      expect(button('Emitir póliza')).toBeUndefined();
+      button('Recotizar con datos actuales')!.click();
+      fixture.detectChanges();
+      expect(page().querySelector('[role="tablist"]')).toBeNull();
+    });
+
+    it('ante otra falla avisa y deja reintentar', () => {
+      issue().flush(null, { status: 500, statusText: 'Internal Server Error' });
+      fixture.detectChanges();
+
+      expect(page().querySelector('[role="alert"]')?.textContent).toContain('No se pudo emitir la póliza');
+      expect(button('Recotizar con datos actuales')).toBeUndefined();
+      expect(button('Emitir póliza')!.disabled).toBe(false);
+    });
+
+    it('una cotización nueva descarta la póliza emitida', () => {
+      issue().flush(policy);
+      component.quote.set({ ...quote, quote_id: 'QUO-2' });
+      fixture.detectChanges();
+
+      expect(page().querySelector('[role="status"]')).toBeNull();
+      expect(button('Emitir póliza')).toBeDefined();
     });
   });
 });
