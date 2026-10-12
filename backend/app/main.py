@@ -13,6 +13,8 @@ from app.modules.auth.models import UserDB  # noqa: F401 - registrar tablas en B
 from app.modules.rating.models import QuoteDB  # noqa: F401 - registrar tablas en Base.metadata
 from app.modules.policy.models import PolicyDB  # noqa: F401 - registrar tablas en Base.metadata
 from app.core.outbox import OutboxMessageDB  # noqa: F401 - registrar tablas en Base.metadata
+from app.core.idempotency import IdempotencyRecordDB  # noqa: F401 - registrar tablas en Base.metadata
+from app.modules.payments.models import PaymentTransactionDB  # noqa: F401 - registrar tablas en Base.metadata
 from app.modules.auth.service import auth_service
 
 

@@ -1,7 +1,7 @@
 import { Component, computed, input } from '@angular/core';
+import { COP } from '../../../core/money';
 import { PremiumFactor, QuoteTier } from '../../../core/models/quote.model';
 
-const COP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
 const MULTIPLIER = new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 interface BreakdownRow {

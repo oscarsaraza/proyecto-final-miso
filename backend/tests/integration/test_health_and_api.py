@@ -63,22 +63,6 @@ async def test_unimplemented_endpoints_return_501(async_client: AsyncClient):
     )
     assert consent_resp.status_code == 501
 
-    # 3. Pago (HU-WEB-06)
-    pay_headers = {**auth_headers, "Idempotency-Key": "key-123"}
-    pay_resp = await async_client.post(
-        "/api/v1/experience/payments/charge",
-        headers=pay_headers,
-        json={
-            "quote_id": "QUO-1",
-            "policy_number": "POL-1",
-            "amount": 100000.0,
-            "currency": "COP",
-            "payment_method": "PSE",
-            "token_or_account": "ACC1",
-        },
-    )
-    assert pay_resp.status_code == 501
-
 
 @pytest.mark.integration
 @pytest.mark.asyncio
