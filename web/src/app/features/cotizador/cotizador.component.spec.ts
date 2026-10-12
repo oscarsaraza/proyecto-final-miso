@@ -1,4 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { QuoteResponse, QuoteTier } from '../../core/models/quote.model';
 import { CotizadorComponent } from './cotizador.component';
 
@@ -26,7 +28,8 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [CotizadorComponent]
+      imports: [CotizadorComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
 
     fixture = TestBed.createComponent(CotizadorComponent);

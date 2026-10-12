@@ -1,7 +1,16 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, computed, inject, linkedSignal, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { finalize } from 'rxjs';
+import { PolicyRecord } from '../../core/models/policy.model';
 import { PlanTier, QuoteResponse } from '../../core/models/quote.model';
+import { PolicyService } from '../../core/policies/policy.service';
 import { PremiumBreakdownComponent } from './premium-breakdown/premium-breakdown.component';
+
+interface Emission {
+  policy?: PolicyRecord;
+  error?: 'expired' | 'failed';
+}
 
 @Component({
   selector: 'app-cotizador',
@@ -37,7 +46,7 @@ import { PremiumBreakdownComponent } from './premium-breakdown/premium-breakdown
       @if (selectedTierDetail(); as tier) {
         <div class="quote-result">
           @if (quote()!.status === 'degraded') {
-            <div class="partial-profile-banner" role="alert">
+            <div class="notice notice-warning" role="alert">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M10.3 4.3L2.6 17.5A2 2 0 004.3 20.5h15.4a2 2 0 001.7-3L13.7 4.3a2 2 0 00-3.4 0z" />
@@ -64,6 +73,43 @@ import { PremiumBreakdownComponent } from './premium-breakdown/premium-breakdown
             }
           </div>
           <app-premium-breakdown [tier]="tier" />
+          @if (emission().policy; as policy) {
+            <div class="notice notice-success" role="status">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M8.5 12.5l2.5 2.5 4.5-5" />
+              </svg>
+              <div>
+                <strong>Póliza emitida {{ policy.policy_number }}</strong>
+                <p>
+                  Plan {{ tierLabels[policy.conditions.tier] }} · vigente del
+                  {{ policy.issued_at | date: 'dd/MM/yyyy' }} al {{ policy.valid_until | date: 'dd/MM/yyyy' }}
+                </p>
+              </div>
+            </div>
+          } @else if (emission().error === 'expired') {
+            <div class="notice notice-error" role="alert">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M15 9l-6 6M9 9l6 6" />
+              </svg>
+              <div>
+                <strong>La cotización venció</strong>
+                <p>Las tarifas deben recalcularse antes de emitir la póliza.</p>
+                <!-- HU-WEB-02 volverá a pedir la cotización con los datos del formulario. -->
+                <button type="button" (click)="quote.set(null)">Recotizar con datos actuales</button>
+              </div>
+            </div>
+          } @else {
+            @if (emission().error === 'failed') {
+              <p class="issue-error" role="alert">No se pudo emitir la póliza. Intente de nuevo.</p>
+            }
+            <button type="button" class="issue-button" [disabled]="issuing()" (click)="issuePolicy()">
+              Emitir póliza
+            </button>
+          }
         </div>
       }
     </div>
@@ -130,22 +176,62 @@ import { PremiumBreakdownComponent } from './premium-breakdown/premium-breakdown
       display: grid;
       gap: 12px;
     }
-    .partial-profile-banner {
+    .notice {
       display: flex;
       align-items: flex-start;
       gap: 12px;
       padding: 12px 16px;
-      border: 1px solid rgba(180, 83, 9, 0.25);
+      border: 1px solid;
       border-radius: 8px;
-      background: #fdf4e7;
-      color: #b45309;
       font-size: 0.8125rem;
     }
-    .partial-profile-banner svg {
+    .notice svg {
       flex: none;
     }
-    .partial-profile-banner p {
+    .notice p {
       margin: 4px 0 0;
+    }
+    .notice button {
+      margin-top: 8px;
+      padding: 6px 12px;
+      border: 1px solid currentColor;
+      border-radius: 6px;
+      background: #fff;
+      color: inherit;
+      cursor: pointer;
+    }
+    .notice-warning {
+      border-color: rgba(180, 83, 9, 0.25);
+      background: #fdf4e7;
+      color: #b45309;
+    }
+    .notice-success {
+      border-color: rgba(21, 128, 61, 0.25);
+      background: #e9f7ee;
+      color: #15803d;
+    }
+    .notice-error {
+      border-color: rgba(185, 28, 28, 0.25);
+      background: #fdeeee;
+      color: #b91c1c;
+    }
+    .issue-button {
+      padding: 12px 16px;
+      border: 0;
+      border-radius: 8px;
+      background: #0b5474;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .issue-button:disabled {
+      opacity: 0.6;
+      cursor: progress;
+    }
+    .issue-error {
+      margin: 0;
+      color: #b91c1c;
+      font-size: 0.8125rem;
     }
     .tier-tabs {
       display: flex;
@@ -184,4 +270,23 @@ export class CotizadorComponent {
     standard: 'Estándar',
     premium: 'Premium',
   };
+
+  private readonly policies = inject(PolicyService);
+  // Una cotización nueva descarta la emisión de la anterior.
+  readonly emission = linkedSignal<QuoteResponse | null, Emission>({
+    source: this.quote,
+    computation: () => ({}),
+  });
+  readonly issuing = signal(false);
+
+  issuePolicy(): void {
+    this.issuing.set(true);
+    this.policies
+      .issuePolicy({ quote_id: this.quote()!.quote_id, tier: this.selectedTier() })
+      .pipe(finalize(() => this.issuing.set(false)))
+      .subscribe({
+        next: (policy) => this.emission.set({ policy }),
+        error: (error: HttpErrorResponse) => this.emission.set({ error: error.status === 409 ? 'expired' : 'failed' }),
+      });
+  }
 }
