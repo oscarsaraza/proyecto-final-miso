@@ -17,9 +17,6 @@ jobs:
   destroy-infra:
     name: Destrucción de Infraestructura (Terraform Destroy)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: terraform
     steps:
       - name: Validar confirmación de seguridad
         run: |
@@ -45,6 +42,7 @@ jobs:
           terraform_version: 1.10.5
 
       - name: Conectar al Backend Remoto de Terraform (S3)
+        working-directory: terraform
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           STATE_BUCKET="solventa-tfstate-${ACCOUNT_ID}"
@@ -79,6 +77,7 @@ jobs:
           done
 
       - name: Destruir recursos de infraestructura con Terraform
+        working-directory: terraform
         run: terraform destroy -auto-approve
 
       - name: Resumen de apagado
