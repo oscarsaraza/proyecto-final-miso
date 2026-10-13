@@ -11,7 +11,8 @@ resource "aws_kms_key" "storage" {
 
 # Bucket S3 para pólizas, certificados y documentos (HA-08: versionado)
 resource "aws_s3_bucket" "documents" {
-  bucket = "${var.project_name}-documents-${var.environment}"
+  bucket        = "${var.project_name}-documents-${var.environment}"
+  force_destroy = true
 
   tags = {
     Name = "${var.project_name}-documents-${var.environment}"

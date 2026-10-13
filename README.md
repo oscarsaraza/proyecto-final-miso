@@ -325,7 +325,7 @@ terraform apply -var-file=environments/local.tfvars -auto-approve
 
 ## 8. Integración y Despliegue Continuo (CI/CD con GitHub Actions)
 
-El repositorio cuenta con dos workflows automatizados en [`.github/workflows`](.github/workflows/):
+El repositorio cuenta con workflows automatizados en [`.github/workflows`](.github/workflows/):
 
 ### 8.1 Integración Continua (`.github/workflows/ci.yml`)
 
@@ -338,13 +338,21 @@ Se dispara en **cada commit y pull request sin importar la rama** (`push` y `pul
 
 ### 8.2 Despliegue Continuo a AWS (`.github/workflows/deploy.yml`)
 
-Se dispara de forma estricta únicamente ante **push / merges a la rama `main`**:
+Se dispara automáticamente ante **push / merges a la rama `main`** o **manualmente vía `workflow_dispatch`** desde la pestaña *Actions* de GitHub:
 
-1. **`deploy-infra`**: Ejecuta `terraform apply -auto-approve` para sincronizar la topología AWS Multi-AZ (VPC, ALB, ECS, RDS, S3/SQS).
+1. **`deploy-infra`**: Ejecuta `terraform apply -auto-approve` para sincronizar o recrear desde cero la topología AWS Multi-AZ (VPC, ALB, ECS, RDS, S3/SQS, ECR y CloudFront).
 2. **`deploy-backend`**: Construye la imagen Docker del backend, la publica en Amazon ECR y actualiza el servicio ECS Fargate con despliegue progresivo.
 3. **`deploy-web`**: Compila los estáticos de Angular 22, los sincroniza con el bucket S3 del portal comercial e invalida la caché de CloudFront.
 
-### 8.3 Despliegue Local Simulado con Floci (`.github/workflows/deploy-local.yml` y `scripts/deploy-local.sh`)
+### 8.3 Apagado y Destrucción de Infraestructura AWS (`.github/workflows/destroy.yml`)
+
+Diseñado especialmente para el contexto académico para evitar incurrir en costos continuos innecesarios (~\$90–\$110 USD/mes por recursos facturados por hora como NAT Gateway, ALB, RDS Multi-AZ y ECS Fargate):
+
+* **Disparo manual protegido:** Se ejecuta exclusivamente bajo demanda mediante `workflow_dispatch` en GitHub Actions, exigiendo ingresar la palabra `DESTRUIR` como confirmación de seguridad.
+* **Vaciado y desaprovisionamiento total:** Realiza la limpieza preventiva de buckets S3 (`force_destroy`) y ejecuta `terraform destroy -auto-approve`, reduciendo el costo horario a **\$0.00 USD**.
+* **Recreación en cualquier momento:** Para volver a levantar la plataforma completa, basta con ejecutar el workflow `CD - Despliegue a AWS` o mezclar nuevos cambios a la rama `main`. El backend inicializará automáticamente el esquema de base de datos y el usuario asesor semilla en su arranque.
+
+### 8.4 Despliegue Local Simulado con Floci (`.github/workflows/deploy-local.yml` y `scripts/deploy-local.sh`)
 
 Permite validar de forma integral el flujo de despliegue simulando la arquitectura completa de AWS de producción localmente:
 * **Vía Workflow de GitHub Actions (`act` o manual):** Archivo [`.github/workflows/deploy-local.yml`](.github/workflows/deploy-local.yml) ejecutable mediante `act` o evento `workflow_dispatch`.
@@ -359,7 +367,7 @@ Permite validar de forma integral el flujo de despliegue simulando la arquitectu
   4. Compilación del bundle de producción del portal web Angular 22 y sincronización al bucket S3 en Floci (`s3://solventa-web-portal-local`).
   5. Verificación de salud e integridad de los recursos creados.
 
-### 8.4 Configuración de Secretos en GitHub Actions
+### 8.5 Configuración de Secretos en GitHub Actions
 
 Para el funcionamiento del pipeline de despliegue a AWS en la nube (`deploy.yml`), deben configurarse los siguientes secretos en el repositorio (**Settings > Secrets and variables > Actions**):
 

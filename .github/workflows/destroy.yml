@@ -1,0 +1,93 @@
+name: CD - Destrucción de Infraestructura AWS (Apagado)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Escriba "DESTRUIR" para confirmar el apagado y eliminación de la infraestructura en AWS'
+        required: true
+        type: string
+        default: ''
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  destroy-infra:
+    name: Destrucción de Infraestructura (Terraform Destroy)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - name: Validar confirmación de seguridad
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "DESTRUIR" ]; then
+            echo "::error::Confirmación no válida. Para proceder debe ingresar exactamente 'DESTRUIR'."
+            exit 1
+          fi
+          echo "Confirmación recibida. Iniciando proceso de apagado y destrucción de infraestructura..."
+
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar credenciales de AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Configurar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Conectar al Backend Remoto de Terraform (S3)
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          STATE_BUCKET="solventa-tfstate-${ACCOUNT_ID}"
+          REGION="${{ secrets.AWS_REGION || 'us-east-1' }}"
+
+          echo "Conectando al bucket de estado: $STATE_BUCKET en $REGION..."
+          if ! aws s3api head-bucket --bucket "$STATE_BUCKET" 2>/dev/null; then
+            echo "::error::El bucket de estado $STATE_BUCKET no existe. No hay infraestructura activa para destruir."
+            exit 1
+          fi
+
+          terraform init \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="key=production/terraform.tfstate" \
+            -backend-config="region=${REGION}"
+
+      - name: Limpieza preventiva de buckets S3 gestionados
+        run: |
+          for BUCKET in "solventa-web-portal-production" "solventa-documents-production"; do
+            if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+              echo "Vaciando bucket $BUCKET..."
+              VERSIONS=$(aws s3api list-object-versions --bucket "$BUCKET" --output json --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}')
+              if [ "$VERSIONS" != '{"Objects":null}' ] && [ -n "$VERSIONS" ]; then
+                aws s3api delete-objects --bucket "$BUCKET" --delete "$VERSIONS" 2>/dev/null || true
+              fi
+              MARKERS=$(aws s3api list-object-versions --bucket "$BUCKET" --output json --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}')
+              if [ "$MARKERS" != '{"Objects":null}' ] && [ -n "$MARKERS" ]; then
+                aws s3api delete-objects --bucket "$BUCKET" --delete "$MARKERS" 2>/dev/null || true
+              fi
+              aws s3 rm "s3://$BUCKET" --recursive 2>/dev/null || true
+            fi
+          done
+
+      - name: Destruir recursos de infraestructura con Terraform
+        run: terraform destroy -auto-approve
+
+      - name: Resumen de apagado
+        run: |
+          echo "================================================================="
+          echo " La infraestructura de Solventa en AWS ha sido apagada con éxito."
+          echo " Costo por hora de cómputo y balanceo: \$0.00 USD"
+          echo " Para recrear la plataforma en cualquier momento:"
+          echo "   1. Haga merge a la rama main, o"
+          echo "   2. Ejecute manualmente el workflow 'CD - Despliegue a AWS'."
+          echo "================================================================="
+

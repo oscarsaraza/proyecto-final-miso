@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Corrección en `backend/Dockerfile` aislando las dependencias en un entorno virtual (`/opt/venv`), configurando el directorio de inicio del usuario `appuser` y adaptando el sondeo de salud (`healthcheck`) para resolver el error `ModuleNotFoundError: No module named 'uvicorn'` al iniciar el backend mediante Docker Compose.
 
 ### Changed
+- Habilitación del disparador manual `workflow_dispatch` en el workflow de despliegue continuo (`.github/workflows/deploy.yml`) permitiendo aprovisionar y desplegar la plataforma bajo demanda sin requerir commits vacíos en `main`.
+- Adición de `force_destroy = true` a los buckets S3 (`aws_s3_bucket.documents` y `aws_s3_bucket.web`) y `force_delete = true` al repositorio ECR (`aws_ecr_repository.backend`) en Terraform para garantizar un desaprovisionamiento limpio y sin bloqueos ante objetos o imágenes existentes.
+- Actualización de la documentación en `README.md` incorporando la guía de uso del workflow de apagado/destrucción y reestructurando la sección de CI/CD.
 - `README.md` y `backend/README.md`: ejecución del backend sin Poetry, endpoints de autenticación del asegurado, conexión de la app con el backend local, emulador con huella y nueva guía de pruebas manuales en `docs/GUIA-PRUEBAS-SPRINT1.md`.
 - Actualización de apariencia del Portal Web (`web`) con el sistema de diseño del prototipo (`prototipos/web`).
 - Configuración de persistencia de estado para Terraform mediante Remote Backend en Amazon S3 en el workflow de despliegue (`.github/workflows/deploy.yml`) y `terraform/versions.tf`, garantizando que `terraform.tfstate` persista entre runners efímeros de GitHub Actions.
@@ -19,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Actualización de la documentación en `README.md` y `backend/README.md`, sustituyendo la referencia residual de LocalStack por Floci e incorporando instrucciones explícitas para la ejecución del servidor backend mediante Poetry (`uvicorn`) y Docker Compose.
 
 ### Added
+- Workflow de Destrucción y Apagado de Infraestructura AWS (`.github/workflows/destroy.yml`) ejecutable bajo demanda con `workflow_dispatch` y confirmación de seguridad para desaprovisionar todos los recursos gestionados por Terraform y reducir a \$0 los costos fijos por hora (NAT Gateway, ALB, RDS Multi-AZ y ECS Fargate).
 - **HU-WEB-05 · Aceptar la cotización y emitir la póliza:**
   - Backend: guarda cada cotización y emite la póliza `POL-YYYY-XXXXX` con un año de vigencia y su evento `PolicyIssued` en el outbox, en una sola transacción; repetir la emisión devuelve la misma póliza y una cotización vencida responde 409.
   - Web: botón «Emitir póliza» con la confirmación, y aviso de cotización vencida con «Recotizar con datos actuales».

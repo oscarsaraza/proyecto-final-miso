@@ -1,6 +1,7 @@
 # S3 Bucket privado para los estáticos del portal Angular
 resource "aws_s3_bucket" "web" {
-  bucket = "${var.project_name}-web-portal-${var.environment}"
+  bucket        = "${var.project_name}-web-portal-${var.environment}"
+  force_destroy = true
 
   tags = {
     Name = "${var.project_name}-web-portal-${var.environment}"
