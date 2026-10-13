@@ -1,11 +1,32 @@
 """Punto de entrada principal del backend monolito modular de Solventa."""
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.middleware import TenantContextMiddleware
 from app.bff.experience.router import router as experience_router
 from app.bff.quote_edge.router import router as quote_edge_router
+from app.bff.auth.router import router as auth_router
+from app.modules.auth.models import UserDB  # noqa: F401 - registrar tablas en Base.metadata
+from app.modules.rating.models import QuoteDB  # noqa: F401 - registrar tablas en Base.metadata
+from app.modules.policy.models import PolicyDB  # noqa: F401 - registrar tablas en Base.metadata
+from app.core.outbox import OutboxMessageDB  # noqa: F401 - registrar tablas en Base.metadata
+from app.modules.auth.service import auth_service
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Inicialización de tablas relacionales y usuario asesor semilla (HU-WEB-13)."""
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        async with AsyncSessionLocal() as session:
+            await auth_service.seed_default_users(session)
+    except Exception as exc:
+        print(f"Aviso de inicialización de base de datos en arranque: {exc}")
+    yield
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -14,6 +35,7 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
+    lifespan=lifespan,
 )
 
 # 1. Configuración de CORS para canal Web y socios
@@ -43,6 +65,7 @@ async def health_check():
 # 4. Registro de Routers BFF
 app.include_router(experience_router, prefix=settings.API_V1_STR)
 app.include_router(quote_edge_router, prefix=settings.API_V1_STR)
+app.include_router(auth_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/", tags=["Root"])

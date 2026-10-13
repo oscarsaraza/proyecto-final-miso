@@ -14,10 +14,13 @@ class Settings(BaseSettings):
     # Base de datos
     DATABASE_URL: str = "postgresql+asyncpg://solventa_user:solventa_password@localhost:5432/solventa"
 
-    # Seguridad JWT
+    # Seguridad JWT y Autenticación (HU-WEB-13)
     JWT_SECRET_KEY: str = "solventa_super_secret_jwt_key_for_development_only_change_in_prod"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    MAX_FAILED_LOGIN_ATTEMPTS: int = 5
+    LOCKOUT_DURATION_MINUTES: int = 15
 
     # Burós externos (ASR-02 / HA-02)
     BUREAU_TIMEOUT_SECONDS: float = 0.400  # 400 ms límite estricto

@@ -8,14 +8,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- `get_password_hash` y `verify_password` usan `bcrypt` directamente: `passlib` 1.7.4 fallaba con `bcrypt` 5.0.0 (versión del lock).
 - Corrección en `backend/Dockerfile` aislando las dependencias en un entorno virtual (`/opt/venv`), configurando el directorio de inicio del usuario `appuser` y adaptando el sondeo de salud (`healthcheck`) para resolver el error `ModuleNotFoundError: No module named 'uvicorn'` al iniciar el backend mediante Docker Compose.
 
 ### Changed
+- Habilitación del disparador manual `workflow_dispatch` en el workflow de despliegue continuo (`.github/workflows/deploy.yml`) permitiendo aprovisionar y desplegar la plataforma bajo demanda sin requerir commits vacíos en `main`.
+- Adición de `force_destroy = true` a los buckets S3 (`aws_s3_bucket.documents` y `aws_s3_bucket.web`) y `force_delete = true` al repositorio ECR (`aws_ecr_repository.backend`) en Terraform para garantizar un desaprovisionamiento limpio y sin bloqueos ante objetos o imágenes existentes.
+- Actualización de la documentación en `README.md` incorporando la guía de uso del workflow de apagado/destrucción y reestructurando la sección de CI/CD.
+- `README.md` y `backend/README.md`: ejecución del backend sin Poetry, endpoints de autenticación del asegurado, conexión de la app con el backend local, emulador con huella y nueva guía de pruebas manuales en `docs/GUIA-PRUEBAS-SPRINT1.md`.
+- Actualización de apariencia del Portal Web (`web`) con el sistema de diseño del prototipo (`prototipos/web`).
 - Configuración de persistencia de estado para Terraform mediante Remote Backend en Amazon S3 en el workflow de despliegue (`.github/workflows/deploy.yml`) y `terraform/versions.tf`, garantizando que `terraform.tfstate` persista entre runners efímeros de GitHub Actions.
 - Actualización de archivo `README.md` con permisos adicionales requeridos para el despliegue con el workflow de CD desde Github (`application-autoscaling`, `cloudwatch`, `kms`).
 - Actualización de la documentación en `README.md` y `backend/README.md`, sustituyendo la referencia residual de LocalStack por Floci e incorporando instrucciones explícitas para la ejecución del servidor backend mediante Poetry (`uvicorn`) y Docker Compose.
 
 ### Added
+- Workflow de Destrucción y Apagado de Infraestructura AWS (`.github/workflows/destroy.yml`) ejecutable bajo demanda con `workflow_dispatch` y confirmación de seguridad para desaprovisionar todos los recursos gestionados por Terraform y reducir a \$0 los costos fijos por hora (NAT Gateway, ALB, RDS Multi-AZ y ECS Fargate).
+- **HU-WEB-05 · Aceptar la cotización y emitir la póliza:**
+  - Backend: guarda cada cotización y emite la póliza `POL-YYYY-XXXXX` con un año de vigencia y su evento `PolicyIssued` en el outbox, en una sola transacción; repetir la emisión devuelve la misma póliza y una cotización vencida responde 409.
+  - Web: botón «Emitir póliza» con la confirmación, y aviso de cotización vencida con «Recotizar con datos actuales».
+  - Pruebas TC-S1-07 contra PostgreSQL, ahora también en el CI, y Vitest de la emisión.
+- **HU-WEB-04 · Cotización con perfil parcial:**
+  - Backend: si el buró supera 400 ms, cotiza con puntaje neutro y recargo del 4 %, y responde `status="degraded"` con `degradation_reason="TIMEOUT_EXCEEDED"`.
+  - Web: banner ámbar con `role="alert"` para cotizaciones degradadas.
+  - Pruebas TC-S1-06 y Vitest del banner.
+- **HU-MOV-12 · Cierre de sesión seguro y revocación móvil:**
+  - Backend: `POST /api/v1/auth/logout` revoca el refresh token (lista negra por `jti`) y `POST /api/v1/auth/refresh` rechaza los revocados y rota el token en cada uso.
+  - App: confirmación modal, purga de tokens y llave del Keystore, regreso a la bienvenida y revocación en el servidor (de mejor esfuerzo sin red).
+  - Pruebas TC-S1-12 en backend y en `AuthViewModel`.
+- **HU-MOV-02 · Acceso alternativo con contraseña y segundo factor:**
+  - Backend: `POST /api/v1/auth/otp` y `POST /api/v1/auth/login` para el asegurado, con código de 6 dígitos de un solo uso (5 min), bloqueo de 15 minutos al tercer intento fallido (HTTP 423) y emisión de access y refresh token. En desarrollo el código se devuelve como `debug_code` para simular el SMS.
+  - App: pantalla de acceso alternativo, cliente HTTP del BFF y oferta de activar la biometría tras ingresar, que guarda la sesión cifrada (HU-MOV-03).
+  - Pruebas TC-S1-10 en backend (unitarias e integración) y en `AuthViewModel`.
+- **HU-MOV-03 · Credenciales en el almacén protegido del dispositivo:**
+  - Llave AES-256-GCM en Android Keystore que exige biometría fuerte en cada uso y se invalida al registrar nuevas huellas o rostros.
+  - `SecureSessionRepository`: guarda los tokens cifrados, los desbloquea con el `CryptoObject` de `BiometricPrompt` y sobrescribe en memoria el texto plano.
+  - Si la llave se invalida o la sesión guardada se altera, la sesión se descarta y se pide ingresar con contraseña y código.
+  - Pruebas unitarias TC-S1-11 sobre el repositorio y el flujo de desbloqueo en `AuthViewModel`.
+- **HU-MOV-01 · Acceso biométrico en la app móvil:**
+  - Pantalla M1 en Jetpack Compose con tema de marca e íconos del prototipo; el diálogo biométrico se lanza al abrir la app.
+  - Puerto `BiometricAuthenticator` e implementación con `BiometricPrompt` restringida a biometría fuerte (`BIOMETRIC_STRONG`).
+  - Manejo de sensor ausente, sin huella o rostro registrados, cancelación y bloqueo por intentos, orientando al acceso alternativo (HU-MOV-02).
+  - Pruebas unitarias TC-S1-09 sobre `AuthViewModel` y el mapeo de códigos de `BiometricPrompt`.
+- **HU-WEB-03 · Desglose explicativo de la prima:**
+  - Backend: `calculate_quote` calcula en memoria los planes básico, estándar y premium con el aporte en pesos de la tarifa base y de los ajustes por edad, ocupación, historial de pago y plan; la suma del desglose es exactamente la prima mensual. El buró usa un puntaje neutro hasta HU-WEB-04.
+  - Web: `QuoteService` contra `POST /api/v1/experience/quotes`, componente `app-premium-breakdown` con recargos, descuentos y multiplicadores, y selector de plan en el cotizador.
+  - Pruebas TC-S1-05 en el motor de tarifa y pruebas Vitest del desglose, el servicio y el cotizador.
+- Implementación integral de la historia de usuario **HU-WEB-13: Login y Sesión del Asesor Comercial en el Portal Web**:
+  - Modelo relacional `UserDB` en SQLAlchemy con hash seguro bcrypt (`HA-06`) y esquemas Pydantic para endpoints de autenticación y renovación de sesión.
+  - Implementación de segundo factor TOTP conforme a RFC 6238 en Python nativo con tolerancia temporal de $\pm 30$ segundos (`HA-06`).
+  - Mitigación de fuerza bruta y enumeración de cuentas mediante bloqueo temporal de 15 minutos (HTTP 423 Locked) tras 5 intentos fallidos consecutivos, y mensaje de error genérico.
+  - Endpoints BFF `/api/v1/experience/auth/login` y `/api/v1/experience/auth/refresh` con generación de tokens JWT (`access_token` con expiración de 15 min y `refresh_token` de 7 días).
+  - Control de acceso por roles RBAC (`HA-13`) mediante la dependencia `require_roles(["advisor"])` asegurando los endpoints comerciales del portal.
+  - Inicialización de tablas y siembra del usuario asesor comercial semilla (`asesor@solventa.com` / `SuperSecreta2026*`) mediante gestor de ciclo de vida `lifespan` en FastAPI.
+  - Servicio Angular `AuthService` con señales reactivas (`signal`), almacenamiento seguro en `sessionStorage` y métodos `login`, `refreshToken` e `isAuthenticated`.
+  - Interceptor HTTP `jwtInterceptor` con inyección de cabecera Bearer y renovación silenciosa transparente ante errores 401.
+  - Guard de rutas `authGuard` protegiendo `/cotizador` con redirección a `/login` preservando `returnUrl`.
+  - Formulario reactivo `LoginComponent` con manejo visual de estados de carga, error 401 y bloqueo 423.
+  - Barra de navegación en `AppComponent` con visualización del nombre del asesor autenticado y acción de cierre de sesión (`logout`).
+  - Configuración de proxy inverso de desarrollo (`web/proxy.conf.json`) para reenvío automático de `/api` hacia `localhost:8000`.
 - Script de automatización [`scripts/setup-aws-secrets.sh`](scripts/setup-aws-secrets.sh) para ingreso interactivo o lectura de perfil de AWS CLI, verificación de identidad con AWS STS y sincronización desatendida de credenciales IAM de AWS hacia GitHub Actions usando GitHub CLI (`gh`).
 - Workflow de Integración Continua en GitHub Actions (`.github/workflows/ci.yml`) ejecutando pruebas automatizadas en cada commit y branch:
   - `backend-ci`: Python 3.12, Poetry y Pytest con validación de cobertura mínima.
