@@ -82,3 +82,44 @@ button, input, select, textarea {
   font-family: var(--font-principal);
   font-size: inherit;
 }
+
+/* Avisos con icono y color (cotizador y paso de pago) */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+}
+.notice svg {
+  flex: none;
+}
+.notice p {
+  margin: 4px 0 0;
+}
+.notice button {
+  margin-top: 8px;
+  padding: 6px 12px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+}
+.notice-warning {
+  border-color: rgba(180, 83, 9, 0.25);
+  background: #fdf4e7;
+  color: #b45309;
+}
+.notice-success {
+  border-color: rgba(21, 128, 61, 0.25);
+  background: #e9f7ee;
+  color: #15803d;
+}
+.notice-error {
+  border-color: rgba(185, 28, 28, 0.25);
+  background: #fdeeee;
+  color: #b91c1c;
+}

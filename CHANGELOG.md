@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Actualización de la documentación en `README.md` y `backend/README.md`, sustituyendo la referencia residual de LocalStack por Floci e incorporando instrucciones explícitas para la ejecución del servidor backend mediante Poetry (`uvicorn`) y Docker Compose.
 
 ### Added
+- **HU-WEB-06 · Cobrar la prima sin duplicar el cobro:**
+  - Backend: `POST /payments/charge` exige `Idempotency-Key` y cobra la primera prima mensual con una pasarela simulada, con la póliza bloqueada y en una sola transacción: si se aprueba, la póliza pasa a `ACTIVE` con recibo `REC-YYYY-XXXXX` y evento `PaymentApproved` en el outbox; la misma clave repite la respuesta sin otro cargo, un rechazo responde 402 con el motivo y una póliza ya pagada, 409.
+  - Web: paso de pago debajo de la póliza emitida, con PSE o tarjeta y una clave por intento que se conserva en los reintentos; muestra el recibo o el motivo del rechazo.
+  - Pruebas TC-S1-08 contra PostgreSQL (reintento, corte después de cobrar, rechazo, 10 cobros simultáneos y atomicidad) y Vitest del paso de pago.
 - Workflow de Destrucción y Apagado de Infraestructura AWS (`.github/workflows/destroy.yml`) ejecutable bajo demanda con `workflow_dispatch` y confirmación de seguridad para desaprovisionar todos los recursos gestionados por Terraform y reducir a \$0 los costos fijos por hora (NAT Gateway, ALB, RDS Multi-AZ y ECS Fargate).
 - **HU-WEB-05 · Aceptar la cotización y emitir la póliza:**
   - Backend: guarda cada cotización y emite la póliza `POL-YYYY-XXXXX` con un año de vigencia y su evento `PolicyIssued` en el outbox, en una sola transacción; repetir la emisión devuelve la misma póliza y una cotización vencida responde 409.

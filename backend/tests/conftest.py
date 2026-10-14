@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.main import app
 from app.core.config import settings
 from app.core.database import Base, get_db_session
-from app.core.middleware import idempotency_store
 from app.modules.identity.service import insured_auth_service
 from app.modules.auth.service import auth_service
 
@@ -49,10 +48,8 @@ class InMemorySessionTestDouble:
 @pytest.fixture(autouse=True)
 def clean_stores():
     """Limpia los estados en memoria antes de cada test."""
-    idempotency_store.clear()
     insured_auth_service.reset_state()
     yield
-    idempotency_store.clear()
     insured_auth_service.reset_state()
 
 

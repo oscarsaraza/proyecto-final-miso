@@ -141,6 +141,7 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
         'Póliza emitida POL-2026-00001 Plan Premium · vigente del 11/10/2026 al 11/10/2027',
       );
       expect(button('Emitir póliza')).toBeUndefined();
+      expect(page().querySelector('app-payment-step')).not.toBeNull();
     });
 
     it('si la cotización venció pide recotizar, y recotizar limpia la cotización', () => {
