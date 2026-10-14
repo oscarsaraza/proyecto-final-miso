@@ -73,11 +73,24 @@ async def validate_client(client: ClientIdentification):
     dependencies=[Depends(require_roles(["advisor"]))],
 )
 async def submit_consent(consent: ConsentRequest):
-    """Registra consentimiento auditable de Open Finance (Placeholder para HU-WEB-01)."""
+    """Registra consentimiento auditable de Open Finance (HU-WEB-01 / TC-S1-04)."""
     try:
         return profile_service.register_consent(consent)
-    except NotImplementedError as exc:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+@router.get(
+    "/consent/{document_number}",
+    response_model=ConsentRecord,
+    dependencies=[Depends(require_roles(["advisor"]))],
+)
+async def get_consent(document_number: str):
+    """Consulta el consentimiento activo de un cliente para auditoría (HU-WEB-01)."""
+    record = profile_service.get_consent(document_number)
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Consentimiento no encontrado")
+    return record
 
 
 @router.post(

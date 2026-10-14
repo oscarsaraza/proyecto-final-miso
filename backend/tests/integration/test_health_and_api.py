@@ -61,7 +61,39 @@ async def test_unimplemented_endpoints_return_501(async_client: AsyncClient):
             "terms_accepted": True,
         },
     )
-    assert consent_resp.status_code == 501
+    assert consent_resp.status_code == 200
+    consent_data = consent_resp.json()
+    assert consent_data["status"] == "GRANTED"
+    assert consent_data["document_number"] == "1020304050"
+    assert len(consent_data["consent_hash"]) == 64
+    assert consent_data["validity_days"] == 30
+
+    # 3. Consulta de consentimiento otorgado (HU-WEB-01)
+    get_consent_resp = await async_client.get(
+        "/api/v1/experience/consent/1020304050",
+        headers=auth_headers,
+    )
+    assert get_consent_resp.status_code == 200
+    assert get_consent_resp.json()["consent_id"] == consent_data["consent_id"]
+
+    # 4. Consentimiento rechazado por términos no aceptados
+    rejected_resp = await async_client.post(
+        "/api/v1/experience/consent",
+        headers=auth_headers,
+        json={
+            "document_number": "1020304050",
+            "otp_code": "123456",
+            "terms_accepted": False,
+        },
+    )
+    assert rejected_resp.status_code == 400
+
+    # 5. Consulta de consentimiento inexistente devuelve 404
+    not_found_resp = await async_client.get(
+        "/api/v1/experience/consent/9999999999",
+        headers=auth_headers,
+    )
+    assert not_found_resp.status_code == 404
 
 
 @pytest.mark.integration

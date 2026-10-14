@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Actualización de la documentación en `README.md` y `backend/README.md`, sustituyendo la referencia residual de LocalStack por Floci e incorporando instrucciones explícitas para la ejecución del servidor backend mediante Poetry (`uvicorn`) y Docker Compose.
 
 ### Added
+- **HU-WEB-01 · Registrar el consentimiento de tratamiento de datos:**
+  - Backend: `POST /api/v1/experience/consent` y `GET /api/v1/experience/consent/{document_number}` con generación de hash SHA-256 canónico inalterable para auditoría (RC-01 / RC-04), validación de términos y vigencia de 30 días.
+  - Pruebas unitarias `TC-S1-04` e integración del flujo de consentimiento en el BFF.
 - **HU-WEB-06 · Cobrar la prima sin duplicar el cobro:**
   - Backend: `POST /payments/charge` exige `Idempotency-Key` y cobra la primera prima mensual con una pasarela simulada, con la póliza bloqueada y en una sola transacción: si se aprueba, la póliza pasa a `ACTIVE` con recibo `REC-YYYY-XXXXX` y evento `PaymentApproved` en el outbox; la misma clave repite la respuesta sin otro cargo, un rechazo responde 402 con el motivo y una póliza ya pagada, 409.
   - Web: paso de pago debajo de la póliza emitida, con PSE o tarjeta y una clave por intento que se conserva en los reintentos; muestra el recibo o el motivo del rechazo.
