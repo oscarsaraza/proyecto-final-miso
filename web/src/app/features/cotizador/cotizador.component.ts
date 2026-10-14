@@ -2,9 +2,11 @@ import { Component, computed, inject, linkedSignal, signal } from '@angular/core
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { finalize } from 'rxjs';
+import { ConsentRecord } from '../../core/models/consent.model';
 import { PolicyRecord } from '../../core/models/policy.model';
 import { PlanTier, QuoteResponse } from '../../core/models/quote.model';
 import { PolicyService } from '../../core/policies/policy.service';
+import { ConsentStepComponent } from './consent-step/consent-step.component';
 import { PaymentStepComponent } from './payment-step/payment-step.component';
 import { PremiumBreakdownComponent } from './premium-breakdown/premium-breakdown.component';
 
@@ -16,7 +18,7 @@ interface Emission {
 @Component({
   selector: 'app-cotizador',
   standalone: true,
-  imports: [CommonModule, PaymentStepComponent, PremiumBreakdownComponent],
+  imports: [CommonModule, ConsentStepComponent, PaymentStepComponent, PremiumBreakdownComponent],
   template: `
     <div class="cotizador-container">
       <div class="cotizador-header">
@@ -25,24 +27,14 @@ interface Emission {
       </div>
 
       <div class="steps-progress">
-        <div class="step active">1. Identificación</div>
-        <div class="step">2. Consentimiento</div>
-        <div class="step">3. Tarificación</div>
-        <div class="step">4. Coberturas</div>
-        <div class="step">5. Emisión y Pago</div>
+        <div class="step" [class.completed]="!!consent()">1. Identificación</div>
+        <div class="step" [class.active]="!consent()" [class.completed]="!!consent()">2. Consentimiento</div>
+        <div class="step" [class.active]="!!consent() && !quote()">3. Tarificación</div>
+        <div class="step" [class.active]="!!quote() && !emission().policy">4. Coberturas</div>
+        <div class="step" [class.active]="!!emission().policy">5. Emisión y Pago</div>
       </div>
 
-      <div class="content-card">
-        <h3>Estructura base del flujo comercial lista para desarrollo</h3>
-        <p>Las siguientes historias de usuario implementarán cada paso de este componente:</p>
-        <ul>
-          <li><strong>HU-WEB-02:</strong> Captura de datos del cliente e identificación inicial.</li>
-          <li><strong>HU-WEB-01:</strong> Captura y auditoría del consentimiento Open Finance.</li>
-          <li><strong>HU-WEB-03 & 04:</strong> Cálculo de prima en memoria con degradación ante caída de burós.</li>
-          <li><strong>HU-WEB-05:</strong> Configuración de coberturas y emisión contractual.</li>
-          <li><strong>HU-WEB-06:</strong> Pago con garantía de idempotencia.</li>
-        </ul>
-      </div>
+      <app-consent-step (consentGranted)="onConsentGranted($event)" />
 
       @if (selectedTierDetail(); as tier) {
         <div class="quote-result">
@@ -154,6 +146,10 @@ interface Emission {
       background: #0b5474;
       color: #ffffff;
     }
+    .step.completed {
+      background: #059669;
+      color: #ffffff;
+    }
     .content-card {
       background: #ffffff;
       border: 1px solid #e2e8f0;
@@ -222,8 +218,14 @@ interface Emission {
   `]
 })
 export class CotizadorComponent {
+  // HU-WEB-01 registro y estado del consentimiento informado.
+  readonly consent = signal<ConsentRecord | null>(null);
   // HU-WEB-02 asigna la cotización devuelta por QuoteService.
   readonly quote = signal<QuoteResponse | null>(null);
+
+  onConsentGranted(record: ConsentRecord): void {
+    this.consent.set(record);
+  }
   readonly selectedTier = signal<PlanTier>('standard');
   readonly selectedTierDetail = computed(
     () => this.quote()?.tiers.find((tier) => tier.tier === this.selectedTier()) ?? null,

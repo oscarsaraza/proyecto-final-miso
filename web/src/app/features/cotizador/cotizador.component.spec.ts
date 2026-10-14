@@ -53,6 +53,35 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
     expect(steps.length).toBe(5);
   });
 
+  describe('consentimiento Open Finance (HU-WEB-01)', () => {
+    it('renderiza el paso de consentimiento dentro del cotizador', () => {
+      const consentStep = fixture.nativeElement.querySelector('app-consent-step');
+      expect(consentStep).not.toBeNull();
+    });
+
+    it('actualiza el estado de consentimiento al recibir el evento de autorización', () => {
+      const mockRecord = {
+        consent_id: 'CNS-TEST-123',
+        document_number: '1020304050',
+        channel: 'web',
+        purpose: 'Test',
+        scope: 'Test',
+        validity_days: 30,
+        status: 'GRANTED',
+        consent_hash: '1234567890abcdef',
+        granted_at: '2026-10-13T00:00:00Z',
+        expires_at: '2026-11-12T00:00:00Z',
+      };
+
+      component.onConsentGranted(mockRecord);
+      fixture.detectChanges();
+
+      expect(component.consent()).toEqual(mockRecord);
+      const steps = fixture.nativeElement.querySelectorAll('.step');
+      expect(steps[1].classList.contains('completed')).toBe(true);
+    });
+  });
+
   describe('desglose de la prima (HU-WEB-03)', () => {
     const total = () => (fixture.nativeElement as HTMLElement).querySelector('[data-testid="total"]')?.textContent;
 
