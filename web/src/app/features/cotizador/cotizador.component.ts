@@ -2,10 +2,13 @@ import { Component, computed, inject, linkedSignal, signal } from '@angular/core
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { finalize } from 'rxjs';
+import { ClientIdentification, ClientQuoteSubmission, RiskData } from '../../core/models/client.model';
 import { ConsentRecord } from '../../core/models/consent.model';
 import { PolicyRecord } from '../../core/models/policy.model';
-import { PlanTier, QuoteResponse } from '../../core/models/quote.model';
+import { PlanTier, QuoteRequest, QuoteResponse } from '../../core/models/quote.model';
 import { PolicyService } from '../../core/policies/policy.service';
+import { QuoteService } from '../../core/quotes/quote.service';
+import { ClientDataStepComponent } from './client-data-step/client-data-step.component';
 import { ConsentStepComponent } from './consent-step/consent-step.component';
 import { PaymentStepComponent } from './payment-step/payment-step.component';
 import { PremiumBreakdownComponent } from './premium-breakdown/premium-breakdown.component';
@@ -18,7 +21,13 @@ interface Emission {
 @Component({
   selector: 'app-cotizador',
   standalone: true,
-  imports: [CommonModule, ConsentStepComponent, PaymentStepComponent, PremiumBreakdownComponent],
+  imports: [
+    CommonModule,
+    ClientDataStepComponent,
+    ConsentStepComponent,
+    PaymentStepComponent,
+    PremiumBreakdownComponent,
+  ],
   template: `
     <div class="cotizador-container">
       <div class="cotizador-header">
@@ -27,14 +36,50 @@ interface Emission {
       </div>
 
       <div class="steps-progress">
-        <div class="step" [class.completed]="!!consent()">1. Identificación</div>
+        <div class="step" [class.completed]="!!client() || !!consent()">1. Identificación</div>
         <div class="step" [class.active]="!consent()" [class.completed]="!!consent()">2. Consentimiento</div>
-        <div class="step" [class.active]="!!consent() && !quote()">3. Cotización</div>
-        <div class="step" [class.active]="!!quote() && !emission().policy">4. Coberturas</div>
+        <div class="step" [class.active]="!!consent() && !quote()" [class.completed]="!!quote()">3. Cotización</div>
+        <div class="step" [class.active]="!!quote() && !emission().policy" [class.completed]="!!emission().policy">4. Coberturas</div>
         <div class="step" [class.active]="!!emission().policy">5. Emisión y Pago</div>
       </div>
 
-      <app-consent-step (consentGranted)="onConsentGranted($event)" />
+      <!-- Paso 1: Captura de Datos del Cliente y Riesgo (HU-WEB-02) -->
+      @if (!consent() || currentStep() === 1) {
+        <app-client-data-step
+          [initialClient]="client()"
+          [initialRisk]="risk()"
+          (clientDataSubmitted)="onClientDataSubmitted($event)"
+        />
+      }
+
+      <!-- Paso 2: Consentimiento de Tratamiento de Datos (HU-WEB-01) -->
+      <app-consent-step
+        [clientData]="client()"
+        [riskData]="risk()"
+        [documentNumber]="client()?.document_number || '1020304050'"
+        (consentGranted)="onConsentGranted($event)"
+        (requestBack)="currentStep.set(1)"
+      />
+
+      @if (quoting()) {
+        <div class="notice notice-info" role="status" style="margin-top: 24px;">
+          <div class="spinner-blue" aria-hidden="true"></div>
+          <div>
+            <strong>Calculando cotización personalizada...</strong>
+            <p>Consultando reglas actuariales y scoring de Open Finance para generar los planes.</p>
+          </div>
+        </div>
+      }
+
+      @if (quoteError(); as err) {
+        <div class="notice notice-error" role="alert" style="margin-top: 24px;">
+          <div>
+            <strong>Error al calcular la cotización:</strong>
+            <p>{{ err }}</p>
+          </div>
+          <button type="button" class="btn-retry" (click)="requestQuote()">Reintentar</button>
+        </div>
+      }
 
       @if (selectedTierDetail(); as tier) {
         <div class="quote-result">
@@ -92,8 +137,8 @@ interface Emission {
               <div>
                 <strong>La cotización venció</strong>
                 <p>Las tarifas deben recalcularse antes de emitir la póliza.</p>
-                <!-- HU-WEB-02 volverá a pedir la cotización con los datos del formulario. -->
-                <button type="button" (click)="quote.set(null)">Recotizar con datos actuales</button>
+                <!-- HU-WEB-02 vuelve a solicitar la cotización con los datos capturados. -->
+                <button type="button" (click)="requestQuote()">Recotizar con datos actuales</button>
               </div>
             </div>
           } @else {
@@ -215,17 +260,91 @@ interface Emission {
       font-size: 0.875rem;
       line-height: 1.75;
     }
+    .notice.notice-info {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      color: #0369a1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 8px;
+    }
+    .spinner-blue {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(11, 84, 116, 0.2);
+      border-top-color: #0b5474;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    .btn-retry {
+      margin-left: auto;
+      padding: 6px 12px;
+      background: #b91c1c;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
   `]
 })
 export class CotizadorComponent {
+  // HU-WEB-02 datos del solicitante y condiciones del riesgo asegurado.
+  readonly client = signal<ClientIdentification | null>(null);
+  readonly risk = signal<RiskData | null>(null);
+  readonly currentStep = signal<number>(1);
+  readonly quoting = signal<boolean>(false);
+  readonly quoteError = signal<string | null>(null);
+
   // HU-WEB-01 registro y estado del consentimiento informado.
   readonly consent = signal<ConsentRecord | null>(null);
   // HU-WEB-02 asigna la cotización devuelta por QuoteService.
   readonly quote = signal<QuoteResponse | null>(null);
 
+  private readonly quotes = inject(QuoteService);
+  private readonly policies = inject(PolicyService);
+
+  onClientDataSubmitted(submission: ClientQuoteSubmission): void {
+    this.client.set(submission.client);
+    this.risk.set(submission.risk);
+    this.currentStep.set(2);
+  }
+
   onConsentGranted(record: ConsentRecord): void {
     this.consent.set(record);
+    this.currentStep.set(3);
+    this.requestQuote();
   }
+
+  requestQuote(): void {
+    this.quote.set(null);
+    const doc = this.consent()?.document_number || this.client()?.document_number || '1020304050';
+    const req: QuoteRequest = {
+      document_type: this.client()?.document_type ?? 'CC',
+      document_number: doc,
+      birth_date: this.client()?.birth_date ?? '1990-05-15',
+      insured_amount: this.risk()?.insured_amount ?? 150_000_000,
+      city: this.risk()?.city ?? 'Bogotá',
+      occupation_risk: this.risk()?.occupation_risk ?? 1,
+    };
+
+    this.quoting.set(true);
+    this.quoteError.set(null);
+    this.quotes
+      .createQuote(req)
+      .pipe(finalize(() => this.quoting.set(false)))
+      .subscribe({
+        next: (res) => this.quote.set(res),
+        error: (error: HttpErrorResponse) => {
+          this.quoteError.set(error.error?.detail || 'Error al conectar con el motor de cotización.');
+        },
+      });
+  }
+
   readonly selectedTier = signal<PlanTier>('standard');
   readonly selectedTierDetail = computed(
     () => this.quote()?.tiers.find((tier) => tier.tier === this.selectedTier()) ?? null,
@@ -236,7 +355,6 @@ export class CotizadorComponent {
     premium: 'Premium',
   };
 
-  private readonly policies = inject(PolicyService);
   // Una cotización nueva descarta la emisión de la anterior.
   readonly emission = linkedSignal<QuoteResponse | null, Emission>({
     source: this.quote,

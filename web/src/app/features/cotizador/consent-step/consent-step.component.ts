@@ -5,6 +5,8 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { finalize } from 'rxjs';
 import { ConsentRecord, ConsentRequest } from '../../../core/models/consent.model';
 import { ConsentService } from '../../../core/consent/consent.service';
+import { ClientIdentification, RiskData } from '../../../core/models/client.model';
+import { COP } from '../../../core/money';
 
 interface ConsentResult {
   record?: ConsentRecord;
@@ -29,6 +31,23 @@ interface ConsentResult {
         Para perfilar al cliente y cotizar su seguro con datos de Open Finance, se requiere registrar
         la autorización expresa informando finalidad, alcance y vigencia (Ley 1581 de 2012).
       </p>
+
+      @if (clientData(); as client) {
+        <div class="client-summary-card">
+          <div class="summary-col">
+            <span class="summary-label">Titular Solicitante:</span>
+            <strong class="summary-val">{{ client.first_name }} {{ client.last_name }}</strong>
+            <span class="summary-sub">{{ client.document_type }} {{ client.document_number }} · {{ client.phone }}</span>
+          </div>
+          @if (riskData(); as risk) {
+            <div class="summary-col">
+              <span class="summary-label">Monto Solicitado:</span>
+              <strong class="summary-amount">{{ formatMoney(risk.insured_amount) }}</strong>
+              <span class="summary-sub">{{ risk.term_months }} meses · {{ risk.financial_entity }}</span>
+            </div>
+          }
+        </div>
+      }
 
       <div class="info-grid">
         <div class="info-item">
@@ -198,13 +217,24 @@ interface ConsentResult {
             </label>
           </div>
 
-          <button
-            type="submit"
-            class="submit-button"
-            [disabled]="registering() || !termsAccepted() || !isOtpValid() || !docNumber() || !purpose() || !scope()"
-          >
-            {{ registering() ? 'Registrando autorización...' : 'Registrar consentimiento' }}
-          </button>
+          <div class="actions-group">
+            <button
+              type="submit"
+              class="submit-button"
+              [disabled]="registering() || !termsAccepted() || !isOtpValid() || !docNumber() || !purpose() || !scope()"
+            >
+              {{ registering() ? 'Registrando autorización...' : 'Registrar consentimiento' }}
+            </button>
+            @if (clientData()) {
+              <button
+                type="button"
+                class="back-button"
+                (click)="requestBack.emit()"
+              >
+                &larr; Modificar datos del cliente
+              </button>
+            }
+          </div>
         </form>
       }
     </section>
@@ -366,11 +396,73 @@ interface ConsentResult {
       color: #0b5474;
       font-weight: 600;
     }
+    .client-summary-card {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      padding: 16px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .summary-col {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .summary-label {
+      font-size: 0.75rem;
+      color: #64748b;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .summary-val {
+      font-size: 0.9375rem;
+      color: #0f172a;
+    }
+    .summary-sub {
+      font-size: 0.8125rem;
+      color: #64748b;
+    }
+    .summary-amount {
+      font-size: 1.0625rem;
+      color: #0b5474;
+    }
+    .actions-group {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .back-button {
+      padding: 10px 14px;
+      background: transparent;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      color: #475569;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .back-button:hover {
+      background: #f1f5f9;
+      border-color: #94a3b8;
+    }
   `],
 })
 export class ConsentStepComponent {
+  readonly clientData = input<ClientIdentification | null>(null);
+  readonly riskData = input<RiskData | null>(null);
   readonly documentNumber = input<string>('1020304050');
   readonly consentGranted = output<ConsentRecord>();
+  readonly requestBack = output<void>();
+
+  formatMoney(amount: number): string {
+    return COP.format(amount);
+  }
 
   readonly docNumber = linkedSignal(() => this.documentNumber());
   readonly otpCode = signal<string>('839201');

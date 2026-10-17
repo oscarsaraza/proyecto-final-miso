@@ -5,9 +5,10 @@ import { PolicyRecord } from '../../core/models/policy.model';
 import { QuoteResponse, QuoteTier } from '../../core/models/quote.model';
 import { CotizadorComponent } from './cotizador.component';
 
-describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
+describe('CotizadorComponent (Flujo Comercial HU-WEB-01 a HU-WEB-06)', () => {
   let component: CotizadorComponent;
   let fixture: ComponentFixture<CotizadorComponent>;
+  let http: HttpTestingController;
 
   const tier = (name: QuoteTier['tier'], premium: number): QuoteTier => ({
     tier: name,
@@ -35,8 +36,11 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
 
     fixture = TestBed.createComponent(CotizadorComponent);
     component = fixture.componentInstance;
+    http = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
   });
+
+  afterEach(() => http.verify());
 
   it('debe crearse el componente del cotizador', () => {
     expect(component).toBeTruthy();
@@ -53,13 +57,88 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
     expect(steps.length).toBe(5);
   });
 
+  describe('captura de datos y solicitud de cotización (HU-WEB-02)', () => {
+    it('renderiza el paso 1 de identificación y datos del riesgo', () => {
+      const step1 = fixture.nativeElement.querySelector('app-client-data-step');
+      expect(step1).not.toBeNull();
+    });
+
+    it('actualiza los datos del cliente y avanza a consentimiento al recibir clientDataSubmitted', () => {
+      const submission = {
+        client: {
+          document_type: 'CC',
+          document_number: '1020304050',
+          first_name: 'Carlos',
+          last_name: 'Rodríguez',
+          birth_date: '1988-04-12',
+          email: 'carlos@correo.co',
+          phone: '3001234567',
+        },
+        risk: {
+          financial_entity: 'Banco Unión',
+          insured_amount: 150_000_000,
+          term_months: 240,
+          occupation_risk: 1,
+          city: 'Bogotá',
+        },
+      };
+
+      component.onClientDataSubmitted(submission);
+      fixture.detectChanges();
+
+      expect(component.client()).toEqual(submission.client);
+      expect(component.risk()).toEqual(submission.risk);
+      expect(component.currentStep()).toBe(2);
+      const steps = fixture.nativeElement.querySelectorAll('.step');
+      expect(steps[0].classList.contains.bind(steps[0].classList)('completed')).toBe(true);
+    });
+
+    it('solicita la cotización usando los datos capturados y carga los planes', () => {
+      component.client.set({
+        document_type: 'CC',
+        document_number: '1020304050',
+        first_name: 'Carlos',
+        last_name: 'Rodríguez',
+        birth_date: '1988-04-12',
+        email: 'carlos@correo.co',
+        phone: '3001234567',
+      });
+      component.risk.set({
+        financial_entity: 'Davivienda',
+        insured_amount: 200_000_000,
+        term_months: 180,
+        occupation_risk: 2,
+        city: 'Medellín',
+      });
+
+      component.requestQuote();
+
+      const call = http.expectOne('/api/v1/experience/quotes');
+      expect(call.request.method).toBe('POST');
+      expect(call.request.body).toEqual({
+        document_type: 'CC',
+        document_number: '1020304050',
+        birth_date: '1988-04-12',
+        insured_amount: 200_000_000,
+        city: 'Medellín',
+        occupation_risk: 2,
+      });
+
+      call.flush(quote);
+      fixture.detectChanges();
+
+      expect(component.quote()).toEqual(quote);
+      expect(fixture.nativeElement.querySelector('app-premium-breakdown')).not.toBeNull();
+    });
+  });
+
   describe('consentimiento Open Finance (HU-WEB-01)', () => {
     it('renderiza el paso de consentimiento dentro del cotizador', () => {
       const consentStep = fixture.nativeElement.querySelector('app-consent-step');
       expect(consentStep).not.toBeNull();
     });
 
-    it('actualiza el estado de consentimiento al recibir el evento de autorización', () => {
+    it('actualiza el estado de consentimiento y dispara la cotización', () => {
       const mockRecord = {
         consent_id: 'CNS-TEST-123',
         document_number: '1020304050',
@@ -67,13 +146,15 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
         purpose: 'Test',
         scope: 'Test',
         validity_days: 30,
-        status: 'GRANTED',
+        status: 'GRANTED' as const,
         consent_hash: '1234567890abcdef',
         granted_at: '2026-10-13T00:00:00Z',
         expires_at: '2026-11-12T00:00:00Z',
       };
 
       component.onConsentGranted(mockRecord);
+      const quoteCall = http.expectOne('/api/v1/experience/quotes');
+      quoteCall.flush(quote);
       fixture.detectChanges();
 
       expect(component.consent()).toEqual(mockRecord);
@@ -138,7 +219,6 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
       issued_at: '2026-10-11T12:00:00Z',
       valid_until: '2027-10-11T12:00:00Z',
     };
-    let http: HttpTestingController;
     const page = () => fixture.nativeElement as HTMLElement;
     const button = (label: string) =>
       [...page().querySelectorAll('button')].find((candidate) => candidate.textContent?.trim() === label);
@@ -149,12 +229,9 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
     };
 
     beforeEach(() => {
-      http = TestBed.inject(HttpTestingController);
       component.quote.set(quote);
       fixture.detectChanges();
     });
-
-    afterEach(() => http.verify());
 
     it('emite el plan elegido y confirma el número y la vigencia', () => {
       component.selectedTier.set('premium');
@@ -182,6 +259,9 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
       button('Recotizar con datos actuales')!.click();
       fixture.detectChanges();
       expect(page().querySelector('[role="tablist"]')).toBeNull();
+
+      const quoteCall = http.expectOne('/api/v1/experience/quotes');
+      quoteCall.flush(quote);
     });
 
     it('ante otra falla avisa y deja reintentar', () => {
