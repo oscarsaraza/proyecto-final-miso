@@ -29,7 +29,7 @@ interface Emission {
       <div class="steps-progress">
         <div class="step" [class.completed]="!!consent()">1. Identificación</div>
         <div class="step" [class.active]="!consent()" [class.completed]="!!consent()">2. Consentimiento</div>
-        <div class="step" [class.active]="!!consent() && !quote()">3. Tarificación</div>
+        <div class="step" [class.active]="!!consent() && !quote()">3. Cotización</div>
         <div class="step" [class.active]="!!quote() && !emission().policy">4. Coberturas</div>
         <div class="step" [class.active]="!!emission().policy">5. Emisión y Pago</div>
       </div>

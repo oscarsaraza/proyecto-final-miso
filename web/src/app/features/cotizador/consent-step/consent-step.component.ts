@@ -26,7 +26,7 @@ interface ConsentResult {
       </div>
 
       <p class="description">
-        Para perfilar al cliente y tarificar su seguro con datos de Open Finance, se requiere registrar
+        Para perfilar al cliente y cotizar su seguro con datos de Open Finance, se requiere registrar
         la autorización expresa informando finalidad, alcance y vigencia (Ley 1581 de 2012).
       </p>
 

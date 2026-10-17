@@ -1,4 +1,4 @@
-"""Modelos de datos para el motor de cotización y tarificación."""
+"""Modelos de datos para el motor de cotización."""
 from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel, Field
