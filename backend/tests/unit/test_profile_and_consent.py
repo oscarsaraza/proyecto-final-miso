@@ -2,12 +2,13 @@
 import pytest
 from datetime import date
 from app.modules.profile.models import ClientIdentification, ConsentRequest
-from app.modules.profile.service import profile_service
+from app.modules.profile.service import IneligibleAgeError, ProfileService, profile_service
+from datetime import datetime, timezone
 
 
 @pytest.mark.unit
-def test_profile_service_validate_age_raises_not_implemented():
-    """Valida que validate_insurable_age lance NotImplementedError hasta HU-WEB-02."""
+def test_profile_service_validate_age_eligible():
+    """Valida que un cliente en el rango asegurable retorne True."""
     client = ClientIdentification(
         document_type="CC",
         document_number="1020304050",
@@ -17,15 +18,38 @@ def test_profile_service_validate_age_raises_not_implemented():
         email="carlos@test.com",
         phone="3001234567",
     )
-    with pytest.raises(NotImplementedError):
-        profile_service.validate_insurable_age(client)
+    assert profile_service.validate_insurable_age(client) is True
 
 
 @pytest.mark.unit
-@pytest.mark.skip(reason="TDD: Se habilitará al implementar HU-WEB-02 (Captura de datos e identificación)")
-def test_insurable_age_validation():
+@pytest.mark.parametrize(
+    "birth_date, is_valid",
+    [
+        (date(2008, 10, 16), False),  # 17 años (menor por un día)
+        (date(2008, 10, 15), True),   # 18 años exactos (límite inferior)
+        (date(1986, 5, 20), True),    # 40 años (plena edad asegurable)
+        (date(1951, 10, 15), True),   # 75 años exactos (límite superior)
+        (date(1950, 10, 15), False),  # 76 años exactos (mayor al límite)
+    ],
+)
+def test_insurable_age_validation(birth_date, is_valid):
     """TC-S1-03: Valida que solicitantes menores de 18 o mayores de 75 años no sean elegibles."""
-    pass
+    service = ProfileService(now=lambda: datetime(2026, 10, 15, tzinfo=timezone.utc))
+    client = ClientIdentification(
+        document_type="CC",
+        document_number="1020304050",
+        first_name="Carlos",
+        last_name="Perez",
+        birth_date=birth_date,
+        email="carlos@test.com",
+        phone="3001234567",
+    )
+    if is_valid:
+        assert service.validate_insurable_age(client) is True
+    else:
+        with pytest.raises(IneligibleAgeError) as exc_info:
+            service.validate_insurable_age(client)
+        assert "Debe tener entre 18 y 75 años para ser asegurable" in str(exc_info.value)
 
 
 @pytest.mark.unit

@@ -11,17 +11,25 @@ class ConsentError(ValueError):
     pass
 
 
+class IneligibleAgeError(ValueError):
+    """Excepción cuando el solicitante está fuera del rango asegurable de 18 a 75 años (HU-WEB-02 / TC-S1-03)."""
+    pass
+
+
 class ProfileService:
     def __init__(self, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
         self._now = now
         self._consents: Dict[str, ConsentRecord] = {}
 
     def validate_insurable_age(self, client: ClientIdentification) -> bool:
-        """Verifica que la edad esté en el rango asegurable de 18 a 75 años (HU-WEB-02 / TC-S1-03).
-
-        A ser implementado durante HU-WEB-02.
-        """
-        raise NotImplementedError("validate_insurable_age pendiente de implementación en HU-WEB-02")
+        """Verifica que la edad esté en el rango asegurable de 18 a 75 años (HU-WEB-02 / TC-S1-03)."""
+        today = self._now().date()
+        age = today.year - client.birth_date.year - ((today.month, today.day) < (client.birth_date.month, client.birth_date.day))
+        if not (18 <= age <= 75):
+            raise IneligibleAgeError(
+                f"El solicitante tiene {age} años. Debe tener entre 18 y 75 años para ser asegurable."
+            )
+        return True
 
     def register_consent(self, request: ConsentRequest) -> ConsentRecord:
         """Genera registro auditable de consentimiento con hash SHA-256 (HU-WEB-01 / TC-S1-04)."""

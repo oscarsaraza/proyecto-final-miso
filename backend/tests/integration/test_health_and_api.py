@@ -29,27 +29,60 @@ async def test_root_endpoint(async_client: AsyncClient):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_unimplemented_endpoints_return_501(async_client: AsyncClient):
-    """Valida que los endpoints de historias protegidas retornen HTTP 501 Not Implemented con rol advisor."""
+async def test_hu_web_02_validacion_asegurabilidad_cliente(async_client: AsyncClient):
+    """HU-WEB-02 / TC-S1-03: validación de asegurabilidad sociodemográfica de clientes por edad."""
     from app.core.security import create_access_token
     advisor_token = create_access_token(subject="asesor@solventa.com", role="advisor")
     auth_headers = {"Authorization": f"Bearer {advisor_token}"}
 
-    # 1. Validación de cliente (HU-WEB-02)
-    client_resp = await async_client.post(
+    # 1. Cliente en rango asegurable (ej. 36 años) -> 200 ELIGIBLE
+    eligible_payload = {
+        "document_type": "CC",
+        "document_number": "1020304050",
+        "first_name": "Carlos",
+        "last_name": "Perez",
+        "birth_date": "1990-05-15",
+        "email": "carlos@test.com",
+        "phone": "3001234567",
+    }
+    resp_ok = await async_client.post(
         "/api/v1/experience/clients/validate",
         headers=auth_headers,
-        json={
-            "document_type": "CC",
-            "document_number": "1020304050",
-            "first_name": "Carlos",
-            "last_name": "Perez",
-            "birth_date": "1990-05-15",
-            "email": "carlos@test.com",
-            "phone": "3001234567",
-        },
+        json=eligible_payload,
     )
-    assert client_resp.status_code == 501
+    assert resp_ok.status_code == 200
+    data = resp_ok.json()
+    assert data["status"] == "ELIGIBLE"
+    assert data["age"] >= 18 and data["age"] <= 75
+
+    # 2. Cliente menor de edad (ej. 11 años) -> 400 Bad Request
+    minor_payload = {**eligible_payload, "birth_date": "2015-01-01"}
+    resp_minor = await async_client.post(
+        "/api/v1/experience/clients/validate",
+        headers=auth_headers,
+        json=minor_payload,
+    )
+    assert resp_minor.status_code == 400
+    assert "Debe tener entre 18 y 75 años para ser asegurable" in resp_minor.json()["detail"]
+
+    # 3. Cliente mayor a 75 años (ej. 86 años) -> 400 Bad Request
+    senior_payload = {**eligible_payload, "birth_date": "1940-01-01"}
+    resp_senior = await async_client.post(
+        "/api/v1/experience/clients/validate",
+        headers=auth_headers,
+        json=senior_payload,
+    )
+    assert resp_senior.status_code == 400
+    assert "Debe tener entre 18 y 75 años para ser asegurable" in resp_senior.json()["detail"]
+
+    # 4. Formato de fecha inválido -> 422 Unprocessable Entity
+    invalid_payload = {**eligible_payload, "birth_date": "fecha-invalida"}
+    resp_invalid = await async_client.post(
+        "/api/v1/experience/clients/validate",
+        headers=auth_headers,
+        json=invalid_payload,
+    )
+    assert resp_invalid.status_code == 422
 
 
 @pytest.mark.integration

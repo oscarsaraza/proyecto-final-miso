@@ -9,7 +9,7 @@ from app.core.security import require_roles
 from app.modules.auth.models import LoginRequest, LoginResponse, RefreshTokenRequest
 from app.modules.auth.service import auth_service
 from app.modules.profile.models import ClientIdentification, ConsentRequest, ConsentRecord
-from app.modules.profile.service import profile_service
+from app.modules.profile.service import IneligibleAgeError, profile_service
 from app.modules.rating.models import QuoteRequest, QuoteResponse
 from app.modules.rating.service import rating_service
 from app.modules.policy.models import PolicyIssueRequest, PolicyRecord
@@ -59,12 +59,12 @@ async def refresh_token(
     dependencies=[Depends(require_roles(["advisor"]))],
 )
 async def validate_client(client: ClientIdentification):
-    """Valida la asegurabilidad sociodemográfica del tomador (Placeholder para HU-WEB-02)."""
+    """Valida la asegurabilidad sociodemográfica del tomador (HU-WEB-02 / TC-S1-03)."""
     try:
         profile_service.validate_insurable_age(client)
-    except NotImplementedError as exc:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
-    return {"status": "ELIGIBLE"}
+    except IneligibleAgeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return {"status": "ELIGIBLE", "age": client.age}
 
 
 @router.post(
