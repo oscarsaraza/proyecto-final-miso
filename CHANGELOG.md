@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Actualización de la documentación en `README.md` y `backend/README.md`, sustituyendo la referencia residual de LocalStack por Floci e incorporando instrucciones explícitas para la ejecución del servidor backend mediante Poetry (`uvicorn`) y Docker Compose.
 
 ### Added
+- **HU-WEB-02 · Capturar los datos del cliente y solicitar la cotización:**
+  - Backend: `POST /api/v1/experience/clients/validate` para validación de asegurabilidad por edad (`TC-S1-03`) en el rango de 18 a 75 años con `ProfileService.validate_insurable_age()`, cálculo determinístico y excepción `IneligibleAgeError` (HTTP 400 Bad Request).
+  - Web: componente `ClientDataStepComponent` (Paso 1) en el cotizador con captura de datos personales del titular y condiciones del crédito hipotecario, cálculo dinámico y validación interactiva de edad en el formulario, formateo en pesos colombianos COP y validación con el BFF.
+  - Servicio `ClientService` para validación sociodemográfica de asegurabilidad.
+  - Integración comercial guiada en `CotizadorComponent`: transferencia fluida hacia consentimiento (`ConsentStepComponent`), resumen visible del titular y monto asegurado, solicitud automática de cotización con `QuoteService.createQuote()` tras autorizar consentimiento, despliegue del desglose explicativo de la prima (`app-premium-breakdown`) y soporte de recotización sin recargar la página.
+  - Pruebas: suite `TC-S1-03` en backend con pruebas parametrizadas de límites de edad (17, 18, 40, 75 y 76 años), pruebas de integración de endpoint protegido con rol `advisor` y validación de esquemas (116 pruebas aprobadas con 97 % de cobertura), y 73 pruebas unitarias en frontend con Angular y Vitest.
 - **HU-WEB-01 · Registrar el consentimiento de tratamiento de datos:**
   - Backend: `POST /api/v1/experience/consent` y `GET /api/v1/experience/consent/{document_number}` con generación de hash SHA-256 canónico inalterable para auditoría (RC-01 / RC-04), validación estricta de OTP numérico (`^\d{6}$`), vigencia configurable con reloj inyectable para expiración determinística y aislamiento de estado en `ProfileService`.
   - Web: componente `ConsentStepComponent` en el cotizador con indicación de finalidad, alcance y vigencia por el asesor, sincronización reactiva de documento con `linkedSignal`, validación numérica y atributos modernos de formulario (`sms-otp-form`), detalle de fuentes consultadas (Open Finance, Burós, KYC), verificación OTP simulada y visualización del hash SHA-256 de auditoría.

@@ -39,7 +39,8 @@ python -m venv .venv
 
 En desarrollo, `/auth/otp` devuelve el código en `debug_code` y existe el asegurado de prueba `maria.ruiz@correo.co` / `Solventa2026!`. Los códigos, intentos y tokens revocados viven en memoria, así que se limpian al reiniciar el servidor.
 
-### Consentimiento Open Finance (`app/bff/experience`, `app/modules/profile`):
+### Consentimiento Open Finance y Asegurabilidad (`app/bff/experience`, `app/modules/profile`):
+- `POST /api/v1/experience/clients/validate`: valida la asegurabilidad sociodemográfica del tomador (rango 18 a 75 años, TC-S1-03). Exige rol `advisor`.
 - `POST /api/v1/experience/consent`: registra consentimiento auditable con hash SHA-256 inalterable (RC-01 / RC-04), vigencia configurable y validación OTP. Exige rol `advisor`.
 - `GET /api/v1/experience/consent/{document_number}`: consulta el consentimiento activo registrado para el tomador. Exige rol `advisor`.
 
