@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Corrección en el asistente del cotizador web (`CotizadorComponent`) para iniciar en el Paso 1 (Identificación) con estado activo.
 - Corrección en `.github/workflows/destroy.yml` asignando `working-directory: terraform` exclusivamente a los pasos que invocan Terraform, evitando errores de inicialización de shell previos al paso de `checkout` del repositorio.
 - `get_password_hash` y `verify_password` usan `bcrypt` directamente: `passlib` 1.7.4 fallaba con `bcrypt` 5.0.0 (versión del lock).
 - Corrección en `backend/Dockerfile` aislando las dependencias en un entorno virtual (`/opt/venv`), configurando el directorio de inicio del usuario `appuser` y adaptando el sondeo de salud (`healthcheck`) para resolver el error `ModuleNotFoundError: No module named 'uvicorn'` al iniciar el backend mediante Docker Compose.

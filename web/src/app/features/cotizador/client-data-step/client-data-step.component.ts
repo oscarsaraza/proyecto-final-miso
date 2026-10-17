@@ -135,7 +135,7 @@ import { COP } from '../../../core/money';
               />
               @if (calculatedAge(); as age) {
                 <small class="helper-text" [class.error-text]="!isAgeValid()">
-                  Edad calculada: {{ age }} años
+                  Edad: {{ age }} años
                   {{ isAgeValid() ? '(Rango asegurable 18-75)' : '(Fuera de rango asegurable)' }}
                 </small>
               }
@@ -243,7 +243,7 @@ import { COP } from '../../../core/money';
                 required
               />
               <small class="helper-text helper-money">
-                Equivalente: <strong>{{ formattedAmount() }}</strong>
+                <strong>{{ formattedAmount() }}</strong>
               </small>
             </div>
 

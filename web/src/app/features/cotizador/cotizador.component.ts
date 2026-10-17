@@ -36,15 +36,15 @@ interface Emission {
       </div>
 
       <div class="steps-progress">
-        <div class="step" [class.completed]="!!client() || !!consent()">1. Identificación</div>
-        <div class="step" [class.active]="!consent()" [class.completed]="!!consent()">2. Consentimiento</div>
-        <div class="step" [class.active]="!!consent() && !quote()" [class.completed]="!!quote()">3. Cotización</div>
+        <div class="step" [class.active]="currentStep() === 1" [class.completed]="currentStep() > 1">1. Identificación</div>
+        <div class="step" [class.active]="currentStep() === 2" [class.completed]="currentStep() > 2 || !!consent()">2. Consentimiento</div>
+        <div class="step" [class.active]="currentStep() === 3 && !quote()" [class.completed]="!!quote()">3. Cotización</div>
         <div class="step" [class.active]="!!quote() && !emission().policy" [class.completed]="!!emission().policy">4. Coberturas</div>
         <div class="step" [class.active]="!!emission().policy">5. Emisión y Pago</div>
       </div>
 
       <!-- Paso 1: Captura de Datos del Cliente y Riesgo (HU-WEB-02) -->
-      @if (!consent() || currentStep() === 1) {
+      @if (currentStep() === 1) {
         <app-client-data-step
           [initialClient]="client()"
           [initialRisk]="risk()"
@@ -53,13 +53,15 @@ interface Emission {
       }
 
       <!-- Paso 2: Consentimiento de Tratamiento de Datos (HU-WEB-01) -->
-      <app-consent-step
-        [clientData]="client()"
-        [riskData]="risk()"
-        [documentNumber]="client()?.document_number || '1020304050'"
-        (consentGranted)="onConsentGranted($event)"
-        (requestBack)="currentStep.set(1)"
-      />
+      @if (currentStep() >= 2) {
+        <app-consent-step
+          [clientData]="client()"
+          [riskData]="risk()"
+          [documentNumber]="client()?.document_number || '1020304050'"
+          (consentGranted)="onConsentGranted($event)"
+          (requestBack)="currentStep.set(1)"
+        />
+      }
 
       @if (quoting()) {
         <div class="notice notice-info" role="status" style="margin-top: 24px;">

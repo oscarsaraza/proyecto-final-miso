@@ -51,16 +51,19 @@ describe('CotizadorComponent (Flujo Comercial HU-WEB-01 a HU-WEB-06)', () => {
     expect(compiled.querySelector('h1')?.textContent).toContain('Cotizador de Seguros de Vida');
   });
 
-  it('debe mostrar las etapas del proceso comercial', () => {
+  it('debe mostrar las etapas del proceso comercial e iniciar activo en el paso 1', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const steps = compiled.querySelectorAll('.step');
     expect(steps.length).toBe(5);
+    expect(steps[0].classList.contains('active')).toBe(true);
+    expect(steps[1].classList.contains('active')).toBe(false);
   });
 
   describe('captura de datos y solicitud de cotización (HU-WEB-02)', () => {
-    it('renderiza el paso 1 de identificación y datos del riesgo', () => {
+    it('renderiza el paso 1 de identificación y oculta consentimiento inicialmente', () => {
       const step1 = fixture.nativeElement.querySelector('app-client-data-step');
       expect(step1).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('app-consent-step')).toBeNull();
     });
 
     it('actualiza los datos del cliente y avanza a consentimiento al recibir clientDataSubmitted', () => {
@@ -90,7 +93,10 @@ describe('CotizadorComponent (Flujo Comercial HU-WEB-01 a HU-WEB-06)', () => {
       expect(component.risk()).toEqual(submission.risk);
       expect(component.currentStep()).toBe(2);
       const steps = fixture.nativeElement.querySelectorAll('.step');
-      expect(steps[0].classList.contains.bind(steps[0].classList)('completed')).toBe(true);
+      expect(steps[0].classList.contains('completed')).toBe(true);
+      expect(steps[1].classList.contains('active')).toBe(true);
+      expect(fixture.nativeElement.querySelector('app-client-data-step')).toBeNull();
+      expect(fixture.nativeElement.querySelector('app-consent-step')).not.toBeNull();
     });
 
     it('solicita la cotización usando los datos capturados y carga los planes', () => {
@@ -133,12 +139,17 @@ describe('CotizadorComponent (Flujo Comercial HU-WEB-01 a HU-WEB-06)', () => {
   });
 
   describe('consentimiento Open Finance (HU-WEB-01)', () => {
-    it('renderiza el paso de consentimiento dentro del cotizador', () => {
+    it('no muestra consentimiento en paso 1 y lo renderiza al avanzar al paso 2', () => {
+      expect(fixture.nativeElement.querySelector('app-consent-step')).toBeNull();
+      component.currentStep.set(2);
+      fixture.detectChanges();
       const consentStep = fixture.nativeElement.querySelector('app-consent-step');
       expect(consentStep).not.toBeNull();
     });
 
     it('actualiza el estado de consentimiento y dispara la cotización', () => {
+      component.currentStep.set(2);
+      fixture.detectChanges();
       const mockRecord = {
         consent_id: 'CNS-TEST-123',
         document_number: '1020304050',
