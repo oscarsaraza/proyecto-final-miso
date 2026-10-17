@@ -87,4 +87,47 @@ describe('ConsentStepComponent (HU-WEB-01)', () => {
 
     expect(fixture.nativeElement.textContent).toContain('Código OTP de verificación incorrecto o expirado.');
   });
+
+  it('sincroniza docNumber reactivamente cuando cambia el input documentNumber', () => {
+    expect(component.docNumber()).toBe('1020304050');
+
+    fixture.componentRef.setInput('documentNumber', '52194832');
+    fixture.detectChanges();
+
+    expect(component.docNumber()).toBe('52194832');
+  });
+
+  it('el botón de registro permanece deshabilitado si el código OTP no es numérico de 6 dígitos', () => {
+    component.termsAccepted.set(true);
+
+    component.otpCode.set('abcdef');
+    fixture.detectChanges();
+    const button = fixture.nativeElement.querySelector('.submit-button') as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+
+    component.otpCode.set('12345');
+    fixture.detectChanges();
+    expect(button.disabled).toBe(true);
+
+    component.otpCode.set('839201');
+    fixture.detectChanges();
+    expect(button.disabled).toBe(false);
+  });
+
+  it('envía finalidad, alcance y vigencia personalizados indicados por el asesor', () => {
+    component.termsAccepted.set(true);
+    component.purpose.set('Finalidad personalizada de suscripción');
+    component.scope.set('Historial crediticio y bancario ampliado');
+    component.validityDays.set(60);
+    fixture.detectChanges();
+
+    component.submitConsent();
+
+    const call = http.expectOne('/api/v1/experience/consent');
+    expect(call.request.body.purpose).toBe('Finalidad personalizada de suscripción');
+    expect(call.request.body.scope).toBe('Historial crediticio y bancario ampliado');
+    expect(call.request.body.validity_days).toBe(60);
+    call.flush(mockRecord);
+  });
 });
+

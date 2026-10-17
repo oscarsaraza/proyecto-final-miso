@@ -21,15 +21,17 @@ class ClientIdentification(BaseModel):
 
 class ConsentRequest(BaseModel):
     document_number: str = Field(..., min_length=5, max_length=20, json_schema_extra={"example": "1020304050"})
-    channel: str = Field(default="web", json_schema_extra={"example": "web"})
-    otp_code: str = Field(..., min_length=6, max_length=6, json_schema_extra={"example": "839201"})
+    channel: str = Field(default="web", min_length=2, json_schema_extra={"example": "web"})
+    otp_code: str = Field(..., pattern=r"^\d{6}$", json_schema_extra={"example": "839201"})
     terms_accepted: bool = Field(..., json_schema_extra={"example": True})
     purpose: str = Field(
         default="Perfilamiento y cotización de seguro de vida hipotecario con Open Finance",
+        min_length=3,
         json_schema_extra={"example": "Perfilamiento y cotización de seguro de vida hipotecario con Open Finance"},
     )
     scope: str = Field(
         default="Historial crediticio, capacidad de endeudamiento y scoring financiero",
+        min_length=3,
         json_schema_extra={"example": "Historial crediticio, capacidad de endeudamiento y scoring financiero"},
     )
     validity_days: int = Field(default=30, ge=1, le=365, json_schema_extra={"example": 30})

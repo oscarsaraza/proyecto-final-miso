@@ -95,6 +95,15 @@ En `ENVIRONMENT=development`:
 
 En producción ninguno de los dos está disponible.
 
+### 2.4 Consentimiento de Tratamiento de Datos (HU-WEB-01)
+
+El BFF expone en `/api/v1/experience` el registro y consulta del consentimiento informado para perfilamiento Open Finance (`RC-01` / `RC-04`):
+
+| Endpoint | Descripción | Respuestas |
+| :------- | :---------- | :--------- |
+| `POST /api/v1/experience/consent` | Registra el consentimiento informado con hash SHA-256 canónico inalterable para auditoría, vigencia y validación OTP. Exige rol `advisor`. | `200` record · `400` sin términos u OTP inválido · `422` formato |
+| `GET /api/v1/experience/consent/{document_number}` | Consulta el consentimiento activo registrado para el número de documento del cliente. Exige rol `advisor`. | `200` record · `404` no encontrado |
+
 
 ---
 
@@ -134,7 +143,7 @@ poetry install
   ```
 
 - **Inspeccionar detalle de pruebas TDD pendientes de Historias de Usuario:**
-  Las pruebas de aceptación técnica de cada historia de usuario (`TC-S1-*`) están estructuradas pero marcadas como `skipped` hasta que la funcionalidad sea codificada en su respectivo sprint. Las de HU-MOV-02 (`TC-S1-10`) y HU-MOV-12 (`TC-S1-12`) ya están implementadas en `tests/unit/test_insured_auth.py`, `tests/unit/test_insured_logout.py` y `tests/integration/test_insured_auth_api.py`. Para visualizar los motivos de omisión:
+  Las pruebas de aceptación técnica de cada historia de usuario (`TC-S1-*`) están estructuradas pero marcadas como `skipped` hasta que la funcionalidad sea codificada en su respectivo sprint. Las de HU-WEB-01 (`TC-S1-04`), HU-MOV-02 (`TC-S1-10`) y HU-MOV-12 (`TC-S1-12`) ya están implementadas en `tests/unit/test_profile_and_consent.py`, `tests/unit/test_insured_auth.py`, `tests/unit/test_insured_logout.py` y `tests/integration/`. Para visualizar los motivos de omisión:
   ```bash
   poetry run pytest -rs
   ```

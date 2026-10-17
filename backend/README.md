@@ -39,6 +39,10 @@ python -m venv .venv
 
 En desarrollo, `/auth/otp` devuelve el código en `debug_code` y existe el asegurado de prueba `maria.ruiz@correo.co` / `Solventa2026!`. Los códigos, intentos y tokens revocados viven en memoria, así que se limpian al reiniciar el servidor.
 
+### Consentimiento Open Finance (`app/bff/experience`, `app/modules/profile`):
+- `POST /api/v1/experience/consent`: registra consentimiento auditable con hash SHA-256 inalterable (RC-01 / RC-04), vigencia configurable y validación OTP. Exige rol `advisor`.
+- `GET /api/v1/experience/consent/{document_number}`: consulta el consentimiento activo registrado para el tomador. Exige rol `advisor`.
+
 ## 2. Pruebas Automatizadas
 
 Las pruebas que guardan cotizaciones usan PostgreSQL (`docker compose up -d postgres`) y crean su propia base, `solventa_test`.

@@ -51,14 +51,26 @@ async def test_unimplemented_endpoints_return_501(async_client: AsyncClient):
     )
     assert client_resp.status_code == 501
 
-    # 2. Consentimiento (HU-WEB-01)
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_hu_web_01_registro_y_consulta_de_consentimiento(async_client: AsyncClient):
+    """HU-WEB-01 / TC-S1-04: registro de consentimiento con hash SHA-256, consulta y validaciones."""
+    from app.core.security import create_access_token
+    advisor_token = create_access_token(subject="asesor@solventa.com", role="advisor")
+    auth_headers = {"Authorization": f"Bearer {advisor_token}"}
+
+    # 1. Registro exitoso
     consent_resp = await async_client.post(
         "/api/v1/experience/consent",
         headers=auth_headers,
         json={
             "document_number": "1020304050",
-            "otp_code": "123456",
+            "otp_code": "839201",
             "terms_accepted": True,
+            "purpose": "Perfilamiento y cotización de seguro con Open Finance",
+            "scope": "Historial crediticio y capacidad de pago",
+            "validity_days": 30,
         },
     )
     assert consent_resp.status_code == 200
@@ -68,27 +80,52 @@ async def test_unimplemented_endpoints_return_501(async_client: AsyncClient):
     assert len(consent_data["consent_hash"]) == 64
     assert consent_data["validity_days"] == 30
 
-    # 3. Consulta de consentimiento otorgado (HU-WEB-01)
+    # 2. Consulta de consentimiento otorgado
     get_consent_resp = await async_client.get(
         "/api/v1/experience/consent/1020304050",
         headers=auth_headers,
     )
     assert get_consent_resp.status_code == 200
     assert get_consent_resp.json()["consent_id"] == consent_data["consent_id"]
+    assert get_consent_resp.json()["consent_hash"] == consent_data["consent_hash"]
 
-    # 4. Consentimiento rechazado por términos no aceptados
-    rejected_resp = await async_client.post(
+    # 3. Rechazo si no se aceptan los términos
+    rejected_terms = await async_client.post(
         "/api/v1/experience/consent",
         headers=auth_headers,
         json={
             "document_number": "1020304050",
-            "otp_code": "123456",
+            "otp_code": "839201",
             "terms_accepted": False,
         },
     )
-    assert rejected_resp.status_code == 400
+    assert rejected_terms.status_code == 400
 
-    # 5. Consulta de consentimiento inexistente devuelve 404
+    # 4. Rechazo con OTP fallido/expirado simulado ('000000')
+    rejected_otp = await async_client.post(
+        "/api/v1/experience/consent",
+        headers=auth_headers,
+        json={
+            "document_number": "1020304050",
+            "otp_code": "000000",
+            "terms_accepted": True,
+        },
+    )
+    assert rejected_otp.status_code == 400
+
+    # 5. Rechazo con formato de OTP no numérico (422)
+    invalid_format = await async_client.post(
+        "/api/v1/experience/consent",
+        headers=auth_headers,
+        json={
+            "document_number": "1020304050",
+            "otp_code": "abcdef",
+            "terms_accepted": True,
+        },
+    )
+    assert invalid_format.status_code == 422
+
+    # 6. Consulta de consentimiento inexistente devuelve 404
     not_found_resp = await async_client.get(
         "/api/v1/experience/consent/9999999999",
         headers=auth_headers,

@@ -1,4 +1,4 @@
-import { Component, inject, input, output, signal } from '@angular/core';
+import { Component, computed, inject, input, linkedSignal, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -121,6 +121,49 @@ interface ConsentResult {
           </div>
 
           <div class="form-row">
+            <label for="purpose">Finalidad de la autorización</label>
+            <input
+              id="purpose"
+              name="purpose"
+              type="text"
+              [ngModel]="purpose()"
+              (ngModelChange)="purpose.set($event)"
+              [disabled]="registering()"
+              required
+            />
+          </div>
+
+          <div class="form-row">
+            <label for="scope">Alcance de los datos a consultar</label>
+            <input
+              id="scope"
+              name="scope"
+              type="text"
+              [ngModel]="scope()"
+              (ngModelChange)="scope.set($event)"
+              [disabled]="registering()"
+              required
+            />
+          </div>
+
+          <div class="form-row">
+            <label for="validityDays">Vigencia del consentimiento</label>
+            <select
+              id="validityDays"
+              name="validityDays"
+              [ngModel]="validityDays()"
+              (ngModelChange)="validityDays.set(+$event)"
+              [disabled]="registering()"
+            >
+              <option [value]="15">15 días calendario</option>
+              <option [value]="30">30 días calendario (estándar)</option>
+              <option [value]="60">60 días calendario</option>
+              <option [value]="90">90 días calendario</option>
+              <option [value]="365">365 días (1 año)</option>
+            </select>
+          </div>
+
+          <div class="form-row">
             <label for="otpCode">
               Código OTP de verificación (SMS cliente)
               <span class="hint">(Simulado: use 839201 o cualquier código de 6 dígitos)</span>
@@ -129,7 +172,10 @@ interface ConsentResult {
               id="otpCode"
               name="otpCode"
               type="text"
+              inputmode="numeric"
+              pattern="[0-9]{6}"
               maxlength="6"
+              autocomplete="one-time-code"
               [ngModel]="otpCode()"
               (ngModelChange)="otpCode.set($event)"
               [disabled]="registering()"
@@ -155,7 +201,7 @@ interface ConsentResult {
           <button
             type="submit"
             class="submit-button"
-            [disabled]="registering() || !termsAccepted() || !otpCode() || otpCode().length !== 6"
+            [disabled]="registering() || !termsAccepted() || !isOtpValid() || !docNumber() || !purpose() || !scope()"
           >
             {{ registering() ? 'Registrando autorización...' : 'Registrar consentimiento' }}
           </button>
@@ -251,14 +297,17 @@ interface ConsentResult {
       font-size: 0.75rem;
       margin-left: 6px;
     }
-    .form-row input {
+    .form-row input,
+    .form-row select {
       padding: 10px 12px;
       border: 1px solid #cbd5e1;
       border-radius: 6px;
       font-size: 0.875rem;
       color: #0f172a;
+      background: #ffffff;
     }
-    .form-row input:focus {
+    .form-row input:focus,
+    .form-row select:focus {
       outline: none;
       border-color: #0b5474;
       box-shadow: 0 0 0 2px rgba(11, 84, 116, 0.2);
@@ -323,16 +372,32 @@ export class ConsentStepComponent {
   readonly documentNumber = input<string>('1020304050');
   readonly consentGranted = output<ConsentRecord>();
 
-  readonly docNumber = signal<string>('1020304050');
+  readonly docNumber = linkedSignal(() => this.documentNumber());
   readonly otpCode = signal<string>('839201');
   readonly termsAccepted = signal<boolean>(false);
   readonly registering = signal<boolean>(false);
   readonly result = signal<ConsentResult>({});
 
+  readonly purpose = signal<string>(
+    'Perfilamiento y cotización de seguro de vida hipotecario con Open Finance',
+  );
+  readonly scope = signal<string>(
+    'Historial crediticio, capacidad de endeudamiento y scoring financiero',
+  );
+  readonly validityDays = signal<number>(30);
+
+  readonly isOtpValid = computed(() => /^\d{6}$/.test(this.otpCode()));
+
   private readonly consentService = inject(ConsentService);
 
   submitConsent(): void {
-    if (!this.termsAccepted() || !this.otpCode() || this.otpCode().length !== 6) {
+    if (
+      !this.termsAccepted() ||
+      !this.isOtpValid() ||
+      !this.docNumber() ||
+      !this.purpose() ||
+      !this.scope()
+    ) {
       return;
     }
 
@@ -344,9 +409,9 @@ export class ConsentStepComponent {
       channel: 'web',
       otp_code: this.otpCode(),
       terms_accepted: this.termsAccepted(),
-      purpose: 'Perfilamiento y cotización de seguro de vida hipotecario con Open Finance',
-      scope: 'Historial crediticio, capacidad de endeudamiento y scoring financiero',
-      validity_days: 30,
+      purpose: this.purpose(),
+      scope: this.scope(),
+      validity_days: this.validityDays(),
     };
 
     this.consentService

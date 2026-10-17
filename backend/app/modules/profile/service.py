@@ -2,7 +2,7 @@
 import hashlib
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 from app.modules.profile.models import ClientIdentification, ConsentRequest, ConsentRecord
 
 
@@ -12,7 +12,8 @@ class ConsentError(ValueError):
 
 
 class ProfileService:
-    def __init__(self):
+    def __init__(self, now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
+        self._now = now
         self._consents: Dict[str, ConsentRecord] = {}
 
     def validate_insurable_age(self, client: ClientIdentification) -> bool:
@@ -31,7 +32,7 @@ class ProfileService:
         if request.otp_code == "000000":
             raise ConsentError("Código OTP de verificación incorrecto o expirado.")
 
-        now = datetime.now(timezone.utc)
+        now = self._now()
         granted_at = now.isoformat()
         expires_at = (now + timedelta(days=request.validity_days)).isoformat()
         consent_id = f"CNS-{uuid.uuid4().hex[:12].upper()}"
@@ -74,7 +75,7 @@ class ProfileService:
         if not record or record.status != "GRANTED":
             return False
         expires = datetime.fromisoformat(record.expires_at)
-        return datetime.now(timezone.utc) < expires
+        return self._now() < expires
 
     def clear(self):
         """Limpia el almacén de consentimientos en memoria."""

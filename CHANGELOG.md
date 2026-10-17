@@ -24,10 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **HU-WEB-01 · Registrar el consentimiento de tratamiento de datos:**
-  - Backend: `POST /api/v1/experience/consent` y `GET /api/v1/experience/consent/{document_number}` con generación de hash SHA-256 canónico inalterable para auditoría (RC-01 / RC-04), validación de términos y vigencia de 30 días.
-  - Web: componente `ConsentStepComponent` en el cotizador con detalle de fuentes consultadas (Open Finance, Burós, KYC), autorización de términos, verificación OTP simulada y visualización del hash SHA-256 generado.
+  - Backend: `POST /api/v1/experience/consent` y `GET /api/v1/experience/consent/{document_number}` con generación de hash SHA-256 canónico inalterable para auditoría (RC-01 / RC-04), validación estricta de OTP numérico (`^\d{6}$`), vigencia configurable con reloj inyectable para expiración determinística y aislamiento de estado en `ProfileService`.
+  - Web: componente `ConsentStepComponent` en el cotizador con indicación de finalidad, alcance y vigencia por el asesor, sincronización reactiva de documento con `linkedSignal`, validación numérica y atributos modernos de formulario (`sms-otp-form`), detalle de fuentes consultadas (Open Finance, Burós, KYC), verificación OTP simulada y visualización del hash SHA-256 de auditoría.
   - Servicio `ConsentService` para comunicación con el BFF de experiencia.
-  - Pruebas: `TC-S1-04` en backend (107 pruebas pasando, 97% cobertura) y pruebas unitarias con Vitest (59 pruebas pasando).
+  - Pruebas: suite `TC-S1-04` en backend con pruebas unitarias de expiración determinística y rechazo de campos inválidos, prueba de integración dedicada en `test_health_and_api.py`, y pruebas unitarias con Vitest (62 pruebas pasando).
 - **HU-WEB-06 · Cobrar la prima sin duplicar el cobro:**
   - Backend: `POST /payments/charge` exige `Idempotency-Key` y cobra la primera prima mensual con una pasarela simulada, con la póliza bloqueada y en una sola transacción: si se aprueba, la póliza pasa a `ACTIVE` con recibo `REC-YYYY-XXXXX` y evento `PaymentApproved` en el outbox; la misma clave repite la respuesta sin otro cargo, un rechazo responde 402 con el motivo y una póliza ya pagada, 409.
   - Web: paso de pago debajo de la póliza emitida, con PSE o tarjeta y una clave por intento que se conserva en los reintentos; muestra el recibo o el motivo del rechazo.

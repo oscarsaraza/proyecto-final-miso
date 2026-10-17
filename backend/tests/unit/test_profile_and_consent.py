@@ -106,3 +106,79 @@ def test_consent_rejected_with_invalid_otp():
     with pytest.raises(ValueError, match="Código OTP de verificación incorrecto"):
         profile_service.register_consent(request)
 
+
+@pytest.mark.unit
+def test_consent_expiration_deterministic():
+    """Valida que has_valid_consent expire exactamente al cumplirse el periodo de vigencia."""
+    from datetime import datetime, timedelta, timezone
+    from app.modules.profile.service import ProfileService
+
+    start_time = datetime(2026, 10, 1, 12, 0, 0, tzinfo=timezone.utc)
+    current_time = start_time
+    service = ProfileService(now=lambda: current_time)
+
+    request = ConsentRequest(
+        document_number="1020304050",
+        channel="web",
+        otp_code="839201",
+        terms_accepted=True,
+        validity_days=30,
+    )
+    record = service.register_consent(request)
+    assert record.status == "GRANTED"
+
+    # En el día 29 sigue vigente
+    current_time = start_time + timedelta(days=29)
+    assert service.has_valid_consent("1020304050") is True
+
+    # En el día 30 exacto (o microsegundo después) expira
+    current_time = start_time + timedelta(days=30, seconds=1)
+    assert service.has_valid_consent("1020304050") is False
+
+
+@pytest.mark.unit
+def test_consent_rejected_with_non_numeric_otp():
+    """Valida que ConsentRequest rechace códigos OTP no numéricos o con longitud errónea."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        ConsentRequest(
+            document_number="1020304050",
+            channel="web",
+            otp_code="abcdef",
+            terms_accepted=True,
+        )
+
+    with pytest.raises(ValidationError):
+        ConsentRequest(
+            document_number="1020304050",
+            channel="web",
+            otp_code="12345",
+            terms_accepted=True,
+        )
+
+
+@pytest.mark.unit
+def test_consent_rejected_with_empty_purpose_or_scope():
+    """Valida que ConsentRequest rechace finalidad o alcance vacíos o insuficientes."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        ConsentRequest(
+            document_number="1020304050",
+            channel="web",
+            otp_code="839201",
+            terms_accepted=True,
+            purpose="",
+        )
+
+    with pytest.raises(ValidationError):
+        ConsentRequest(
+            document_number="1020304050",
+            channel="web",
+            otp_code="839201",
+            terms_accepted=True,
+            scope="ab",
+        )
+
+

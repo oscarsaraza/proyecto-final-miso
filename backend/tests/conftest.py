@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.database import Base, get_db_session
 from app.modules.identity.service import insured_auth_service
 from app.modules.auth.service import auth_service
+from app.modules.profile.service import profile_service
 
 
 class InMemorySessionTestDouble:
@@ -49,8 +50,10 @@ class InMemorySessionTestDouble:
 def clean_stores():
     """Limpia los estados en memoria antes de cada test."""
     insured_auth_service.reset_state()
+    profile_service.clear()
     yield
     insured_auth_service.reset_state()
+    profile_service.clear()
 
 
 @pytest.fixture(autouse=True)
