@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Corrección en `backend/Dockerfile` aislando las dependencias en un entorno virtual (`/opt/venv`), configurando el directorio de inicio del usuario `appuser` y adaptando el sondeo de salud (`healthcheck`) para resolver el error `ModuleNotFoundError: No module named 'uvicorn'` al iniciar el backend mediante Docker Compose.
 
 ### Changed
+- Validación y restricciones en el formulario de captura de datos (`ClientDataStepComponent`): restricción del campo de número de documento a valores numéricos y restricción de la fecha de nacimiento para impedir fechas futuras.
+- Ajuste de maquetación en el formulario de consentimiento (`ConsentStepComponent`). Reorganización de campos en filas de dos columnas.
 - Habilitación del disparador manual `workflow_dispatch` en el workflow de despliegue continuo (`.github/workflows/deploy.yml`) permitiendo aprovisionar y desplegar la plataforma bajo demanda sin requerir commits vacíos en `main`.
 - Adición de `force_destroy = true` a los buckets S3 (`aws_s3_bucket.documents` y `aws_s3_bucket.web`) y `force_delete = true` al repositorio ECR (`aws_ecr_repository.backend`) en Terraform para garantizar un desaprovisionamiento limpio y sin bloqueos ante objetos o imágenes existentes.
 - Actualización de la documentación en `README.md` incorporando la guía de uso del workflow de apagado/destrucción y reestructurando la sección de CI/CD.

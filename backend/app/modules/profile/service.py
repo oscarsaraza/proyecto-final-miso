@@ -24,6 +24,8 @@ class ProfileService:
     def validate_insurable_age(self, client: ClientIdentification) -> bool:
         """Verifica que la edad esté en el rango asegurable de 18 a 75 años (HU-WEB-02 / TC-S1-03)."""
         today = self._now().date()
+        if client.birth_date > today:
+            raise IneligibleAgeError("La fecha de nacimiento no puede ser una fecha futura.")
         age = today.year - client.birth_date.year - ((today.month, today.day) < (client.birth_date.month, client.birth_date.day))
         if not (18 <= age <= 75):
             raise IneligibleAgeError(

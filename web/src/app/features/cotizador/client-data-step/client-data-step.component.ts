@@ -78,16 +78,43 @@ import { COP } from '../../../core/money';
                 id="docNumber"
                 type="text"
                 inputmode="numeric"
+                pattern="[0-9]*"
                 autocomplete="off"
                 enterkeyhint="next"
                 [ngModel]="documentNumber()"
-                (ngModelChange)="documentNumber.set($event)"
+                (ngModelChange)="onDocumentNumberChange($event)"
+                (input)="onDocumentNumberInput($event)"
+                (keydown)="onDocumentNumberKeyDown($event)"
                 name="docNumber"
                 placeholder="1020304050"
                 required
                 minlength="5"
                 maxlength="20"
               />
+            </div>
+
+            <div class="form-group">
+              <label for="birthDate">Fecha de nacimiento</label>
+              <input
+                id="birthDate"
+                type="date"
+                [max]="maxDate"
+                enterkeyhint="next"
+                [ngModel]="birthDate()"
+                (ngModelChange)="birthDate.set($event)"
+                name="birthDate"
+                required
+              />
+              @if (isFutureDate()) {
+                <small class="helper-text error-text">
+                  La fecha de nacimiento no puede ser una fecha futura.
+                </small>
+              } @else if (calculatedAge(); as age) {
+                <small class="helper-text" [class.error-text]="!isAgeValid()">
+                  Edad: {{ age }} años
+                  {{ isAgeValid() ? '(Rango asegurable 18-75)' : '(Fuera de rango asegurable)' }}
+                </small>
+              }
             </div>
 
             <div class="form-group">
@@ -123,25 +150,6 @@ import { COP } from '../../../core/money';
             </div>
 
             <div class="form-group">
-              <label for="birthDate">Fecha de nacimiento</label>
-              <input
-                id="birthDate"
-                type="date"
-                enterkeyhint="next"
-                [ngModel]="birthDate()"
-                (ngModelChange)="birthDate.set($event)"
-                name="birthDate"
-                required
-              />
-              @if (calculatedAge(); as age) {
-                <small class="helper-text" [class.error-text]="!isAgeValid()">
-                  Edad: {{ age }} años
-                  {{ isAgeValid() ? '(Rango asegurable 18-75)' : '(Fuera de rango asegurable)' }}
-                </small>
-              }
-            </div>
-
-            <div class="form-group">
               <label for="phone">Teléfono celular</label>
               <input
                 id="phone"
@@ -157,7 +165,7 @@ import { COP } from '../../../core/money';
               />
             </div>
 
-            <div class="form-group full-width">
+            <div class="form-group">
               <label for="email">Correo Electrónico</label>
               <input
                 id="email"
@@ -247,50 +255,52 @@ import { COP } from '../../../core/money';
               </small>
             </div>
 
-            <div class="form-group">
-              <label for="termMonths">Plazo del crédito en meses</label>
-              <input
-                id="termMonths"
-                type="number"
-                min="36"
-                max="360"
-                step="12"
-                enterkeyhint="next"
-                [ngModel]="termMonths()"
-                (ngModelChange)="termMonths.set(+$event)"
-                name="termMonths"
-                required
-              />
-              <small class="helper-text">
-                {{ termMonths() }} meses ({{ termMonths() / 12 | number: '1.0-1' }} años)
-              </small>
-            </div>
+            <div class="form-row-group">
+              <div class="form-group">
+                <label for="termMonths">Plazo del crédito en meses</label>
+                <input
+                  id="termMonths"
+                  type="number"
+                  min="36"
+                  max="360"
+                  step="12"
+                  enterkeyhint="next"
+                  [ngModel]="termMonths()"
+                  (ngModelChange)="termMonths.set(+$event)"
+                  name="termMonths"
+                  required
+                />
+                <small class="helper-text">
+                  {{ termMonths() }} meses ({{ termMonths() / 12 | number: '1.0-1' }} años)
+                </small>
+              </div>
 
-            <div class="form-group full-width">
-              <label for="occupationRisk">Nivel de riesgo ocupacional</label>
-              <select
-                id="occupationRisk"
-                [ngModel]="occupationRisk()"
-                (ngModelChange)="occupationRisk.set(+$event)"
-                name="occupationRisk"
-                required
-              >
-                <option [ngValue]="1">
-                  Nivel 1 · Administrativo / Docencia / Oficina (Factor 1.0x)
-                </option>
-                <option [ngValue]="2">
-                  Nivel 2 · Comercial / Ventas / Servicios (Factor 1.1x)
-                </option>
-                <option [ngValue]="3">
-                  Nivel 3 · Técnico / Operativo / Manufactura (Factor 1.25x)
-                </option>
-                <option [ngValue]="4">
-                  Nivel 4 · Transporte / Construcción / Seguridad (Factor 1.45x)
-                </option>
-                <option [ngValue]="5">
-                  Nivel 5 · Alto Riesgo / Trabajo en Alturas / Minas (Factor 1.7x)
-                </option>
-              </select>
+              <div class="form-group">
+                <label for="occupationRisk">Nivel de riesgo ocupacional</label>
+                <select
+                  id="occupationRisk"
+                  [ngModel]="occupationRisk()"
+                  (ngModelChange)="occupationRisk.set(+$event)"
+                  name="occupationRisk"
+                  required
+                >
+                  <option [ngValue]="1">
+                    Nivel 1 · Administrativo / Docencia / Oficina (Factor 1.0x)
+                  </option>
+                  <option [ngValue]="2">
+                    Nivel 2 · Comercial / Ventas / Servicios (Factor 1.1x)
+                  </option>
+                  <option [ngValue]="3">
+                    Nivel 3 · Técnico / Operativo / Manufactura (Factor 1.25x)
+                  </option>
+                  <option [ngValue]="4">
+                    Nivel 4 · Transporte / Construcción / Seguridad (Factor 1.45x)
+                  </option>
+                  <option [ngValue]="5">
+                    Nivel 5 · Alto Riesgo / Trabajo en Alturas / Minas (Factor 1.7x)
+                  </option>
+                </select>
+              </div>
             </div>
           </div>
         </fieldset>
@@ -408,6 +418,17 @@ import { COP } from '../../../core/money';
       .full-width {
         grid-column: 1 / -1;
       }
+      .form-row-group {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      @media (max-width: 560px) {
+        .form-row-group {
+          grid-template-columns: 1fr;
+        }
+      }
       .form-group {
         display: flex;
         flex-direction: column;
@@ -517,7 +538,7 @@ export class ClientDataStepComponent {
   // Titular Solicitante
   readonly documentType = linkedSignal(() => this.initialClient()?.document_type ?? 'CC');
   readonly documentNumber = linkedSignal(
-    () => this.initialClient()?.document_number ?? '1020304050',
+    () => (this.initialClient()?.document_number ?? '1020304050').replace(/\D/g, ''),
   );
   readonly firstName = linkedSignal(() => this.initialClient()?.first_name ?? 'Carlos');
   readonly lastName = linkedSignal(() => this.initialClient()?.last_name ?? 'Rodríguez');
@@ -537,6 +558,67 @@ export class ClientDataStepComponent {
   readonly validating = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
+  onDocumentNumberChange(val: string): void {
+    const numeric = (val || '').replace(/\D/g, '');
+    this.documentNumber.set(numeric);
+  }
+
+  onDocumentNumberInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const numeric = input.value.replace(/\D/g, '');
+    if (input.value !== numeric) {
+      input.value = numeric;
+    }
+    this.documentNumber.set(numeric);
+  }
+
+  onDocumentNumberKeyDown(event: KeyboardEvent): void {
+    if (
+      event.key === 'Backspace' ||
+      event.key === 'Delete' ||
+      event.key === 'Tab' ||
+      event.key === 'Enter' ||
+      event.key === 'ArrowLeft' ||
+      event.key === 'ArrowRight' ||
+      event.key === 'ArrowUp' ||
+      event.key === 'ArrowDown' ||
+      event.key === 'Home' ||
+      event.key === 'End' ||
+      event.ctrlKey ||
+      event.metaKey
+    ) {
+      return;
+    }
+    if (!/^\d$/.test(event.key)) {
+      event.preventDefault();
+    }
+  }
+
+  readonly isDocumentNumberValid = computed(() => {
+    const doc = this.documentNumber().trim();
+    return doc.length >= 5 && doc.length <= 20 && /^\d+$/.test(doc);
+  });
+
+  readonly maxDate = (() => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  })();
+
+  readonly isFutureDate = computed(() => {
+    const raw = this.birthDate();
+    if (!raw) return false;
+    const parts = raw.split('-');
+    if (parts.length !== 3) return false;
+    const birth = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    if (isNaN(birth.getTime())) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return birth.getTime() > today.getTime();
+  });
+
   readonly calculatedAge = computed(() => {
     const raw = this.birthDate();
     if (!raw) return null;
@@ -554,6 +636,7 @@ export class ClientDataStepComponent {
   });
 
   readonly isAgeValid = computed(() => {
+    if (this.isFutureDate()) return false;
     const age = this.calculatedAge();
     return age !== null && age >= 18 && age <= 75;
   });
@@ -562,10 +645,11 @@ export class ClientDataStepComponent {
 
   readonly isFormValid = computed(() => {
     return (
-      this.documentNumber().trim().length >= 5 &&
+      this.isDocumentNumberValid() &&
+      !this.isFutureDate() &&
+      this.isAgeValid() &&
       this.firstName().trim().length >= 2 &&
       this.lastName().trim().length >= 2 &&
-      this.isAgeValid() &&
       this.phone().trim().length >= 7 &&
       this.email().includes('@') &&
       this.insuredAmount() > 0 &&
@@ -575,7 +659,13 @@ export class ClientDataStepComponent {
 
   onSubmit(): void {
     if (!this.isFormValid()) {
-      if (!this.isAgeValid()) {
+      if (!this.isDocumentNumberValid()) {
+        this.errorMessage.set(
+          'El número de documento solo debe contener dígitos numéricos (entre 5 y 20 dígitos).',
+        );
+      } else if (this.isFutureDate()) {
+        this.errorMessage.set('La fecha de nacimiento no puede ser una fecha futura.');
+      } else if (!this.isAgeValid()) {
         this.errorMessage.set(
           `El solicitante tiene ${this.calculatedAge()} años. Debe tener entre 18 y 75 años para ser asegurable.`,
         );

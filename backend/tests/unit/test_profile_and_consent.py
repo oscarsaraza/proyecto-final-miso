@@ -53,6 +53,24 @@ def test_insurable_age_validation(birth_date, is_valid):
 
 
 @pytest.mark.unit
+def test_insurable_age_rejects_future_birth_date():
+    """Valida que una fecha de nacimiento futura sea rechazada con mensaje explicativo."""
+    service = ProfileService(now=lambda: datetime(2026, 10, 15, tzinfo=timezone.utc))
+    client = ClientIdentification(
+        document_type="CC",
+        document_number="1020304050",
+        first_name="Carlos",
+        last_name="Perez",
+        birth_date=date(2026, 10, 16),
+        email="carlos@test.com",
+        phone="3001234567",
+    )
+    with pytest.raises(IneligibleAgeError) as exc_info:
+        service.validate_insurable_age(client)
+    assert "La fecha de nacimiento no puede ser una fecha futura." in str(exc_info.value)
+
+
+@pytest.mark.unit
 def test_consent_hash_generation():
     """TC-S1-04: Valida la generación de hash SHA-256 inalterable para auditoría de consentimiento (RC-01 / RC-04)."""
     profile_service.clear()

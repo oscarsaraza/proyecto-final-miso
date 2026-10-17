@@ -59,6 +59,25 @@ describe('ClientDataStepComponent (HU-WEB-02 / TC-S1-03)', () => {
     expect(component.isFormValid()).toBe(false);
   });
 
+  it('no debe permitir fechas de nacimiento futuras', () => {
+    const inputEl = fixture.nativeElement.querySelector('#birthDate') as HTMLInputElement;
+    expect(inputEl.max).toBe(component.maxDate);
+
+    component.birthDate.set('2099-01-01');
+    fixture.detectChanges();
+
+    expect(component.isFutureDate()).toBe(true);
+    expect(component.isAgeValid()).toBe(false);
+    expect(component.isFormValid()).toBe(false);
+
+    const helperEl = fixture.nativeElement.querySelector('.error-text');
+    expect(helperEl?.textContent).toContain('La fecha de nacimiento no puede ser una fecha futura');
+
+    component.onSubmit();
+    fixture.detectChanges();
+    expect(component.errorMessage()).toContain('La fecha de nacimiento no puede ser una fecha futura');
+  });
+
   it('debe formatear el monto asegurado en pesos colombianos COP', () => {
     component.insuredAmount.set(200_000_000);
     fixture.detectChanges();
@@ -141,6 +160,45 @@ describe('ClientDataStepComponent (HU-WEB-02 / TC-S1-03)', () => {
     expect(component.firstName()).toBe('Ana');
     expect(component.financialEntity()).toBe('Davivienda');
     expect(component.insuredAmount()).toBe(250_000_000);
+  });
+
+  it('solo debe permitir valores numéricos en el número de documento', () => {
+    component.onDocumentNumberChange('1020abc3040');
+    expect(component.documentNumber()).toBe('10203040');
+
+    const inputEl = fixture.nativeElement.querySelector('#docNumber') as HTMLInputElement;
+    inputEl.value = '52A.194-832';
+    const inputEvent = new Event('input');
+    Object.defineProperty(inputEvent, 'target', { value: inputEl });
+    component.onDocumentNumberInput(inputEvent);
+
+    expect(inputEl.value).toBe('52194832');
+    expect(component.documentNumber()).toBe('52194832');
+
+    const letterEvent = new KeyboardEvent('keydown', { key: 'a', cancelable: true });
+    component.onDocumentNumberKeyDown(letterEvent);
+    expect(letterEvent.defaultPrevented).toBe(true);
+
+    const digitEvent = new KeyboardEvent('keydown', { key: '5', cancelable: true });
+    component.onDocumentNumberKeyDown(digitEvent);
+    expect(digitEvent.defaultPrevented).toBe(false);
+
+    const controlEvent = new KeyboardEvent('keydown', { key: 'Backspace', cancelable: true });
+    component.onDocumentNumberKeyDown(controlEvent);
+    expect(controlEvent.defaultPrevented).toBe(false);
+  });
+
+  it('invalida el formulario y muestra error si el documento tiene menos de 5 dígitos o está vacío', () => {
+    component.documentNumber.set('123');
+    fixture.detectChanges();
+
+    expect(component.isDocumentNumberValid()).toBe(false);
+    expect(component.isFormValid()).toBe(false);
+
+    component.onSubmit();
+    fixture.detectChanges();
+
+    expect(component.errorMessage()).toContain('dígitos numéricos');
   });
 });
 
