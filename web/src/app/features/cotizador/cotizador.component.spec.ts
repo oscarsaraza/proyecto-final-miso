@@ -1,9 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { of } from 'rxjs';
 import { PolicyRecord } from '../../core/models/policy.model';
 import { QuoteResponse, QuoteTier } from '../../core/models/quote.model';
 import { CotizadorComponent } from './cotizador.component';
+import { CatalogService } from '../../core/catalogs/catalog.service';
 
 describe('CotizadorComponent (Flujo Comercial HU-WEB-01 a HU-WEB-06)', () => {
   let component: CotizadorComponent;
@@ -31,7 +33,25 @@ describe('CotizadorComponent (Flujo Comercial HU-WEB-01 a HU-WEB-06)', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [CotizadorComponent],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: CatalogService,
+          useValue: {
+            getFinancialEntities: () =>
+              of([
+                { id: 1, code: 'BANCO_UNION', name: 'Banco Unión', is_active: true },
+                { id: 2, code: 'BANCOLOMBIA', name: 'Bancolombia', is_active: true },
+              ]),
+            getCities: () =>
+              of([
+                { id: 1, code: 'BOGOTA', name: 'Bogotá, D.C.', is_active: true },
+                { id: 2, code: 'MEDELLIN', name: 'Medellín', is_active: true },
+              ]),
+          },
+        },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(CotizadorComponent);

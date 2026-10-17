@@ -19,6 +19,21 @@ describe('ClientDataStepComponent (HU-WEB-02 / TC-S1-03)', () => {
     component = fixture.componentInstance;
     http = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
+
+    const entitiesReq = http.expectOne('/api/v1/experience/catalogs/financial-entities');
+    entitiesReq.flush([
+      { id: 1, code: 'BANCO_UNION', name: 'Banco Unión', is_active: true },
+      { id: 2, code: 'BANCOLOMBIA', name: 'Bancolombia', is_active: true },
+      { id: 3, code: 'DAVIVIENDA', name: 'Davivienda', is_active: true },
+    ]);
+
+    const citiesReq = http.expectOne('/api/v1/experience/catalogs/cities');
+    citiesReq.flush([
+      { id: 1, code: 'BOGOTA', name: 'Bogotá, D.C.', is_active: true },
+      { id: 2, code: 'MEDELLIN', name: 'Medellín', is_active: true },
+      { id: 3, code: 'CALI', name: 'Cali', is_active: true },
+    ]);
+    fixture.detectChanges();
   });
 
   afterEach(() => http.verify());
@@ -33,6 +48,27 @@ describe('ClientDataStepComponent (HU-WEB-02 / TC-S1-03)', () => {
     expect(el.querySelector('#docNumber')).not.toBeNull();
     expect(el.querySelector('#insuredAmount')).not.toBeNull();
     expect(el.querySelector('#financialEntity')).not.toBeNull();
+  });
+
+  it('debe cargar los catálogos de bancos y ciudades en los selectores correspondientes (HU-WEB-02.1)', () => {
+    const el = fixture.nativeElement as HTMLElement;
+    const entityOptions = el.querySelectorAll('#financialEntity option');
+    const cityOptions = el.querySelectorAll('#city option');
+
+    expect(component.financialEntities().length).toBe(3);
+    expect(component.cities().length).toBe(3);
+    expect(component.loadingEntities()).toBe(false);
+    expect(component.loadingCities()).toBe(false);
+
+    expect(entityOptions.length).toBe(3);
+    expect(entityOptions[0].textContent).toContain('Banco Unión');
+    expect(entityOptions[1].textContent).toContain('Bancolombia');
+    expect(entityOptions[2].textContent).toContain('Davivienda');
+
+    expect(cityOptions.length).toBe(3);
+    expect(cityOptions[0].textContent).toContain('Bogotá, D.C.');
+    expect(cityOptions[1].textContent).toContain('Medellín');
+    expect(cityOptions[2].textContent).toContain('Cali');
   });
 
   it('debe calcular la edad y el estado de elegibilidad a partir de la fecha de nacimiento', () => {

@@ -1,7 +1,9 @@
 """Modelos de datos para identificación de cliente y consentimiento Open Finance."""
-from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import date, datetime
+from typing import Optional
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import Boolean, Column, Integer, String
+from app.core.database import Base
 
 
 class ClientIdentification(BaseModel):
@@ -48,3 +50,45 @@ class ConsentRecord(BaseModel):
     consent_hash: str
     granted_at: str
     expires_at: str
+
+
+# --- Modelos SQLAlchemy de Catálogos (PostgreSQL) ---
+
+class FinancialEntityDB(Base):
+    """Entidad financiera / establecimiento bancario vigilado en Colombia."""
+    __tablename__ = "financial_entities"
+
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    code = Column(String(64), unique=True, nullable=False, index=True)
+    name = Column(String(120), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+
+class CityDB(Base):
+    """Ciudad o municipio de residencia en Colombia."""
+    __tablename__ = "cities"
+
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    code = Column(String(64), unique=True, nullable=False, index=True)
+    name = Column(String(120), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+
+# --- DTOs Pydantic para Catálogos ---
+
+class FinancialEntityResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    code: str
+    name: str
+    is_active: bool
+
+
+class CityResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    code: str
+    name: str
+    is_active: bool

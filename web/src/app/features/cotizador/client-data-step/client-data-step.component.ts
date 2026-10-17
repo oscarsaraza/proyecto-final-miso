@@ -1,4 +1,4 @@
-import { Component, computed, inject, input, linkedSignal, output, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, input, linkedSignal, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -9,6 +9,8 @@ import {
   RiskData,
 } from '../../../core/models/client.model';
 import { ClientService } from '../../../core/client/client.service';
+import { CatalogService } from '../../../core/catalogs/catalog.service';
+import { City, FinancialEntity } from '../../../core/models/catalog.model';
 import { COP } from '../../../core/money';
 
 /** HU-WEB-02 · Captura de datos del cliente y del riesgo para cotización */
@@ -212,11 +214,12 @@ import { COP } from '../../../core/money';
                 name="financialEntity"
                 required
               >
-                <option value="Banco Unión">Banco Unión</option>
-                <option value="Bancolombia">Bancolombia</option>
-                <option value="Davivienda">Davivienda</option>
-                <option value="Banco de Bogotá">Banco de Bogotá</option>
-                <option value="BBVA Colombia">BBVA Colombia</option>
+                @if (loadingEntities()) {
+                  <option value="" disabled selected>Cargando entidades financieras...</option>
+                }
+                @for (entity of financialEntities(); track entity.id) {
+                  <option [value]="entity.name">{{ entity.name }}</option>
+                }
               </select>
             </div>
 
@@ -229,11 +232,12 @@ import { COP } from '../../../core/money';
                 name="city"
                 required
               >
-                <option value="Bogotá">Bogotá, D.C.</option>
-                <option value="Medellín">Medellín</option>
-                <option value="Cali">Cali</option>
-                <option value="Barranquilla">Barranquilla</option>
-                <option value="Bucaramanga">Bucaramanga</option>
+                @if (loadingCities()) {
+                  <option value="" disabled selected>Cargando ciudades...</option>
+                }
+                @for (item of cities(); track item.id) {
+                  <option [value]="item.name">{{ item.name }}</option>
+                }
               </select>
             </div>
 
@@ -527,8 +531,9 @@ import { COP } from '../../../core/money';
     `,
   ],
 })
-export class ClientDataStepComponent {
+export class ClientDataStepComponent implements OnInit {
   private readonly clientService = inject(ClientService);
+  private readonly catalogService = inject(CatalogService);
 
   readonly initialClient = input<ClientIdentification | null>(null);
   readonly initialRisk = input<RiskData | null>(null);
@@ -546,17 +551,67 @@ export class ClientDataStepComponent {
   readonly phone = linkedSignal(() => this.initialClient()?.phone ?? '3001234567');
   readonly email = linkedSignal(() => this.initialClient()?.email ?? 'carlos.rodriguez@email.com');
 
+  // Catálogos dinámicos desde backend
+  readonly financialEntities = signal<FinancialEntity[]>([]);
+  readonly cities = signal<City[]>([]);
+  readonly loadingEntities = signal(true);
+  readonly loadingCities = signal(true);
+
   // Crédito Hipotecario / Riesgo
   readonly financialEntity = linkedSignal(
     () => this.initialRisk()?.financial_entity ?? 'Banco Unión',
   );
-  readonly city = linkedSignal(() => this.initialRisk()?.city ?? 'Bogotá');
+  readonly city = linkedSignal(() => this.initialRisk()?.city ?? 'Bogotá, D.C.');
   readonly insuredAmount = linkedSignal(() => this.initialRisk()?.insured_amount ?? 150_000_000);
   readonly termMonths = linkedSignal(() => this.initialRisk()?.term_months ?? 240);
   readonly occupationRisk = linkedSignal(() => this.initialRisk()?.occupation_risk ?? 1);
 
   readonly validating = signal(false);
   readonly errorMessage = signal<string | null>(null);
+
+  ngOnInit(): void {
+    this.catalogService.getFinancialEntities().subscribe({
+      next: (entities) => {
+        this.financialEntities.set(entities);
+        this.loadingEntities.set(false);
+        const current = this.financialEntity();
+        if (!current && entities.length > 0) {
+          this.financialEntity.set(entities[0].name);
+        } else if (current && !entities.some((e) => e.name === current)) {
+          const match = entities.find((e) =>
+            e.name.toLowerCase().includes(current.toLowerCase()),
+          );
+          if (match) {
+            this.financialEntity.set(match.name);
+          }
+        }
+      },
+      error: () => {
+        this.loadingEntities.set(false);
+      },
+    });
+
+    this.catalogService.getCities().subscribe({
+      next: (cities) => {
+        this.cities.set(cities);
+        this.loadingCities.set(false);
+        const current = this.city();
+        if (!current && cities.length > 0) {
+          this.city.set(cities[0].name);
+        } else if (current && !cities.some((c) => c.name === current)) {
+          const match = cities.find((c) =>
+            c.name.toLowerCase().startsWith(current.toLowerCase()),
+          );
+          if (match) {
+            this.city.set(match.name);
+          }
+        }
+      },
+      error: () => {
+        this.loadingCities.set(false);
+      },
+    });
+  }
 
   onDocumentNumberChange(val: string): void {
     const numeric = (val || '').replace(/\D/g, '');

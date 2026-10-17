@@ -15,7 +15,9 @@ from app.modules.policy.models import PolicyDB  # noqa: F401 - registrar tablas 
 from app.core.outbox import OutboxMessageDB  # noqa: F401 - registrar tablas en Base.metadata
 from app.core.idempotency import IdempotencyRecordDB  # noqa: F401 - registrar tablas en Base.metadata
 from app.modules.payments.models import PaymentTransactionDB  # noqa: F401 - registrar tablas en Base.metadata
+from app.modules.profile.models import FinancialEntityDB, CityDB  # noqa: F401 - registrar tablas en Base.metadata
 from app.modules.auth.service import auth_service
+from app.modules.profile.service import profile_service
 
 
 @asynccontextmanager
@@ -26,6 +28,7 @@ async def lifespan(app: FastAPI):
             await conn.run_sync(Base.metadata.create_all)
         async with AsyncSessionLocal() as session:
             await auth_service.seed_default_users(session)
+            await profile_service.seed_default_catalogs(session)
     except Exception as exc:
         print(f"Aviso de inicialización de base de datos en arranque: {exc}")
     yield

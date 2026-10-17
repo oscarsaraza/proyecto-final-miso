@@ -224,3 +224,36 @@ def test_consent_rejected_with_empty_purpose_or_scope():
         )
 
 
+@pytest.mark.unit
+async def test_catalogs_service_and_seed(test_db_session):
+    """HU-WEB-02.1: Valida que los catálogos se hayan sembrado y se consulten ordenados alfabéticamente."""
+    entities = await profile_service.get_active_financial_entities(test_db_session)
+    assert len(entities) >= 30
+    assert any(e.name == "Banco Unión" for e in entities)
+    assert any(e.name == "Bancolombia" for e in entities)
+    assert entities == sorted(entities, key=lambda x: x.name)
+
+    cities = await profile_service.get_active_cities(test_db_session)
+    assert len(cities) == 100
+    assert any(c.name == "Bogotá, D.C." for c in cities)
+    assert any(c.name == "Medellín" for c in cities)
+    assert cities == sorted(cities, key=lambda x: x.name)
+
+
+@pytest.mark.unit
+async def test_catalogs_api_endpoints(async_client):
+    """HU-WEB-02.1: Valida los endpoints GET /catalogs/financial-entities y GET /catalogs/cities en el BFF."""
+    res_entities = await async_client.get("/api/v1/experience/catalogs/financial-entities")
+    assert res_entities.status_code == 200
+    entities_data = res_entities.json()
+    assert len(entities_data) >= 30
+    assert any(item["name"] == "Banco Unión" for item in entities_data)
+
+    res_cities = await async_client.get("/api/v1/experience/catalogs/cities")
+    assert res_cities.status_code == 200
+    cities_data = res_cities.json()
+    assert len(cities_data) == 100
+    assert any(item["name"] == "Bogotá, D.C." for item in cities_data)
+
+
+

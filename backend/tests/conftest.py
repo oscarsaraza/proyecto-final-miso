@@ -16,6 +16,8 @@ class InMemorySessionTestDouble:
 
     def __init__(self):
         self.users = {}
+        self.financial_entities = {}
+        self.cities = {}
 
     async def execute(self, stmt):
         class Result:
@@ -30,14 +32,44 @@ class InMemorySessionTestDouble:
                     def first(self):
                         return self._items[0] if self._items else None
 
+                    def all(self):
+                        return list(self._items)
+
                 return Scalars(self._items)
 
-        clean_username = stmt.whereclause.right.value
-        user = self.users.get(clean_username)
-        return Result([user] if user else [])
+        sql_str = str(stmt).lower()
+        if "financial_entities" in sql_str:
+            if "financial_entities.code" in sql_str and "financial_entities.name" not in sql_str:
+                return Result(list(self.financial_entities.keys()))
+            entities = sorted(self.financial_entities.values(), key=lambda x: getattr(x, "name", ""))
+            return Result(entities)
 
-    def add(self, user):
-        self.users[user.username] = user
+        if "cities" in sql_str:
+            if "cities.code" in sql_str and "cities.name" not in sql_str:
+                return Result(list(self.cities.keys()))
+            cities = sorted(self.cities.values(), key=lambda x: getattr(x, "name", ""))
+            return Result(cities)
+
+        try:
+            clean_username = stmt.whereclause.right.value
+            user = self.users.get(clean_username)
+            return Result([user] if user else [])
+        except Exception:
+            return Result([])
+
+    def add(self, obj):
+        from app.modules.profile.models import FinancialEntityDB, CityDB
+
+        if isinstance(obj, FinancialEntityDB):
+            if not getattr(obj, "id", None):
+                obj.id = len(self.financial_entities) + 1
+            self.financial_entities[obj.code] = obj
+        elif isinstance(obj, CityDB):
+            if not getattr(obj, "id", None):
+                obj.id = len(self.cities) + 1
+            self.cities[obj.code] = obj
+        else:
+            self.users[obj.username] = obj
 
     async def commit(self):
         pass
@@ -61,6 +93,7 @@ async def test_db_session():
     """Configura base de datos en memoria para aislar pruebas sin requerir daemon de PostgreSQL."""
     session = InMemorySessionTestDouble()
     await auth_service.seed_default_users(session)
+    await profile_service.seed_default_catalogs(session)
 
     async def override_db():
         yield session
