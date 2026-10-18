@@ -1,7 +1,9 @@
 """Modelos de datos para identificación de cliente y consentimiento Open Finance."""
-from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import date, datetime
+from typing import Optional
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import Boolean, Column, Integer, String
+from app.core.database import Base
 
 
 class ClientIdentification(BaseModel):
@@ -20,15 +22,73 @@ class ClientIdentification(BaseModel):
 
 
 class ConsentRequest(BaseModel):
-    document_number: str
-    channel: str = Field(default="web", json_schema_extra={"example": "web"})
-    otp_code: str = Field(..., min_length=6, max_length=6, json_schema_extra={"example": "839201"})
+    document_number: str = Field(..., min_length=5, max_length=20, json_schema_extra={"example": "1020304050"})
+    channel: str = Field(default="web", min_length=2, json_schema_extra={"example": "web"})
+    otp_code: str = Field(..., pattern=r"^\d{6}$", json_schema_extra={"example": "839201"})
     terms_accepted: bool = Field(..., json_schema_extra={"example": True})
+    purpose: str = Field(
+        default="Perfilamiento y cotización de seguro de vida hipotecario con Open Finance",
+        min_length=3,
+        json_schema_extra={"example": "Perfilamiento y cotización de seguro de vida hipotecario con Open Finance"},
+    )
+    scope: str = Field(
+        default="Historial crediticio, capacidad de endeudamiento y scoring financiero",
+        min_length=3,
+        json_schema_extra={"example": "Historial crediticio, capacidad de endeudamiento y scoring financiero"},
+    )
+    validity_days: int = Field(default=30, ge=1, le=365, json_schema_extra={"example": 30})
 
 
 class ConsentRecord(BaseModel):
     consent_id: str
     document_number: str
+    channel: str = "web"
+    purpose: str
+    scope: str
+    validity_days: int
     status: str = Field(default="GRANTED")
     consent_hash: str
     granted_at: str
+    expires_at: str
+
+
+# --- Modelos SQLAlchemy de Catálogos (PostgreSQL) ---
+
+class FinancialEntityDB(Base):
+    """Entidad financiera / establecimiento bancario vigilado en Colombia."""
+    __tablename__ = "financial_entities"
+
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    code = Column(String(64), unique=True, nullable=False, index=True)
+    name = Column(String(120), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+
+class CityDB(Base):
+    """Ciudad o municipio de residencia en Colombia."""
+    __tablename__ = "cities"
+
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    code = Column(String(64), unique=True, nullable=False, index=True)
+    name = Column(String(120), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+
+# --- DTOs Pydantic para Catálogos ---
+
+class FinancialEntityResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    code: str
+    name: str
+    is_active: bool
+
+
+class CityResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    code: str
+    name: str
+    is_active: bool

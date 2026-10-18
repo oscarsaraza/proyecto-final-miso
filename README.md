@@ -95,6 +95,22 @@ En `ENVIRONMENT=development`:
 
 En producción ninguno de los dos está disponible.
 
+### 2.4 Consentimiento de Tratamiento de Datos (HU-WEB-01)
+
+El BFF expone en `/api/v1/experience` el registro y consulta del consentimiento informado para perfilamiento Open Finance (`RC-01` / `RC-04`):
+
+| Endpoint | Descripción | Respuestas |
+| :------- | :---------- | :--------- |
+| `POST /api/v1/experience/consent` | Registra el consentimiento informado con hash SHA-256 canónico inalterable para auditoría, vigencia y validación OTP. Exige rol `advisor`. | `200` record · `400` sin términos u OTP inválido · `422` formato |
+| `GET /api/v1/experience/consent/{document_number}` | Consulta el consentimiento activo registrado para el número de documento del cliente. Exige rol `advisor`. | `200` record · `404` no encontrado |
+
+### 2.5 Validación de Asegurabilidad del Cliente (HU-WEB-02)
+
+El BFF expone la verificación de asegurabilidad sociodemográfica por rango de edad (18 a 75 años) para el seguro de vida hipotecario (`TC-S1-03`):
+
+| Endpoint | Descripción | Respuestas |
+| :------- | :---------- | :--------- |
+| `POST /api/v1/experience/clients/validate` | Valida que el tomador cumpla con el rango asegurable de 18 a 75 años según su fecha de nacimiento. Exige rol `advisor`. | `200` `{"status": "ELIGIBLE", "age": N}` · `400` fuera de rango · `422` formato |
 
 ---
 
@@ -134,7 +150,7 @@ poetry install
   ```
 
 - **Inspeccionar detalle de pruebas TDD pendientes de Historias de Usuario:**
-  Las pruebas de aceptación técnica de cada historia de usuario (`TC-S1-*`) están estructuradas pero marcadas como `skipped` hasta que la funcionalidad sea codificada en su respectivo sprint. Las de HU-MOV-02 (`TC-S1-10`) y HU-MOV-12 (`TC-S1-12`) ya están implementadas en `tests/unit/test_insured_auth.py`, `tests/unit/test_insured_logout.py` y `tests/integration/test_insured_auth_api.py`. Para visualizar los motivos de omisión:
+  Las pruebas de aceptación técnica de cada historia de usuario (`TC-S1-*`) están estructuradas y marcadas según el avance del sprint. Las de HU-WEB-02 (`TC-S1-03`), HU-WEB-01 (`TC-S1-04`), HU-MOV-02 (`TC-S1-10`) y HU-MOV-12 (`TC-S1-12`) ya están implementadas en `tests/unit/test_profile_and_consent.py`, `tests/unit/test_insured_auth.py`, `tests/unit/test_insured_logout.py` y `tests/integration/`. Para visualizar los motivos de omisión:
   ```bash
   poetry run pytest -rs
   ```

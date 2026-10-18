@@ -57,7 +57,7 @@ Luego abre en tu navegador:
 - Visualiza de manera exclusiva el módulo **Cotizador y Emisión**:
   1. **Identificación (Paso 1 - HU-WEB-02)**: Captura de datos personales y condiciones del crédito hipotecario con soporte multimoneda y multirregión.
   2. **Consentimiento (Paso 2 - HU-WEB-01)**: Captura de autorización para consulta de Open Finance con verificación SMS simulada.
-  3. **Resultado de Cotización (Paso 3 - HU-WEB-03 y HU-WEB-04)**: Tarificación en tiempo real con desglose explicable en pesos (edad, riesgo, impuestos, base) y detección de perfil parcial con indicación de antigüedad.
+  3. **Resultado de Cotización (Paso 3 - HU-WEB-03 y HU-WEB-04)**: Cotización en tiempo real con desglose explicable en pesos (edad, riesgo, impuestos, base) y detección de perfil parcial con indicación de antigüedad.
   4. **Emisión y Cobro (Paso 4 - HU-WEB-05, HU-WEB-06 y HU-WEB-07)**: Formalización con clave de idempotencia, emisión inmediata de número oficial de póliza y explicación clara ante rechazos de suscripción.
 
 ##### B. Rol: Analista de Operaciones (`HU-WEB-08` y `HU-WEB-09`)

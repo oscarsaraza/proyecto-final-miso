@@ -1,5 +1,5 @@
 """Router BFF para canales Web y Móvil (experience-edge) (HU-WEB-13)."""
-from typing import Dict, Any
+from typing import Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,8 +8,14 @@ from app.core.idempotency import IdempotencyConflictError
 from app.core.security import require_roles
 from app.modules.auth.models import LoginRequest, LoginResponse, RefreshTokenRequest
 from app.modules.auth.service import auth_service
-from app.modules.profile.models import ClientIdentification, ConsentRequest, ConsentRecord
-from app.modules.profile.service import profile_service
+from app.modules.profile.models import (
+    CityResponse,
+    ClientIdentification,
+    ConsentRecord,
+    ConsentRequest,
+    FinancialEntityResponse,
+)
+from app.modules.profile.service import IneligibleAgeError, profile_service
 from app.modules.rating.models import QuoteRequest, QuoteResponse
 from app.modules.rating.service import rating_service
 from app.modules.policy.models import PolicyIssueRequest, PolicyRecord
@@ -59,12 +65,12 @@ async def refresh_token(
     dependencies=[Depends(require_roles(["advisor"]))],
 )
 async def validate_client(client: ClientIdentification):
-    """Valida la asegurabilidad sociodemográfica del tomador (Placeholder para HU-WEB-02)."""
+    """Valida la asegurabilidad sociodemográfica del tomador (HU-WEB-02 / TC-S1-03)."""
     try:
         profile_service.validate_insurable_age(client)
-    except NotImplementedError as exc:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
-    return {"status": "ELIGIBLE"}
+    except IneligibleAgeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return {"status": "ELIGIBLE", "age": client.age}
 
 
 @router.post(
@@ -73,11 +79,24 @@ async def validate_client(client: ClientIdentification):
     dependencies=[Depends(require_roles(["advisor"]))],
 )
 async def submit_consent(consent: ConsentRequest):
-    """Registra consentimiento auditable de Open Finance (Placeholder para HU-WEB-01)."""
+    """Registra consentimiento auditable de Open Finance (HU-WEB-01 / TC-S1-04)."""
     try:
         return profile_service.register_consent(consent)
-    except NotImplementedError as exc:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+@router.get(
+    "/consent/{document_number}",
+    response_model=ConsentRecord,
+    dependencies=[Depends(require_roles(["advisor"]))],
+)
+async def get_consent(document_number: str):
+    """Consulta el consentimiento activo de un cliente para auditoría (HU-WEB-01)."""
+    record = profile_service.get_consent(document_number)
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Consentimiento no encontrado")
+    return record
 
 
 @router.post(
@@ -147,3 +166,30 @@ async def charge_premium(
     except tuple(PAYMENT_ERRORS) as exc:
         status_code, detail = PAYMENT_ERRORS[type(exc)]
         raise HTTPException(status_code=status_code, detail=detail or str(exc))
+
+
+# --- Endpoints de Catálogos (HU-WEB-02.1) ---
+
+@router.get(
+    "/catalogs/financial-entities",
+    response_model=List[FinancialEntityResponse],
+    status_code=status.HTTP_200_OK,
+)
+async def get_financial_entities(
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Consulta el catálogo de entidades financieras disponibles para créditos hipotecarios."""
+    return await profile_service.get_active_financial_entities(db)
+
+
+@router.get(
+    "/catalogs/cities",
+    response_model=List[CityResponse],
+    status_code=status.HTTP_200_OK,
+)
+async def get_cities(
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Consulta el catálogo de ciudades de residencia en Colombia."""
+    return await profile_service.get_active_cities(db)
+

@@ -8,11 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Corrección en el asistente del cotizador web (`CotizadorComponent`) para iniciar en el Paso 1 (Identificación) con estado activo.
 - Corrección en `.github/workflows/destroy.yml` asignando `working-directory: terraform` exclusivamente a los pasos que invocan Terraform, evitando errores de inicialización de shell previos al paso de `checkout` del repositorio.
 - `get_password_hash` y `verify_password` usan `bcrypt` directamente: `passlib` 1.7.4 fallaba con `bcrypt` 5.0.0 (versión del lock).
 - Corrección en `backend/Dockerfile` aislando las dependencias en un entorno virtual (`/opt/venv`), configurando el directorio de inicio del usuario `appuser` y adaptando el sondeo de salud (`healthcheck`) para resolver el error `ModuleNotFoundError: No module named 'uvicorn'` al iniciar el backend mediante Docker Compose.
 
 ### Changed
+- Validación y restricciones en el formulario de captura de datos (`ClientDataStepComponent`): restricción del campo de número de documento a valores numéricos y restricción de la fecha de nacimiento para impedir fechas futuras.
+- Ajuste de maquetación en el formulario de consentimiento (`ConsentStepComponent`). Reorganización de campos en filas de dos columnas.
 - Habilitación del disparador manual `workflow_dispatch` en el workflow de despliegue continuo (`.github/workflows/deploy.yml`) permitiendo aprovisionar y desplegar la plataforma bajo demanda sin requerir commits vacíos en `main`.
 - Adición de `force_destroy = true` a los buckets S3 (`aws_s3_bucket.documents` y `aws_s3_bucket.web`) y `force_delete = true` al repositorio ECR (`aws_ecr_repository.backend`) en Terraform para garantizar un desaprovisionamiento limpio y sin bloqueos ante objetos o imágenes existentes.
 - Actualización de la documentación en `README.md` incorporando la guía de uso del workflow de apagado/destrucción y reestructurando la sección de CI/CD.
@@ -23,6 +26,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Actualización de la documentación en `README.md` y `backend/README.md`, sustituyendo la referencia residual de LocalStack por Floci e incorporando instrucciones explícitas para la ejecución del servidor backend mediante Poetry (`uvicorn`) y Docker Compose.
 
 ### Added
+- **HU-WEB-02.1 · Catálogos de bancos y ciudades en base de datos y consumo en cotizador (Issue #163):**
+  - Backend: Modelos SQLAlchemy `FinancialEntityDB` (tabla `financial_entities`) y `CityDB` (tabla `cities`) en `app/modules/profile/models.py`. Siembra automática e idempotente en el ciclo de vida de la aplicación (`lifespan`) con el listado completo de 32 entidades bancarias vigiladas por la SFC y las 100 ciudades principales de Colombia según el DANE. Endpoints REST `GET /api/v1/experience/catalogs/financial-entities` y `GET /api/v1/experience/catalogs/cities` en el BFF de experiencia.
+  - Web: Interfaces `FinancialEntity` y `City` en `catalog.model.ts`, servicio `CatalogService` para consumo de catálogos, e integración reactiva mediante señales (`financialEntities`, `cities`, `loadingEntities`, `loadingCities`) en `ClientDataStepComponent` con estados de carga y población dinámica de los `<select>` de entidad financiera y ciudad de residencia.
+  - Pruebas: Pruebas unitarias y de endpoints para catálogos y siembra en backend (`test_profile_and_consent.py`), pruebas unitarias para `CatalogService` (`catalog.service.spec.ts`) y cobertura de carga e interacción con selectores en `ClientDataStepComponent` (`client-data-step.component.spec.ts`).
+- **HU-WEB-02 · Capturar los datos del cliente y solicitar la cotización:**
+  - Backend: `POST /api/v1/experience/clients/validate` para validación de asegurabilidad por edad (`TC-S1-03`) en el rango de 18 a 75 años con `ProfileService.validate_insurable_age()`, cálculo determinístico y excepción `IneligibleAgeError` (HTTP 400 Bad Request).
+  - Web: componente `ClientDataStepComponent` (Paso 1) en el cotizador con captura de datos personales del titular y condiciones del crédito hipotecario, cálculo dinámico y validación interactiva de edad en el formulario, formateo en pesos colombianos COP y validación con el BFF.
+  - Servicio `ClientService` para validación sociodemográfica de asegurabilidad.
+  - Integración comercial guiada en `CotizadorComponent`: transferencia fluida hacia consentimiento (`ConsentStepComponent`), resumen visible del titular y monto asegurado, solicitud automática de cotización con `QuoteService.createQuote()` tras autorizar consentimiento, despliegue del desglose explicativo de la prima (`app-premium-breakdown`) y soporte de recotización sin recargar la página.
+  - Pruebas: suite `TC-S1-03` en backend con pruebas parametrizadas de límites de edad (17, 18, 40, 75 y 76 años), pruebas de integración de endpoint protegido con rol `advisor` y validación de esquemas (116 pruebas aprobadas con 97 % de cobertura), y 73 pruebas unitarias en frontend con Angular y Vitest.
+- **HU-WEB-01 · Registrar el consentimiento de tratamiento de datos:**
+  - Backend: `POST /api/v1/experience/consent` y `GET /api/v1/experience/consent/{document_number}` con generación de hash SHA-256 canónico inalterable para auditoría (RC-01 / RC-04), validación estricta de OTP numérico (`^\d{6}$`), vigencia configurable con reloj inyectable para expiración determinística y aislamiento de estado en `ProfileService`.
+  - Web: componente `ConsentStepComponent` en el cotizador con indicación de finalidad, alcance y vigencia por el asesor, sincronización reactiva de documento con `linkedSignal`, validación numérica y atributos modernos de formulario (`sms-otp-form`), detalle de fuentes consultadas (Open Finance, Burós, KYC), verificación OTP simulada y visualización del hash SHA-256 de auditoría.
+  - Servicio `ConsentService` para comunicación con el BFF de experiencia.
+  - Pruebas: suite `TC-S1-04` en backend con pruebas unitarias de expiración determinística y rechazo de campos inválidos, prueba de integración dedicada en `test_health_and_api.py`, y pruebas unitarias con Vitest (62 pruebas pasando).
 - Reportes de cobertura en el CI para backend (`coverage.xml`), web (`lcov`, Vitest) y móvil (Kover), publicados como artefactos, y análisis en SonarCloud (`sonar-project.properties`) cuando existe el secreto `SONAR_TOKEN`.
 - **HU-WEB-06 · Cobrar la prima sin duplicar el cobro:**
   - Backend: `POST /payments/charge` exige `Idempotency-Key` y cobra la primera prima mensual con una pasarela simulada, con la póliza bloqueada y en una sola transacción: si se aprueba, la póliza pasa a `ACTIVE` con recibo `REC-YYYY-XXXXX` y evento `PaymentApproved` en el outbox; la misma clave repite la respuesta sin otro cargo, un rechazo responde 402 con el motivo y una póliza ya pagada, 409.
