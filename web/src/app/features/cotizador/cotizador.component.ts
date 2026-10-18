@@ -12,6 +12,7 @@ import { ClientDataStepComponent } from './client-data-step/client-data-step.com
 import { ConsentStepComponent } from './consent-step/consent-step.component';
 import { PaymentStepComponent } from './payment-step/payment-step.component';
 import { PremiumBreakdownComponent } from './premium-breakdown/premium-breakdown.component';
+import { extractErrorMessage } from '../../core/utils/http-error';
 
 interface Emission {
   policy?: PolicyRecord;
@@ -57,7 +58,7 @@ interface Emission {
         <app-consent-step
           [clientData]="client()"
           [riskData]="risk()"
-          [documentNumber]="client()?.document_number || '1020304050'"
+          [documentNumber]="client()?.document_number || ''"
           (consentGranted)="onConsentGranted($event)"
           (requestBack)="currentStep.set(1)"
         />
@@ -324,14 +325,31 @@ export class CotizadorComponent {
 
   requestQuote(): void {
     this.quote.set(null);
-    const doc = this.consent()?.document_number || this.client()?.document_number || '1020304050';
+    const client = this.client();
+    const risk = this.risk();
+
+    if (!client || !risk) {
+      this.quoteError.set(
+        'No se dispone de la información completa del cliente y del crédito para calcular la cotización.',
+      );
+      return;
+    }
+
+    const doc = this.consent()?.document_number || client.document_number;
+    if (!doc || !client.birth_date) {
+      this.quoteError.set(
+        'Se requiere el documento y la fecha de nacimiento del titular para cotizar.',
+      );
+      return;
+    }
+
     const req: QuoteRequest = {
-      document_type: this.client()?.document_type ?? 'CC',
+      document_type: client.document_type || 'CC',
       document_number: doc,
-      birth_date: this.client()?.birth_date ?? '1990-05-15',
-      insured_amount: this.risk()?.insured_amount ?? 150_000_000,
-      city: this.risk()?.city ?? 'Bogotá',
-      occupation_risk: this.risk()?.occupation_risk ?? 1,
+      birth_date: client.birth_date,
+      insured_amount: risk.insured_amount,
+      city: risk.city,
+      occupation_risk: risk.occupation_risk,
     };
 
     this.quoting.set(true);
@@ -342,7 +360,9 @@ export class CotizadorComponent {
       .subscribe({
         next: (res) => this.quote.set(res),
         error: (error: HttpErrorResponse) => {
-          this.quoteError.set(error.error?.detail || 'Error al conectar con el motor de cotización.');
+          this.quoteError.set(
+            extractErrorMessage(error, 'Error al conectar con el motor de cotización.'),
+          );
         },
       });
   }

@@ -46,6 +46,8 @@ En desarrollo, `/auth/otp` devuelve el código en `debug_code` y existe el asegu
 - `GET /api/v1/experience/catalogs/financial-entities`: consulta el catálogo de entidades financieras bancarias vigiladas por la SFC activas en base de datos.
 - `GET /api/v1/experience/catalogs/cities`: consulta el catálogo de las principales ciudades de Colombia activas en base de datos.
 
+En el alcance del Sprint 1, `/experience/consent` valida el formato del código OTP de 6 dígitos y emula el rechazo ante el código de prueba `'000000'`. La emisión en tiempo real, vencimiento estricto (TTL) e invalidación de un solo uso están programados para el Sprint 2.
+
 ## 2. Pruebas Automatizadas
 
 Las pruebas que guardan cotizaciones usan PostgreSQL (`docker compose up -d postgres`) y crean su propia base, `solventa_test`.

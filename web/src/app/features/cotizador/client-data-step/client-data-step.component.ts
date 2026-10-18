@@ -12,6 +12,7 @@ import { ClientService } from '../../../core/client/client.service';
 import { CatalogService } from '../../../core/catalogs/catalog.service';
 import { City, FinancialEntity } from '../../../core/models/catalog.model';
 import { COP } from '../../../core/money';
+import { extractErrorMessage } from '../../../core/utils/http-error';
 
 /** HU-WEB-02 · Captura de datos del cliente y del riesgo para cotización */
 @Component({
@@ -250,7 +251,7 @@ import { COP } from '../../../core/money';
                 min="10000000"
                 enterkeyhint="next"
                 [ngModel]="insuredAmount()"
-                (ngModelChange)="insuredAmount.set(+$event)"
+                (ngModelChange)="insuredAmount.set($event ? +$event : null)"
                 name="insuredAmount"
                 required
               />
@@ -270,12 +271,16 @@ import { COP } from '../../../core/money';
                   step="12"
                   enterkeyhint="next"
                   [ngModel]="termMonths()"
-                  (ngModelChange)="termMonths.set(+$event)"
+                  (ngModelChange)="termMonths.set($event ? +$event : null)"
                   name="termMonths"
                   required
                 />
                 <small class="helper-text">
-                  {{ termMonths() }} meses ({{ termMonths() / 12 | number: '1.0-1' }} años)
+                  @if (termMonths()) {
+                    {{ termMonths() }} meses ({{ termMonths()! / 12 | number: '1.0-1' }} años)
+                  } @else {
+                    Mínimo 36 meses (3 años)
+                  }
                 </small>
               </div>
 
@@ -543,13 +548,13 @@ export class ClientDataStepComponent implements OnInit {
   // Titular Solicitante
   readonly documentType = linkedSignal(() => this.initialClient()?.document_type ?? 'CC');
   readonly documentNumber = linkedSignal(
-    () => (this.initialClient()?.document_number ?? '1020304050').replace(/\D/g, ''),
+    () => (this.initialClient()?.document_number ?? '').replace(/\D/g, ''),
   );
-  readonly firstName = linkedSignal(() => this.initialClient()?.first_name ?? 'Carlos');
-  readonly lastName = linkedSignal(() => this.initialClient()?.last_name ?? 'Rodríguez');
-  readonly birthDate = linkedSignal(() => this.initialClient()?.birth_date ?? '1988-04-12');
-  readonly phone = linkedSignal(() => this.initialClient()?.phone ?? '3001234567');
-  readonly email = linkedSignal(() => this.initialClient()?.email ?? 'carlos.rodriguez@email.com');
+  readonly firstName = linkedSignal(() => this.initialClient()?.first_name ?? '');
+  readonly lastName = linkedSignal(() => this.initialClient()?.last_name ?? '');
+  readonly birthDate = linkedSignal(() => this.initialClient()?.birth_date ?? '');
+  readonly phone = linkedSignal(() => this.initialClient()?.phone ?? '');
+  readonly email = linkedSignal(() => this.initialClient()?.email ?? '');
 
   // Catálogos dinámicos desde backend
   readonly financialEntities = signal<FinancialEntity[]>([]);
@@ -559,11 +564,11 @@ export class ClientDataStepComponent implements OnInit {
 
   // Crédito Hipotecario / Riesgo
   readonly financialEntity = linkedSignal(
-    () => this.initialRisk()?.financial_entity ?? 'Banco Unión',
+    () => this.initialRisk()?.financial_entity ?? '',
   );
-  readonly city = linkedSignal(() => this.initialRisk()?.city ?? 'Bogotá, D.C.');
-  readonly insuredAmount = linkedSignal(() => this.initialRisk()?.insured_amount ?? 150_000_000);
-  readonly termMonths = linkedSignal(() => this.initialRisk()?.term_months ?? 240);
+  readonly city = linkedSignal(() => this.initialRisk()?.city ?? '');
+  readonly insuredAmount = linkedSignal<number | null>(() => this.initialRisk()?.insured_amount ?? null);
+  readonly termMonths = linkedSignal<number | null>(() => this.initialRisk()?.term_months ?? null);
   readonly occupationRisk = linkedSignal(() => this.initialRisk()?.occupation_risk ?? 1);
 
   readonly validating = signal(false);
@@ -707,8 +712,8 @@ export class ClientDataStepComponent implements OnInit {
       this.lastName().trim().length >= 2 &&
       this.phone().trim().length >= 7 &&
       this.email().includes('@') &&
-      this.insuredAmount() > 0 &&
-      this.termMonths() >= 36
+      (this.insuredAmount() ?? 0) > 0 &&
+      (this.termMonths() ?? 0) >= 36
     );
   });
 
@@ -745,8 +750,8 @@ export class ClientDataStepComponent implements OnInit {
 
     const riskPayload: RiskData = {
       financial_entity: this.financialEntity(),
-      insured_amount: this.insuredAmount(),
-      term_months: this.termMonths(),
+      insured_amount: this.insuredAmount() ?? 0,
+      term_months: this.termMonths() ?? 0,
       occupation_risk: this.occupationRisk(),
       city: this.city(),
     };
@@ -762,8 +767,9 @@ export class ClientDataStepComponent implements OnInit {
           });
         },
         error: (err: HttpErrorResponse) => {
-          const detail = err.error?.detail || 'Error al validar la asegurabilidad del cliente.';
-          this.errorMessage.set(detail);
+          this.errorMessage.set(
+            extractErrorMessage(err, 'Error al validar la asegurabilidad del cliente.'),
+          );
         },
       });
   }

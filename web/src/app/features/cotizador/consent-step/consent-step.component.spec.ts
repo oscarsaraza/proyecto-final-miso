@@ -40,18 +40,24 @@ describe('ConsentStepComponent (HU-WEB-01)', () => {
     expect(component).toBeTruthy();
   });
 
-  it('el botón de registro debe estar deshabilitado mientras no se acepten los términos', () => {
+  it('el botón de registro debe estar deshabilitado mientras no se acepten los términos o el OTP sea inválido', () => {
     const button = fixture.nativeElement.querySelector('.submit-button') as HTMLButtonElement;
     expect(button.disabled).toBe(true);
 
+    // Con términos aceptados pero OTP vacío sigue deshabilitado
     component.termsAccepted.set(true);
     fixture.detectChanges();
+    expect(button.disabled).toBe(true);
 
+    // Con términos y OTP válido de 6 dígitos se habilita
+    component.otpCode.set('839201');
+    fixture.detectChanges();
     expect(button.disabled).toBe(false);
   });
 
   it('registra el consentimiento exitosamente y muestra el hash SHA-256', () => {
     component.termsAccepted.set(true);
+    component.otpCode.set('839201');
     fixture.detectChanges();
 
     let emittedRecord: ConsentRecord | undefined;
@@ -77,6 +83,7 @@ describe('ConsentStepComponent (HU-WEB-01)', () => {
 
   it('muestra mensaje de error si el registro de consentimiento falla', () => {
     component.termsAccepted.set(true);
+    component.otpCode.set('839201');
     fixture.detectChanges();
 
     component.submitConsent();
@@ -116,6 +123,7 @@ describe('ConsentStepComponent (HU-WEB-01)', () => {
 
   it('envía finalidad, alcance y vigencia personalizados indicados por el asesor', () => {
     component.termsAccepted.set(true);
+    component.otpCode.set('839201');
     component.purpose.set('Finalidad personalizada de suscripción');
     component.scope.set('Historial crediticio y bancario ampliado');
     component.validityDays.set(60);
@@ -128,6 +136,14 @@ describe('ConsentStepComponent (HU-WEB-01)', () => {
     expect(call.request.body.scope).toBe('Historial crediticio y bancario ampliado');
     expect(call.request.body.validity_days).toBe(60);
     call.flush(mockRecord);
+  });
+
+  it('renderiza la vigencia dinámicamente en el panel informativo según validityDays', () => {
+    component.validityDays.set(90);
+    fixture.detectChanges();
+
+    const infoGrid = fixture.nativeElement.querySelector('.info-grid');
+    expect(infoGrid?.textContent).toContain('90 días calendario a partir del momento de la autorización.');
   });
 });
 

@@ -168,6 +168,22 @@ describe('CotizadorComponent (Flujo Comercial HU-WEB-01 a HU-WEB-06)', () => {
     });
 
     it('actualiza el estado de consentimiento y dispara la cotización', () => {
+      component.client.set({
+        document_type: 'CC',
+        document_number: '1020304050',
+        first_name: 'Carlos',
+        last_name: 'Rodríguez',
+        birth_date: '1988-04-12',
+        email: 'carlos@correo.co',
+        phone: '3001234567',
+      });
+      component.risk.set({
+        financial_entity: 'Banco Unión',
+        insured_amount: 150_000_000,
+        term_months: 240,
+        occupation_risk: 1,
+        city: 'Bogotá',
+      });
       component.currentStep.set(2);
       fixture.detectChanges();
       const mockRecord = {
@@ -185,12 +201,25 @@ describe('CotizadorComponent (Flujo Comercial HU-WEB-01 a HU-WEB-06)', () => {
 
       component.onConsentGranted(mockRecord);
       const quoteCall = http.expectOne('/api/v1/experience/quotes');
+      expect(quoteCall.request.body.document_number).toBe('1020304050');
+      expect(quoteCall.request.body.birth_date).toBe('1988-04-12');
       quoteCall.flush(quote);
       fixture.detectChanges();
 
       expect(component.consent()).toEqual(mockRecord);
       const steps = fixture.nativeElement.querySelectorAll('.step');
       expect(steps[1].classList.contains('completed')).toBe(true);
+    });
+
+    it('no solicita cotización ni recurre a datos ficticios si falta la información del cliente o del riesgo', () => {
+      component.client.set(null);
+      component.risk.set(null);
+
+      component.requestQuote();
+
+      http.expectNone('/api/v1/experience/quotes');
+      expect(component.quoteError()).toContain('No se dispone de la información completa del cliente');
+      expect(component.quoting()).toBe(false);
     });
   });
 
@@ -260,6 +289,22 @@ describe('CotizadorComponent (Flujo Comercial HU-WEB-01 a HU-WEB-06)', () => {
     };
 
     beforeEach(() => {
+      component.client.set({
+        document_type: 'CC',
+        document_number: '1020304050',
+        first_name: 'Carlos',
+        last_name: 'Rodríguez',
+        birth_date: '1988-04-12',
+        email: 'carlos@correo.co',
+        phone: '3001234567',
+      });
+      component.risk.set({
+        financial_entity: 'Banco Unión',
+        insured_amount: 150_000_000,
+        term_months: 240,
+        occupation_risk: 1,
+        city: 'Bogotá',
+      });
       component.quote.set(quote);
       fixture.detectChanges();
     });

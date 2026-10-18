@@ -7,6 +7,7 @@ import { ConsentRecord, ConsentRequest } from '../../../core/models/consent.mode
 import { ConsentService } from '../../../core/consent/consent.service';
 import { ClientIdentification, RiskData } from '../../../core/models/client.model';
 import { COP } from '../../../core/money';
+import { extractErrorMessage } from '../../../core/utils/http-error';
 
 interface ConsentResult {
   record?: ConsentRecord;
@@ -224,15 +225,15 @@ interface ConsentResult {
         <div class="info-grid">
           <div class="info-item">
             <strong>Finalidad:</strong>
-            <span>Perfilamiento y cotización de seguro de vida hipotecario con Open Finance.</span>
+            <span>{{ purpose() }}</span>
           </div>
           <div class="info-item">
             <strong>Alcance:</strong>
-            <span>Historial crediticio, capacidad de endeudamiento y scoring financiero.</span>
+            <span>{{ scope() }}</span>
           </div>
           <div class="info-item">
             <strong>Vigencia:</strong>
-            <span>30 días calendario a partir del momento de la autorización.</span>
+            <span>{{ validityDays() }} días calendario a partir del momento de la autorización.</span>
           </div>
         </div>
       }
@@ -491,7 +492,7 @@ export class ConsentStepComponent {
   }
 
   readonly docNumber = linkedSignal(() => this.documentNumber());
-  readonly otpCode = signal<string>('839201');
+  readonly otpCode = signal<string>('');
   readonly termsAccepted = signal<boolean>(false);
   readonly registering = signal<boolean>(false);
   readonly result = signal<ConsentResult>({});
@@ -541,8 +542,9 @@ export class ConsentStepComponent {
           this.consentGranted.emit(record);
         },
         error: (error: HttpErrorResponse) => {
-          const detail = error.error?.detail || 'Error al registrar el consentimiento.';
-          this.result.set({ error: detail });
+          this.result.set({
+            error: extractErrorMessage(error, 'Error al registrar el consentimiento.'),
+          });
         },
       });
   }

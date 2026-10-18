@@ -9,6 +9,17 @@ describe('ClientDataStepComponent (HU-WEB-02 / TC-S1-03)', () => {
   let fixture: ComponentFixture<ClientDataStepComponent>;
   let http: HttpTestingController;
 
+  const populateDemoClient = (c: ClientDataStepComponent) => {
+    c.documentNumber.set('1020304050');
+    c.firstName.set('Carlos');
+    c.lastName.set('Rodríguez');
+    c.birthDate.set('1988-04-12');
+    c.phone.set('3001234567');
+    c.email.set('carlos@correo.co');
+    c.insuredAmount.set(150_000_000);
+    c.termMonths.set(240);
+  };
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [ClientDataStepComponent],
@@ -109,9 +120,22 @@ describe('ClientDataStepComponent (HU-WEB-02 / TC-S1-03)', () => {
     const helperEl = fixture.nativeElement.querySelector('.error-text');
     expect(helperEl?.textContent).toContain('La fecha de nacimiento no puede ser una fecha futura');
 
+    component.documentNumber.set('1020304050');
     component.onSubmit();
     fixture.detectChanges();
     expect(component.errorMessage()).toContain('La fecha de nacimiento no puede ser una fecha futura');
+  });
+
+  it('debe inicializarse con campos vacíos cuando no se suministran datos iniciales', () => {
+    expect(component.documentNumber()).toBe('');
+    expect(component.firstName()).toBe('');
+    expect(component.lastName()).toBe('');
+    expect(component.birthDate()).toBe('');
+    expect(component.phone()).toBe('');
+    expect(component.email()).toBe('');
+    expect(component.insuredAmount()).toBeNull();
+    expect(component.termMonths()).toBeNull();
+    expect(component.isFormValid()).toBe(false);
   });
 
   it('debe formatear el monto asegurado en pesos colombianos COP', () => {
@@ -154,6 +178,9 @@ describe('ClientDataStepComponent (HU-WEB-02 / TC-S1-03)', () => {
   });
 
   it('debe mostrar mensaje de error si el BFF rechaza la asegurabilidad por edad', () => {
+    populateDemoClient(component);
+    fixture.detectChanges();
+
     component.onSubmit();
 
     const call = http.expectOne('/api/v1/experience/clients/validate');
@@ -167,6 +194,27 @@ describe('ClientDataStepComponent (HU-WEB-02 / TC-S1-03)', () => {
     const alert = fixture.nativeElement.querySelector('.notice.notice-error');
     expect(alert).not.toBeNull();
     expect(alert?.textContent).toContain('17 años');
+  });
+
+  it('formatea errores 422 de FastAPI donde detail es una lista de errores de validación', () => {
+    populateDemoClient(component);
+    fixture.detectChanges();
+
+    component.onSubmit();
+
+    const call = http.expectOne('/api/v1/experience/clients/validate');
+    call.flush(
+      {
+        detail: [
+          { loc: ['body', 'birth_date'], msg: 'Formato de fecha inválido', type: 'value_error' },
+        ],
+      },
+      { status: 422, statusText: 'Unprocessable Entity' },
+    );
+    fixture.detectChanges();
+
+    expect(component.errorMessage()).toContain('birth_date: Formato de fecha inválido');
+    expect(component.errorMessage()).not.toContain('[object Object]');
   });
 
   it('debe inicializarse con datos iniciales si se suministran', () => {

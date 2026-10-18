@@ -44,11 +44,19 @@ class ProfileService:
         return True
 
     def register_consent(self, request: ConsentRequest) -> ConsentRecord:
-        """Genera registro auditable de consentimiento con hash SHA-256 (HU-WEB-01 / TC-S1-04)."""
+        """Genera registro auditable de consentimiento con hash SHA-256 (HU-WEB-01 / TC-S1-04).
+
+        Nota de simulación (Sprint 1):
+        El backend valida el formato del código OTP recibido (6 dígitos numéricos) y
+        simula el rechazo ante el código de prueba '000000'. En el alcance del Sprint 1
+        no se emite ni se comprueba un OTP en tiempo real. La implementación del ciclo
+        completo de OTP (generación criptográfica, envío multicanal, vencimiento/TTL y
+        consumo de un solo uso) se gestionará como tarea de seguimiento en el Sprint 2.
+        """
         if not request.terms_accepted:
             raise ConsentError("El cliente debe aceptar expresamente los términos y condiciones de tratamiento de datos.")
 
-        # Validación de OTP: el código no puede ser inválido o nulo; '000000' simula OTP rechazado
+        # Validación de OTP: el código no puede ser inválido o nulo; '000000' simula OTP rechazado / expirado
         if request.otp_code == "000000":
             raise ConsentError("Código OTP de verificación incorrecto o expirado.")
 
