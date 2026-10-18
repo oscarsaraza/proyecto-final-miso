@@ -77,3 +77,5 @@ Thumbs.db
 experiments/cloud/evidencias/*
 experiments/e1-latencia/resultados/*
 experiments/e3-continuidad/resultados/*
+
+coverage.xml
