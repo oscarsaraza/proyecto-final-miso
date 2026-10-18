@@ -183,6 +183,7 @@ jobs:
         run: |
           cp coverage-backend/coverage.xml backend/coverage.xml
           mkdir -p web/coverage && cp -r coverage-web/. web/coverage/
+          sed -i 's|^SF:src/|SF:web/src/|' web/coverage/web/lcov.info
           mkdir -p movil/app/build/reports/kover && cp coverage-movil/reportDebug.xml movil/app/build/reports/kover/
 
       - name: Analizar con SonarCloud
