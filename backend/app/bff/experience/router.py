@@ -1,20 +1,33 @@
 """Router BFF para canales Web y Móvil (experience-edge) (HU-WEB-13)."""
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
+from app.core.idempotency import IdempotencyConflictError
 from app.core.security import require_roles
 from app.modules.auth.models import LoginRequest, LoginResponse, RefreshTokenRequest
 from app.modules.auth.service import auth_service
-from app.modules.profile.models import ClientIdentification, ConsentRequest, ConsentRecord
-from app.modules.profile.service import profile_service
+from app.modules.profile.models import (
+    CityResponse,
+    ClientIdentification,
+    ConsentRecord,
+    ConsentRequest,
+    FinancialEntityResponse,
+)
+from app.modules.profile.service import IneligibleAgeError, profile_service
 from app.modules.rating.models import QuoteRequest, QuoteResponse
 from app.modules.rating.service import rating_service
 from app.modules.policy.models import PolicyIssueRequest, PolicyRecord
-from app.modules.policy.service import QuoteExpiredError, QuoteNotFoundError, policy_service
+from app.modules.policy.service import PolicyNotFoundError, QuoteExpiredError, QuoteNotFoundError, policy_service
 from app.modules.payments.models import PaymentChargeRequest, PaymentReceipt
-from app.modules.payments.service import payment_service
+from app.modules.payments.gateway import GatewayUnavailableError
+from app.modules.payments.service import (
+    AmountMismatchError,
+    PaymentDeclinedError,
+    PolicyAlreadyPaidError,
+    payment_service,
+)
 
 router = APIRouter(prefix="/experience", tags=["Experience BFF"])
 
@@ -52,12 +65,12 @@ async def refresh_token(
     dependencies=[Depends(require_roles(["advisor"]))],
 )
 async def validate_client(client: ClientIdentification):
-    """Valida la asegurabilidad sociodemográfica del tomador (Placeholder para HU-WEB-02)."""
+    """Valida la asegurabilidad sociodemográfica del tomador (HU-WEB-02 / TC-S1-03)."""
     try:
         profile_service.validate_insurable_age(client)
-    except NotImplementedError as exc:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
-    return {"status": "ELIGIBLE"}
+    except IneligibleAgeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return {"status": "ELIGIBLE", "age": client.age}
 
 
 @router.post(
@@ -66,11 +79,24 @@ async def validate_client(client: ClientIdentification):
     dependencies=[Depends(require_roles(["advisor"]))],
 )
 async def submit_consent(consent: ConsentRequest):
-    """Registra consentimiento auditable de Open Finance (Placeholder para HU-WEB-01)."""
+    """Registra consentimiento auditable de Open Finance (HU-WEB-01 / TC-S1-04)."""
     try:
         return profile_service.register_consent(consent)
-    except NotImplementedError as exc:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+@router.get(
+    "/consent/{document_number}",
+    response_model=ConsentRecord,
+    dependencies=[Depends(require_roles(["advisor"]))],
+)
+async def get_consent(document_number: str):
+    """Consulta el consentimiento activo de un cliente para auditoría (HU-WEB-01)."""
+    record = profile_service.get_consent(document_number)
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Consentimiento no encontrado")
+    return record
 
 
 @router.post(
@@ -111,6 +137,19 @@ async def issue_policy(
         )
 
 
+# Respuesta de cada error del cobro; el rechazo trae su motivo en la excepción.
+PAYMENT_ERRORS = {
+    PolicyNotFoundError: (status.HTTP_404_NOT_FOUND, "La póliza no existe."),
+    AmountMismatchError: (status.HTTP_422_UNPROCESSABLE_CONTENT, "El monto no coincide con la prima de la póliza."),
+    PolicyAlreadyPaidError: (status.HTTP_409_CONFLICT, "La póliza ya está pagada."),
+    IdempotencyConflictError: (status.HTTP_409_CONFLICT, "La clave de idempotencia ya se usó con otra solicitud."),
+    PaymentDeclinedError: (status.HTTP_402_PAYMENT_REQUIRED, None),
+    GatewayUnavailableError: (
+        status.HTTP_502_BAD_GATEWAY, "La pasarela no respondió. Reintente con la misma clave: no se cobrará dos veces."
+    ),
+}
+
+
 @router.post(
     "/payments/charge",
     response_model=PaymentReceipt,
@@ -118,10 +157,39 @@ async def issue_policy(
 )
 async def charge_premium(
     request: PaymentChargeRequest,
-    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=1, max_length=128),
+    db: AsyncSession = Depends(get_db_session),
 ):
-    """Cobra la prima con garantía de idempotencia (Placeholder para HU-WEB-06)."""
+    """Cobra la prima una sola vez; reintentar con la misma clave repite la respuesta sin otro cargo (HU-WEB-06)."""
     try:
-        return payment_service.process_charge(request, idempotency_key=idempotency_key or "")
-    except NotImplementedError as exc:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc))
+        return await payment_service.process_charge(db, request, idempotency_key)
+    except tuple(PAYMENT_ERRORS) as exc:
+        status_code, detail = PAYMENT_ERRORS[type(exc)]
+        raise HTTPException(status_code=status_code, detail=detail or str(exc))
+
+
+# --- Endpoints de Catálogos (HU-WEB-02.1) ---
+
+@router.get(
+    "/catalogs/financial-entities",
+    response_model=List[FinancialEntityResponse],
+    status_code=status.HTTP_200_OK,
+)
+async def get_financial_entities(
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Consulta el catálogo de entidades financieras disponibles para créditos hipotecarios."""
+    return await profile_service.get_active_financial_entities(db)
+
+
+@router.get(
+    "/catalogs/cities",
+    response_model=List[CityResponse],
+    status_code=status.HTTP_200_OK,
+)
+async def get_cities(
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Consulta el catálogo de ciudades de residencia en Colombia."""
+    return await profile_service.get_active_cities(db)
+

@@ -169,7 +169,7 @@ async def test_role_authorization_on_commercial_endpoints(async_client: AsyncCli
     assert resp_forbidden.status_code == 403
     assert "Permisos insuficientes" in resp_forbidden.json()["detail"]
 
-    # 3. Con rol 'advisor' -> Autorizado (pasa el middleware RBAC y llega al placeholder del servicio 501)
+    # 3. Con rol 'advisor' -> Autorizado (pasa el middleware RBAC y valida cliente asegurable HU-WEB-02)
     advisor_token = create_access_token(
         subject=DEFAULT_SEED_USERNAME,
         role="advisor",
@@ -179,6 +179,6 @@ async def test_role_authorization_on_commercial_endpoints(async_client: AsyncCli
         headers={"Authorization": f"Bearer {advisor_token}"},
         json=client_payload,
     )
-    # Pasa la barrera de seguridad de roles y llega al endpoint (501 placeholder de HU-WEB-02)
-    assert resp_authorized.status_code == 501
+    assert resp_authorized.status_code == 200
+    assert resp_authorized.json()["status"] == "ELIGIBLE"
 

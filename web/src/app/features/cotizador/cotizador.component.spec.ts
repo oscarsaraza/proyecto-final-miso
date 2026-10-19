@@ -1,13 +1,16 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { of } from 'rxjs';
 import { PolicyRecord } from '../../core/models/policy.model';
 import { QuoteResponse, QuoteTier } from '../../core/models/quote.model';
 import { CotizadorComponent } from './cotizador.component';
+import { CatalogService } from '../../core/catalogs/catalog.service';
 
-describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
+describe('CotizadorComponent (Flujo Comercial HU-WEB-01 a HU-WEB-06)', () => {
   let component: CotizadorComponent;
   let fixture: ComponentFixture<CotizadorComponent>;
+  let http: HttpTestingController;
 
   const tier = (name: QuoteTier['tier'], premium: number): QuoteTier => ({
     tier: name,
@@ -30,13 +33,34 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [CotizadorComponent],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        {
+          provide: CatalogService,
+          useValue: {
+            getFinancialEntities: () =>
+              of([
+                { id: 1, code: 'BANCO_UNION', name: 'Banco Unión', is_active: true },
+                { id: 2, code: 'BANCOLOMBIA', name: 'Bancolombia', is_active: true },
+              ]),
+            getCities: () =>
+              of([
+                { id: 1, code: 'BOGOTA', name: 'Bogotá, D.C.', is_active: true },
+                { id: 2, code: 'MEDELLIN', name: 'Medellín', is_active: true },
+              ]),
+          },
+        },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(CotizadorComponent);
     component = fixture.componentInstance;
+    http = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
   });
+
+  afterEach(() => http.verify());
 
   it('debe crearse el componente del cotizador', () => {
     expect(component).toBeTruthy();
@@ -47,10 +71,156 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
     expect(compiled.querySelector('h1')?.textContent).toContain('Cotizador de Seguros de Vida');
   });
 
-  it('debe mostrar las etapas del proceso comercial', () => {
+  it('debe mostrar las etapas del proceso comercial e iniciar activo en el paso 1', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const steps = compiled.querySelectorAll('.step');
     expect(steps.length).toBe(5);
+    expect(steps[0].classList.contains('active')).toBe(true);
+    expect(steps[1].classList.contains('active')).toBe(false);
+  });
+
+  describe('captura de datos y solicitud de cotización (HU-WEB-02)', () => {
+    it('renderiza el paso 1 de identificación y oculta consentimiento inicialmente', () => {
+      const step1 = fixture.nativeElement.querySelector('app-client-data-step');
+      expect(step1).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('app-consent-step')).toBeNull();
+    });
+
+    it('actualiza los datos del cliente y avanza a consentimiento al recibir clientDataSubmitted', () => {
+      const submission = {
+        client: {
+          document_type: 'CC',
+          document_number: '1020304050',
+          first_name: 'Carlos',
+          last_name: 'Rodríguez',
+          birth_date: '1988-04-12',
+          email: 'carlos@correo.co',
+          phone: '3001234567',
+        },
+        risk: {
+          financial_entity: 'Banco Unión',
+          insured_amount: 150_000_000,
+          term_months: 240,
+          occupation_risk: 1,
+          city: 'Bogotá',
+        },
+      };
+
+      component.onClientDataSubmitted(submission);
+      fixture.detectChanges();
+
+      expect(component.client()).toEqual(submission.client);
+      expect(component.risk()).toEqual(submission.risk);
+      expect(component.currentStep()).toBe(2);
+      const steps = fixture.nativeElement.querySelectorAll('.step');
+      expect(steps[0].classList.contains('completed')).toBe(true);
+      expect(steps[1].classList.contains('active')).toBe(true);
+      expect(fixture.nativeElement.querySelector('app-client-data-step')).toBeNull();
+      expect(fixture.nativeElement.querySelector('app-consent-step')).not.toBeNull();
+    });
+
+    it('solicita la cotización usando los datos capturados y carga los planes', () => {
+      component.client.set({
+        document_type: 'CC',
+        document_number: '1020304050',
+        first_name: 'Carlos',
+        last_name: 'Rodríguez',
+        birth_date: '1988-04-12',
+        email: 'carlos@correo.co',
+        phone: '3001234567',
+      });
+      component.risk.set({
+        financial_entity: 'Davivienda',
+        insured_amount: 200_000_000,
+        term_months: 180,
+        occupation_risk: 2,
+        city: 'Medellín',
+      });
+
+      component.requestQuote();
+
+      const call = http.expectOne('/api/v1/experience/quotes');
+      expect(call.request.method).toBe('POST');
+      expect(call.request.body).toEqual({
+        document_type: 'CC',
+        document_number: '1020304050',
+        birth_date: '1988-04-12',
+        insured_amount: 200_000_000,
+        city: 'Medellín',
+        occupation_risk: 2,
+      });
+
+      call.flush(quote);
+      fixture.detectChanges();
+
+      expect(component.quote()).toEqual(quote);
+      expect(fixture.nativeElement.querySelector('app-premium-breakdown')).not.toBeNull();
+    });
+  });
+
+  describe('consentimiento Open Finance (HU-WEB-01)', () => {
+    it('no muestra consentimiento en paso 1 y lo renderiza al avanzar al paso 2', () => {
+      expect(fixture.nativeElement.querySelector('app-consent-step')).toBeNull();
+      component.currentStep.set(2);
+      fixture.detectChanges();
+      const consentStep = fixture.nativeElement.querySelector('app-consent-step');
+      expect(consentStep).not.toBeNull();
+    });
+
+    it('actualiza el estado de consentimiento y dispara la cotización', () => {
+      component.client.set({
+        document_type: 'CC',
+        document_number: '1020304050',
+        first_name: 'Carlos',
+        last_name: 'Rodríguez',
+        birth_date: '1988-04-12',
+        email: 'carlos@correo.co',
+        phone: '3001234567',
+      });
+      component.risk.set({
+        financial_entity: 'Banco Unión',
+        insured_amount: 150_000_000,
+        term_months: 240,
+        occupation_risk: 1,
+        city: 'Bogotá',
+      });
+      component.currentStep.set(2);
+      fixture.detectChanges();
+      const mockRecord = {
+        consent_id: 'CNS-TEST-123',
+        document_number: '1020304050',
+        channel: 'web',
+        purpose: 'Test',
+        scope: 'Test',
+        validity_days: 30,
+        status: 'GRANTED' as const,
+        consent_hash: '1234567890abcdef',
+        granted_at: '2026-10-13T00:00:00Z',
+        expires_at: '2026-11-12T00:00:00Z',
+      };
+
+      component.onConsentGranted(mockRecord);
+      const quoteCall = http.expectOne('/api/v1/experience/quotes');
+      expect(quoteCall.request.body.document_number).toBe('1020304050');
+      expect(quoteCall.request.body.birth_date).toBe('1988-04-12');
+      quoteCall.flush(quote);
+      fixture.detectChanges();
+
+      expect(component.consent()).toEqual(mockRecord);
+      const steps = fixture.nativeElement.querySelectorAll('.step');
+      expect(steps[1].classList.contains('completed')).toBe(true);
+    });
+
+    it('no solicita cotización ni recurre a datos ficticios si falta la información del cliente o del riesgo', () => {
+      component.client.set(null);
+      component.risk.set(null);
+
+      component.requestQuote();
+
+      http.expectNone('/api/v1/experience/quotes');
+      expect(component.quoteError()).toContain('No se dispone de la información completa del cliente');
+      expect(component.quoting()).toBe(false);
+    });
   });
 
   describe('desglose de la prima (HU-WEB-03)', () => {
@@ -109,7 +279,6 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
       issued_at: '2026-10-11T12:00:00Z',
       valid_until: '2027-10-11T12:00:00Z',
     };
-    let http: HttpTestingController;
     const page = () => fixture.nativeElement as HTMLElement;
     const button = (label: string) =>
       [...page().querySelectorAll('button')].find((candidate) => candidate.textContent?.trim() === label);
@@ -120,12 +289,25 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
     };
 
     beforeEach(() => {
-      http = TestBed.inject(HttpTestingController);
+      component.client.set({
+        document_type: 'CC',
+        document_number: '1020304050',
+        first_name: 'Carlos',
+        last_name: 'Rodríguez',
+        birth_date: '1988-04-12',
+        email: 'carlos@correo.co',
+        phone: '3001234567',
+      });
+      component.risk.set({
+        financial_entity: 'Banco Unión',
+        insured_amount: 150_000_000,
+        term_months: 240,
+        occupation_risk: 1,
+        city: 'Bogotá',
+      });
       component.quote.set(quote);
       fixture.detectChanges();
     });
-
-    afterEach(() => http.verify());
 
     it('emite el plan elegido y confirma el número y la vigencia', () => {
       component.selectedTier.set('premium');
@@ -141,6 +323,7 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
         'Póliza emitida POL-2026-00001 Plan Premium · vigente del 11/10/2026 al 11/10/2027',
       );
       expect(button('Emitir póliza')).toBeUndefined();
+      expect(page().querySelector('app-payment-step')).not.toBeNull();
     });
 
     it('si la cotización venció pide recotizar, y recotizar limpia la cotización', () => {
@@ -152,6 +335,9 @@ describe('CotizadorComponent (Placeholder Flujo Comercial)', () => {
       button('Recotizar con datos actuales')!.click();
       fixture.detectChanges();
       expect(page().querySelector('[role="tablist"]')).toBeNull();
+
+      const quoteCall = http.expectOne('/api/v1/experience/quotes');
+      quoteCall.flush(quote);
     });
 
     it('ante otra falla avisa y deja reintentar', () => {

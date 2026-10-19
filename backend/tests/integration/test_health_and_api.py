@@ -29,55 +29,141 @@ async def test_root_endpoint(async_client: AsyncClient):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_unimplemented_endpoints_return_501(async_client: AsyncClient):
-    """Valida que los endpoints de historias protegidas retornen HTTP 501 Not Implemented con rol advisor."""
+async def test_hu_web_02_validacion_asegurabilidad_cliente(async_client: AsyncClient):
+    """HU-WEB-02 / TC-S1-03: validación de asegurabilidad sociodemográfica de clientes por edad."""
     from app.core.security import create_access_token
     advisor_token = create_access_token(subject="asesor@solventa.com", role="advisor")
     auth_headers = {"Authorization": f"Bearer {advisor_token}"}
 
-    # 1. Validación de cliente (HU-WEB-02)
-    client_resp = await async_client.post(
+    # 1. Cliente en rango asegurable (ej. 36 años) -> 200 ELIGIBLE
+    eligible_payload = {
+        "document_type": "CC",
+        "document_number": "1020304050",
+        "first_name": "Carlos",
+        "last_name": "Perez",
+        "birth_date": "1990-05-15",
+        "email": "carlos@test.com",
+        "phone": "3001234567",
+    }
+    resp_ok = await async_client.post(
         "/api/v1/experience/clients/validate",
         headers=auth_headers,
-        json={
-            "document_type": "CC",
-            "document_number": "1020304050",
-            "first_name": "Carlos",
-            "last_name": "Perez",
-            "birth_date": "1990-05-15",
-            "email": "carlos@test.com",
-            "phone": "3001234567",
-        },
+        json=eligible_payload,
     )
-    assert client_resp.status_code == 501
+    assert resp_ok.status_code == 200
+    data = resp_ok.json()
+    assert data["status"] == "ELIGIBLE"
+    assert data["age"] >= 18 and data["age"] <= 75
 
-    # 2. Consentimiento (HU-WEB-01)
+    # 2. Cliente menor de edad (ej. 11 años) -> 400 Bad Request
+    minor_payload = {**eligible_payload, "birth_date": "2015-01-01"}
+    resp_minor = await async_client.post(
+        "/api/v1/experience/clients/validate",
+        headers=auth_headers,
+        json=minor_payload,
+    )
+    assert resp_minor.status_code == 400
+    assert "Debe tener entre 18 y 75 años para ser asegurable" in resp_minor.json()["detail"]
+
+    # 3. Cliente mayor a 75 años (ej. 86 años) -> 400 Bad Request
+    senior_payload = {**eligible_payload, "birth_date": "1940-01-01"}
+    resp_senior = await async_client.post(
+        "/api/v1/experience/clients/validate",
+        headers=auth_headers,
+        json=senior_payload,
+    )
+    assert resp_senior.status_code == 400
+    assert "Debe tener entre 18 y 75 años para ser asegurable" in resp_senior.json()["detail"]
+
+    # 4. Formato de fecha inválido -> 422 Unprocessable Entity
+    invalid_payload = {**eligible_payload, "birth_date": "fecha-invalida"}
+    resp_invalid = await async_client.post(
+        "/api/v1/experience/clients/validate",
+        headers=auth_headers,
+        json=invalid_payload,
+    )
+    assert resp_invalid.status_code == 422
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_hu_web_01_registro_y_consulta_de_consentimiento(async_client: AsyncClient):
+    """HU-WEB-01 / TC-S1-04: registro de consentimiento con hash SHA-256, consulta y validaciones."""
+    from app.core.security import create_access_token
+    advisor_token = create_access_token(subject="asesor@solventa.com", role="advisor")
+    auth_headers = {"Authorization": f"Bearer {advisor_token}"}
+
+    # 1. Registro exitoso
     consent_resp = await async_client.post(
         "/api/v1/experience/consent",
         headers=auth_headers,
         json={
             "document_number": "1020304050",
-            "otp_code": "123456",
+            "otp_code": "839201",
+            "terms_accepted": True,
+            "purpose": "Perfilamiento y cotización de seguro con Open Finance",
+            "scope": "Historial crediticio y capacidad de pago",
+            "validity_days": 30,
+        },
+    )
+    assert consent_resp.status_code == 200
+    consent_data = consent_resp.json()
+    assert consent_data["status"] == "GRANTED"
+    assert consent_data["document_number"] == "1020304050"
+    assert len(consent_data["consent_hash"]) == 64
+    assert consent_data["validity_days"] == 30
+
+    # 2. Consulta de consentimiento otorgado
+    get_consent_resp = await async_client.get(
+        "/api/v1/experience/consent/1020304050",
+        headers=auth_headers,
+    )
+    assert get_consent_resp.status_code == 200
+    assert get_consent_resp.json()["consent_id"] == consent_data["consent_id"]
+    assert get_consent_resp.json()["consent_hash"] == consent_data["consent_hash"]
+
+    # 3. Rechazo si no se aceptan los términos
+    rejected_terms = await async_client.post(
+        "/api/v1/experience/consent",
+        headers=auth_headers,
+        json={
+            "document_number": "1020304050",
+            "otp_code": "839201",
+            "terms_accepted": False,
+        },
+    )
+    assert rejected_terms.status_code == 400
+
+    # 4. Rechazo con OTP fallido/expirado simulado ('000000')
+    rejected_otp = await async_client.post(
+        "/api/v1/experience/consent",
+        headers=auth_headers,
+        json={
+            "document_number": "1020304050",
+            "otp_code": "000000",
             "terms_accepted": True,
         },
     )
-    assert consent_resp.status_code == 501
+    assert rejected_otp.status_code == 400
 
-    # 3. Pago (HU-WEB-06)
-    pay_headers = {**auth_headers, "Idempotency-Key": "key-123"}
-    pay_resp = await async_client.post(
-        "/api/v1/experience/payments/charge",
-        headers=pay_headers,
+    # 5. Rechazo con formato de OTP no numérico (422)
+    invalid_format = await async_client.post(
+        "/api/v1/experience/consent",
+        headers=auth_headers,
         json={
-            "quote_id": "QUO-1",
-            "policy_number": "POL-1",
-            "amount": 100000.0,
-            "currency": "COP",
-            "payment_method": "PSE",
-            "token_or_account": "ACC1",
+            "document_number": "1020304050",
+            "otp_code": "abcdef",
+            "terms_accepted": True,
         },
     )
-    assert pay_resp.status_code == 501
+    assert invalid_format.status_code == 422
+
+    # 6. Consulta de consentimiento inexistente devuelve 404
+    not_found_resp = await async_client.get(
+        "/api/v1/experience/consent/9999999999",
+        headers=auth_headers,
+    )
+    assert not_found_resp.status_code == 404
 
 
 @pytest.mark.integration

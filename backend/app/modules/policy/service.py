@@ -19,6 +19,10 @@ class QuoteExpiredError(Exception):
     pass
 
 
+class PolicyNotFoundError(Exception):
+    pass
+
+
 def one_year_after(moment: datetime) -> datetime:
     """Mismo día y hora del año siguiente; el 29 de febrero pasa al 28."""
     try:
@@ -69,6 +73,19 @@ class PolicyService:
             session.add(OutboxMessageDB(aggregate_id=policy.policy_number, event_type="PolicyIssued", payload=payload))
         await session.commit()
         return policy or await self.find_by_quote(session, quote.quote_id)
+
+    async def lock(self, session: AsyncSession, policy_number: str) -> PolicyDB:
+        """Póliza bloqueada hasta que termine la transacción, para que sus cobros se atiendan de uno en uno."""
+        policy = await session.scalar(
+            select(PolicyDB).where(PolicyDB.policy_number == policy_number).with_for_update()
+        )
+        if policy is None:
+            raise PolicyNotFoundError()
+        return policy
+
+    def activate(self, policy: PolicyDB) -> None:
+        """La póliza pagada queda activa (S8: ACTIVA_PAGADA)."""
+        policy.status = "ACTIVE"
 
 
 policy_service = PolicyService()

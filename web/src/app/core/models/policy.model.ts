@@ -11,7 +11,7 @@ export interface PolicyRecord {
   quote_id: string;
   insured_document: string;
   conditions: QuoteTier;
-  status: 'ISSUED';
+  status: 'ISSUED' | 'ACTIVE';
   issued_at: string;
   valid_until: string;
   pdf_s3_key?: string | null;
