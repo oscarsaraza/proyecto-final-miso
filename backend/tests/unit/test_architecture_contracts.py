@@ -45,3 +45,34 @@ def test_password_hash_and_verify():
     assert hashed.startswith("$2b$")
     assert verify_password("Solventa2026!", hashed)
     assert not verify_password("otra-clave", hashed)
+
+
+@pytest.mark.unit
+def test_settings_rds_assembly():
+    """Valida que Settings ensamble DATABASE_URL hacia RDS cuando se configuran variables de entorno."""
+    from app.core.config import Settings
+
+    custom_settings = Settings(
+        DB_HOST="solventa-db-production.rds.amazonaws.com",
+        DB_PORT=5432,
+        DB_USER="solventa_admin",
+        DB_PASSWORD="SuperSecretPassword!",
+        DB_NAME="solventa_db",
+    )
+    assert custom_settings.DATABASE_URL == (
+        "postgresql+asyncpg://solventa_admin:SuperSecretPassword!@solventa-db-production.rds.amazonaws.com:5432/solventa_db"
+    )
+
+
+@pytest.mark.unit
+def test_settings_s3_sqs_mapping():
+    """Valida mapeo de variables ECS S3_DOCUMENTS_BUCKET y SQS_EVENTS_URL."""
+    from app.core.config import Settings
+
+    custom_settings = Settings(
+        S3_DOCUMENTS_BUCKET="solventa-documents-prod",
+        SQS_EVENTS_URL="https://sqs.us-east-1.amazonaws.com/123/events",
+    )
+    assert custom_settings.S3_BUCKET_POLICIES == "solventa-documents-prod"
+    assert custom_settings.SQS_QUEUE_EVENTS == "https://sqs.us-east-1.amazonaws.com/123/events"
+

@@ -120,6 +120,10 @@ resource "aws_ecs_task_definition" "backend" {
           value = "8000"
         },
         {
+          name  = "DATABASE_URL"
+          value = "postgresql+asyncpg://${var.db_user}:${var.db_password}@${var.db_host}:5432/${var.db_name}"
+        },
+        {
           name  = "DB_HOST"
           value = var.db_host
         },

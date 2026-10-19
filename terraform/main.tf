@@ -63,4 +63,6 @@ module "web_hosting" {
 
   project_name = var.project_name
   environment  = var.environment
+  alb_dns_name = module.alb.alb_dns_name
 }
+
