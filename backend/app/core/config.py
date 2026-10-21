@@ -20,10 +20,11 @@ class Settings(BaseSettings):
     DB_PASSWORD: Optional[str] = None
     DB_NAME: Optional[str] = None
 
-    # Seguridad JWT y Autenticación (HU-WEB-13)
+    # Seguridad JWT y Autenticación (HU-WEB-13 / HU-WEB-10)
     JWT_SECRET_KEY: str = "solventa_super_secret_jwt_key_for_development_only_change_in_prod"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    PARTNER_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     MAX_FAILED_LOGIN_ATTEMPTS: int = 5
     LOCKOUT_DURATION_MINUTES: int = 15
