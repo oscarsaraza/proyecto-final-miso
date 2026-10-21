@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     MAX_FAILED_LOGIN_ATTEMPTS: int = 5
     LOCKOUT_DURATION_MINUTES: int = 15
 
+    # SMS del código del asegurado (HU-MOV-02): "console" en desarrollo, "twilio" con credenciales
+    SMS_PROVIDER: str = "console"
+    TWILIO_ACCOUNT_SID: Optional[str] = None
+    TWILIO_AUTH_TOKEN: Optional[str] = None
+    TWILIO_FROM_NUMBER: Optional[str] = None
+
     # Burós externos (ASR-02 / HA-02)
     BUREAU_TIMEOUT_SECONDS: float = 0.400  # 400 ms límite estricto
 
