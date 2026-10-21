@@ -53,3 +53,5 @@ markers = [
 [tool.coverage.run]
 source = ["app"]
 omit = ["tests/*"]
+# SQLAlchemy asíncrono corre sobre greenlets; sin esto se pierden las líneas que siguen a cada consulta.
+concurrency = ["greenlet", "thread"]

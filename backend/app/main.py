@@ -16,19 +16,23 @@ from app.core.outbox import OutboxMessageDB  # noqa: F401 - registrar tablas en 
 from app.core.idempotency import IdempotencyRecordDB  # noqa: F401 - registrar tablas en Base.metadata
 from app.modules.payments.models import PaymentTransactionDB  # noqa: F401 - registrar tablas en Base.metadata
 from app.modules.profile.models import FinancialEntityDB, CityDB  # noqa: F401 - registrar tablas en Base.metadata
+from app.modules.identity import db_models as identity_db_models  # noqa: F401 - registrar tablas en Base.metadata
 from app.modules.auth.service import auth_service
 from app.modules.profile.service import profile_service
+from app.modules.identity.service import insured_auth_service
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Inicialización de tablas relacionales y usuario asesor semilla (HU-WEB-13)."""
+    insured_auth_service.sms  # falla al arrancar si la configuración del SMS está incompleta
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         async with AsyncSessionLocal() as session:
             await auth_service.seed_default_users(session)
             await profile_service.seed_default_catalogs(session)
+            await insured_auth_service.seed_default_account(session)
     except Exception as exc:
         print(f"Aviso de inicialización de base de datos en arranque: {exc}")
     yield

@@ -33,13 +33,17 @@ class FakeSessionCrypto : SessionCrypto {
 }
 
 class InMemorySessionStore : EncryptedSessionStore {
-    var stored: EncryptedSession? = null
+    val sessions = mutableListOf<EncryptedSession>()
 
-    override fun read(): EncryptedSession? = stored
+    override fun readAll(): List<EncryptedSession> = sessions.toList()
     override fun write(session: EncryptedSession) {
-        stored = session
+        sessions.removeAll { it.accountEmail == session.accountEmail }
+        sessions.add(session)
+    }
+    override fun remove(accountEmail: String) {
+        sessions.removeAll { it.accountEmail == accountEmail }
     }
     override fun clear() {
-        stored = null
+        sessions.clear()
     }
 }
