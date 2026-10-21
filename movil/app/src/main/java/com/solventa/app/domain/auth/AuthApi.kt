@@ -37,6 +37,7 @@ sealed interface ResetResult {
     data object Success : ResetResult
     data object InvalidCode : ResetResult
     data object WeakPassword : ResetResult
+    data object SamePassword : ResetResult
     data class TooManyRequests(val retryAfterSeconds: Int) : ResetResult
     data object NetworkError : ResetResult
 }

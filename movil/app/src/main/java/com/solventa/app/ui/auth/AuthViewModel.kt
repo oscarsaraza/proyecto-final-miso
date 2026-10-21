@@ -48,6 +48,7 @@ enum class AlternativeLoginError {
 enum class RecoveryError {
     INVALID_CODE,
     WEAK_PASSWORD,
+    SAME_PASSWORD,
     PASSWORD_MISMATCH,
     TOO_MANY_REQUESTS,
     SMS_UNAVAILABLE,
@@ -74,6 +75,7 @@ data class AuthUiState(
     val failedAttempts: Int = 0,
     val lockedSeconds: Int = 0,
     val otpCooldownSeconds: Int = 0,
+    val otpCooldownEmail: String? = null,
     val status: AuthStatus = AuthStatus.IDLE,
     val showAlternativeAccess: Boolean = false,
     val alternativeLogin: AlternativeLoginState = AlternativeLoginState(),
@@ -81,11 +83,19 @@ data class AuthUiState(
     val recovery: PasswordRecoveryState = PasswordRecoveryState(),
     val offerBiometricEnrollment: Boolean = false,
     val biometricEnabled: Boolean = false,
+    val biometricAccountName: String? = null,
+    val enrollmentReplacesOther: Boolean = false,
     val fullName: String? = null,
     val showLogoutConfirmation: Boolean = false,
 ) {
     val isLocked: Boolean get() = lockedSeconds > 0
+
+    // La espera para reenviar aplica al mismo correo; otro correo puede pedir su código.
+    fun canRequestOtp(email: String): Boolean =
+        otpCooldownSeconds == 0 || normalizeEmail(email) != otpCooldownEmail
 }
+
+fun normalizeEmail(email: String): String = email.trim().lowercase()
 
 /**
  * Acceso con huella, acceso alterno con contraseña y código, recuperación de contraseña y
@@ -96,11 +106,17 @@ class AuthViewModel(
     private val authApi: AuthApi,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(AuthUiState(biometricEnabled = sessionRepository.hasStoredSession()))
+    private val _uiState = MutableStateFlow(
+        AuthUiState(
+            biometricEnabled = sessionRepository.hasStoredSession(),
+            biometricAccountName = sessionRepository.storedAccountName(),
+        )
+    )
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     private var lockJob: Job? = null
     private var otpCooldownJob: Job? = null
+    private var pendingAccountEmail: String? = null
 
     fun authenticateWithBiometrics(authenticator: BiometricAuthenticator) {
         val current = _uiState.value
@@ -136,9 +152,9 @@ class AuthViewModel(
                 BiometricResult.UseAlternative -> _uiState.update {
                     it.copy(status = AuthStatus.IDLE, showAlternativeAccess = true)
                 }
-                BiometricResult.LockedOut -> setStatus(AuthStatus.BIOMETRIC_LOCKED_OUT)
+                BiometricResult.LockedOut -> fallBackToPassword(AuthStatus.BIOMETRIC_LOCKED_OUT)
                 BiometricResult.Unavailable -> setStatus(AuthStatus.BIOMETRIC_UNAVAILABLE)
-                is BiometricResult.Error -> setStatus(AuthStatus.BIOMETRIC_ERROR)
+                is BiometricResult.Error -> fallBackToPassword(AuthStatus.BIOMETRIC_ERROR)
             }
         }
     }
@@ -169,7 +185,14 @@ class AuthViewModel(
     // El servidor ya no reconoce el teléfono (huella desactivada o contraseña cambiada).
     private fun resetBiometrics() {
         sessionRepository.unbindDevice()
-        _uiState.update { it.copy(status = AuthStatus.SESSION_RESET, biometricEnabled = false) }
+        _uiState.update {
+            it.copy(status = AuthStatus.SESSION_RESET, biometricEnabled = false, biometricAccountName = null)
+        }
+    }
+
+    // Si la huella falla, se pasa directo al ingreso con contraseña y código.
+    private fun fallBackToPassword(status: AuthStatus) {
+        _uiState.update { it.copy(status = status, showAlternativeAccess = true) }
     }
 
     private fun setStatus(status: AuthStatus) {
@@ -187,7 +210,7 @@ class AuthViewModel(
     }
 
     fun requestOtp(email: String) {
-        if (_uiState.value.otpCooldownSeconds > 0) return
+        if (!_uiState.value.canRequestOtp(email)) return
         viewModelScope.launch {
             val result = authApi.requestOtp(email.trim())
             _uiState.update { state ->
@@ -201,7 +224,7 @@ class AuthViewModel(
                     },
                 )
             }
-            startOtpCooldown(result)
+            startOtpCooldown(result, email)
         }
     }
 
@@ -217,10 +240,17 @@ class AuthViewModel(
         _uiState.update { it.copy(alternativeLogin = it.alternativeLogin.copy(isSubmitting = true, error = null)) }
         viewModelScope.launch {
             val result = authApi.login(email.trim(), password, otpCode.trim())
+            val accountEmail = normalizeEmail(email)
+            val boundToOther = sessionRepository.hasStoredSession() &&
+                sessionRepository.storedAccountEmail() != accountEmail
             val canEnrollBiometrics = result is LoginResult.Success &&
-                !sessionRepository.hasStoredSession() &&
+                (!sessionRepository.hasStoredSession() || boundToOther) &&
                 authenticator.checkAvailability() == BiometricAvailability.AVAILABLE
-            if (result is LoginResult.Success) sessionRepository.startSession(result.tokens)
+            if (result is LoginResult.Success) {
+                sessionRepository.startSession(result.tokens)
+                pendingAccountEmail = accountEmail
+                otpCooldownJob?.cancel()
+            }
 
             _uiState.update { state ->
                 val form = state.alternativeLogin.copy(isSubmitting = false)
@@ -228,8 +258,11 @@ class AuthViewModel(
                     is LoginResult.Success -> state.copy(
                         alternativeLogin = AlternativeLoginState(),
                         failedAttempts = 0,
+                        otpCooldownSeconds = 0,
+                        otpCooldownEmail = null,
                         fullName = result.fullName,
                         offerBiometricEnrollment = canEnrollBiometrics,
+                        enrollmentReplacesOther = canEnrollBiometrics && boundToOther,
                         isAuthenticated = !canEnrollBiometrics,
                         status = if (canEnrollBiometrics) state.status else AuthStatus.AUTHENTICATED,
                     )
@@ -268,10 +301,12 @@ class AuthViewModel(
                 finishLogin()
                 return@launch
             }
+            val fullName = _uiState.value.fullName
             val saved = try {
+                if (_uiState.value.enrollmentReplacesOther) sessionRepository.unbindDevice()
                 val result = authenticator.authenticate(sessionRepository.encryptionCipher())
                 if (result is BiometricResult.Success) {
-                    sessionRepository.save(credential, result.cipher)
+                    sessionRepository.save(credential, result.cipher, pendingAccountEmail, fullName)
                     true
                 } else {
                     false
@@ -281,7 +316,12 @@ class AuthViewModel(
                 false
             }
             if (!saved) authApi.revokeDevice(tokens.accessToken, credential.deviceId)
-            _uiState.update { it.copy(biometricEnabled = saved) }
+            _uiState.update {
+                it.copy(
+                    biometricEnabled = sessionRepository.hasStoredSession(),
+                    biometricAccountName = sessionRepository.storedAccountName(),
+                )
+            }
             finishLogin()
         }
     }
@@ -292,6 +332,7 @@ class AuthViewModel(
         _uiState.update {
             it.copy(
                 offerBiometricEnrollment = false,
+                enrollmentReplacesOther = false,
                 isAuthenticated = true,
                 status = AuthStatus.AUTHENTICATED,
                 showAlternativeAccess = false,
@@ -303,7 +344,7 @@ class AuthViewModel(
         val accessToken = sessionRepository.activeSession?.accessToken
         val deviceId = sessionRepository.storedDeviceId()
         sessionRepository.unbindDevice()
-        _uiState.update { it.copy(biometricEnabled = false) }
+        _uiState.update { it.copy(biometricEnabled = false, biometricAccountName = null) }
         if (accessToken != null && deviceId != null) {
             viewModelScope.launch { authApi.revokeDevice(accessToken, deviceId) }
         }
@@ -325,6 +366,7 @@ class AuthViewModel(
         _uiState.value = AuthUiState(
             status = if (biometricReady) AuthStatus.LOGGED_OUT_BIOMETRIC_READY else AuthStatus.LOGGED_OUT,
             biometricEnabled = biometricReady,
+            biometricAccountName = sessionRepository.storedAccountName(),
         )
         if (refreshToken != null) {
             viewModelScope.launch { authApi.logout(refreshToken) }
@@ -346,7 +388,7 @@ class AuthViewModel(
     }
 
     fun requestRecoveryCode(email: String) {
-        if (_uiState.value.otpCooldownSeconds > 0) return
+        if (!_uiState.value.canRequestOtp(email)) return
         viewModelScope.launch {
             val result = authApi.forgotPassword(email.trim())
             _uiState.update { state ->
@@ -360,7 +402,7 @@ class AuthViewModel(
                     },
                 )
             }
-            startOtpCooldown(result)
+            startOtpCooldown(result, email)
         }
     }
 
@@ -383,12 +425,14 @@ class AuthViewModel(
                     ResetResult.Success -> state.copy(
                         recovery = recovery.copy(completed = true),
                         biometricEnabled = false,
+                        biometricAccountName = null,
                         lockedSeconds = 0,
                         failedAttempts = 0,
                         alternativeLogin = AlternativeLoginState(),
                     )
                     ResetResult.InvalidCode -> state.copy(recovery = recovery.copy(error = RecoveryError.INVALID_CODE))
                     ResetResult.WeakPassword -> state.copy(recovery = recovery.copy(error = RecoveryError.WEAK_PASSWORD))
+                    ResetResult.SamePassword -> state.copy(recovery = recovery.copy(error = RecoveryError.SAME_PASSWORD))
                     is ResetResult.TooManyRequests ->
                         state.copy(recovery = recovery.copy(error = RecoveryError.TOO_MANY_REQUESTS))
                     ResetResult.NetworkError -> state.copy(recovery = recovery.copy(error = RecoveryError.NETWORK))
@@ -397,13 +441,14 @@ class AuthViewModel(
         }
     }
 
-    private fun startOtpCooldown(result: OtpResult) {
+    private fun startOtpCooldown(result: OtpResult, email: String) {
         val seconds = when (result) {
             is OtpResult.Sent -> OTP_COOLDOWN_SECONDS
             is OtpResult.TooManyRequests -> result.retryAfterSeconds
             else -> return
         }
         otpCooldownJob?.cancel()
+        _uiState.update { it.copy(otpCooldownEmail = normalizeEmail(email)) }
         otpCooldownJob = countdown(seconds) { remaining -> _uiState.update { it.copy(otpCooldownSeconds = remaining) } }
     }
 

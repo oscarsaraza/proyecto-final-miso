@@ -70,6 +70,7 @@ class HttpAuthApi(private val baseUrl: String) : AuthApi {
                     HttpURLConnection.HTTP_OK -> ResetResult.Success
                     HttpURLConnection.HTTP_UNAUTHORIZED -> ResetResult.InvalidCode
                     HTTP_UNPROCESSABLE_ENTITY -> ResetResult.WeakPassword
+                    HttpURLConnection.HTTP_CONFLICT -> ResetResult.SamePassword
                     HTTP_TOO_MANY_REQUESTS -> ResetResult.TooManyRequests(response.retryAfter)
                     else -> ResetResult.NetworkError
                 }

@@ -86,10 +86,10 @@ fun PasswordRecoveryScreen(
             )
             OutlinedButton(
                 onClick = { onRequestCode(email) },
-                enabled = email.isNotBlank() && uiState.otpCooldownSeconds == 0,
+                enabled = email.isNotBlank() && uiState.canRequestOtp(email),
             ) {
                 Text(
-                    if (uiState.otpCooldownSeconds > 0) {
+                    if (!uiState.canRequestOtp(email)) {
                         stringResource(R.string.auth_otp_wait, uiState.otpCooldownSeconds)
                     } else {
                         stringResource(R.string.recovery_send)
@@ -117,7 +117,6 @@ fun PasswordRecoveryScreen(
             value = newPassword,
             onValueChange = { newPassword = it },
             label = stringResource(R.string.recovery_new_password),
-            supportingText = stringResource(R.string.recovery_rules),
             modifier = Modifier.fillMaxWidth(),
         )
         PasswordField(
@@ -126,12 +125,14 @@ fun PasswordRecoveryScreen(
             label = stringResource(R.string.recovery_confirm_password),
             modifier = Modifier.fillMaxWidth(),
         )
+        PasswordRequirements(newPassword = newPassword, confirmation = confirmation)
 
         recovery.error?.let { error ->
             Text(
                 text = when (error) {
                     RecoveryError.INVALID_CODE -> stringResource(R.string.recovery_error_code)
                     RecoveryError.WEAK_PASSWORD -> stringResource(R.string.recovery_error_weak)
+                    RecoveryError.SAME_PASSWORD -> stringResource(R.string.recovery_error_same)
                     RecoveryError.PASSWORD_MISMATCH -> stringResource(R.string.recovery_error_mismatch)
                     RecoveryError.TOO_MANY_REQUESTS -> stringResource(R.string.auth_error_too_many)
                     RecoveryError.SMS_UNAVAILABLE -> stringResource(R.string.auth_error_sms)
@@ -145,8 +146,8 @@ fun PasswordRecoveryScreen(
         Spacer(Modifier.height(8.dp))
         Button(
             onClick = { onSubmit(email, code, newPassword, confirmation) },
-            enabled = email.isNotBlank() && code.length == CODE_LENGTH && newPassword.isNotEmpty() &&
-                confirmation.isNotEmpty() && !recovery.isSubmitting,
+            enabled = email.isNotBlank() && code.length == CODE_LENGTH &&
+                passwordRulesMet(newPassword, confirmation) && !recovery.isSubmitting,
             modifier = Modifier.fillMaxWidth().height(48.dp),
         ) {
             Text(stringResource(if (recovery.isSubmitting) R.string.auth_submitting else R.string.recovery_submit))

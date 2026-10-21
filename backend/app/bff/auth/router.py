@@ -28,6 +28,7 @@ from app.modules.identity.service import (
     InvalidCredentialsError,
     InvalidTokenError,
     RateLimitedError,
+    SamePasswordError,
     SmsUnavailableError,
     WeakPasswordError,
     insured_auth_service,
@@ -37,7 +38,7 @@ router = APIRouter(prefix="/auth", tags=["Auth Asegurado"])
 
 require_insured = require_roles(["insured"])
 
-INVALID_CREDENTIALS = "Correo, contraseña o código incorrectos."
+INVALID_CREDENTIALS = "Los datos ingresados no son válidos."
 CODE_SENT = "Si el correo está registrado, enviamos un código por SMS."
 LOCKED_RESPONSES: Dict[int | str, Dict[str, Any]] = {423: {"model": LockedResponse}}
 
@@ -51,7 +52,7 @@ def _locked(exc: AccountLockedError) -> JSONResponse:
         status_code=status.HTTP_423_LOCKED,
         headers={"Retry-After": str(exc.retry_after)},
         content={
-            "detail": f"Cuenta bloqueada por intentos fallidos hasta {exc.locked_until.isoformat()}.",
+            "detail": "Por seguridad, el ingreso está suspendido temporalmente.",
             "locked_until": exc.locked_until.isoformat(),
             "retry_after": exc.retry_after,
         },
@@ -183,5 +184,10 @@ async def reset_password(request: PasswordResetRequest, http: Request, db: Async
     except RateLimitedError as exc:
         raise _rate_limited(exc)
     except InvalidCredentialsError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Correo o código incorrectos.")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=INVALID_CREDENTIALS)
+    except SamePasswordError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La contraseña nueva debe ser distinta a la actual.",
+        )
     return MessageResponse(message="Contraseña actualizada. Ingrese con su nueva contraseña.")

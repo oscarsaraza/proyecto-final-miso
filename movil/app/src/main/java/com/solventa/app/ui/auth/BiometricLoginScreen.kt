@@ -73,7 +73,10 @@ fun BiometricLoginScreen(
             fontWeight = FontWeight.Bold,
         )
         Text(
-            text = stringResource(R.string.auth_biometric_subtitle),
+            text = uiState.biometricAccountName
+                ?.takeIf { uiState.biometricEnabled }
+                ?.let { stringResource(R.string.auth_biometric_account, it) }
+                ?: stringResource(R.string.auth_biometric_subtitle),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

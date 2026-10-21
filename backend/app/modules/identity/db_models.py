@@ -13,9 +13,6 @@ class InsuredAccountDB(Base):
     document_number = Column(String(20), nullable=False)
     phone = Column(String(20), nullable=False)
     password_hash = Column(String(255), nullable=False)
-    failed_attempts = Column(Integer, default=0, nullable=False)
-    lock_count = Column(Integer, default=0, nullable=False)
-    locked_until = Column(DateTime(timezone=True), nullable=True)
     token_version = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
@@ -43,6 +40,17 @@ class InsuredDeviceDB(Base):
     created_at = Column(DateTime(timezone=True), nullable=False)
     last_used_at = Column(DateTime(timezone=True), nullable=True)
     revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class LoginLockDB(Base):
+    """Intentos fallidos y bloqueo por correo, exista o no la cuenta, para no revelar cuáles existen."""
+
+    __tablename__ = "login_locks"
+
+    email = Column(String(254), primary_key=True)
+    failed_attempts = Column(Integer, default=0, nullable=False)
+    lock_count = Column(Integer, default=0, nullable=False)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
 
 
 class RevokedTokenDB(Base):

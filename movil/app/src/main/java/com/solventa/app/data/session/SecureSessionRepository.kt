@@ -25,6 +25,10 @@ class SecureSessionRepository(
 
     fun storedDeviceId(): String? = store.read()?.deviceId
 
+    fun storedAccountEmail(): String? = store.read()?.accountEmail
+
+    fun storedAccountName(): String? = store.read()?.accountName
+
     fun encryptionCipher(): Cipher = crypto.encryptionCipher()
 
     fun decryptionCipher(): Cipher? {
@@ -35,10 +39,23 @@ class SecureSessionRepository(
         }
     }
 
-    fun save(credential: DeviceCredential, authenticatedCipher: Cipher) {
+    fun save(
+        credential: DeviceCredential,
+        authenticatedCipher: Cipher,
+        accountEmail: String? = null,
+        accountName: String? = null,
+    ) {
         val plaintext = credential.toBytes()
         try {
-            store.write(EncryptedSession(authenticatedCipher.doFinal(plaintext), authenticatedCipher.iv, credential.deviceId))
+            store.write(
+                EncryptedSession(
+                    ciphertext = authenticatedCipher.doFinal(plaintext),
+                    iv = authenticatedCipher.iv,
+                    deviceId = credential.deviceId,
+                    accountEmail = accountEmail,
+                    accountName = accountName,
+                )
+            )
         } finally {
             plaintext.fill(0)
         }

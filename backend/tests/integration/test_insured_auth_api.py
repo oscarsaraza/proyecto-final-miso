@@ -131,3 +131,25 @@ async def test_recuperar_contrasena_por_codigo(async_client: AsyncClient):
 
     assert weak.status_code == 422
     assert ok.status_code == 200
+
+
+async def test_mensajes_no_revelan_si_el_correo_existe(async_client: AsyncClient):
+    real = await async_client.post(
+        "/api/v1/auth/login", json={"email": EMAIL, "password": "otra-clave", "otp_code": "000000"}
+    )
+    fake = await async_client.post(
+        "/api/v1/auth/login", json={"email": "nadie@correo.co", "password": "otra-clave", "otp_code": "000000"}
+    )
+
+    assert real.status_code == fake.status_code == 401
+    assert real.json() == fake.json()
+
+
+async def test_recuperar_con_la_misma_contrasena_responde_409(async_client: AsyncClient):
+    code = (await async_client.post("/api/v1/auth/password/forgot", json={"email": EMAIL})).json()["debug_code"]
+
+    response = await async_client.post(
+        "/api/v1/auth/password/reset", json={"email": EMAIL, "code": code, "new_password": PASSWORD}
+    )
+
+    assert response.status_code == 409

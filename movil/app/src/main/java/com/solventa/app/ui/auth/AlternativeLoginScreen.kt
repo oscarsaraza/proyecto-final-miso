@@ -95,11 +95,11 @@ fun AlternativeLoginScreen(
             )
             OutlinedButton(
                 onClick = { onRequestOtp(email) },
-                enabled = email.isNotBlank() && uiState.otpCooldownSeconds == 0,
+                enabled = email.isNotBlank() && uiState.canRequestOtp(email),
             ) {
                 Text(
                     when {
-                        uiState.otpCooldownSeconds > 0 -> stringResource(R.string.auth_otp_wait, uiState.otpCooldownSeconds)
+                        !uiState.canRequestOtp(email) -> stringResource(R.string.auth_otp_wait, uiState.otpCooldownSeconds)
                         form.otpSent -> stringResource(R.string.auth_otp_resend)
                         else -> stringResource(R.string.auth_otp_send)
                     }
@@ -155,11 +155,13 @@ fun AlternativeLoginScreen(
 }
 
 @Composable
-fun BiometricEnrollmentDialog(onEnable: () -> Unit, onSkip: () -> Unit) {
+fun BiometricEnrollmentDialog(replacesOther: Boolean, onEnable: () -> Unit, onSkip: () -> Unit) {
     AlertDialog(
         onDismissRequest = onSkip,
         title = { Text(stringResource(R.string.auth_enroll_title)) },
-        text = { Text(stringResource(R.string.auth_enroll_message)) },
+        text = {
+            Text(stringResource(if (replacesOther) R.string.auth_enroll_replace_message else R.string.auth_enroll_message))
+        },
         confirmButton = { TextButton(onClick = onEnable) { Text(stringResource(R.string.auth_enroll_confirm)) } },
         dismissButton = { TextButton(onClick = onSkip) { Text(stringResource(R.string.auth_enroll_skip)) } },
     )

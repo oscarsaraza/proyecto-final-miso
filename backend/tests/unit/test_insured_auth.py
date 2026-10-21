@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import select
 
 from app.core.security import decode_access_token
-from app.modules.identity.db_models import InsuredAccountDB, LoginAttemptDB
+from app.modules.identity.db_models import LoginAttemptDB
 from app.modules.identity.service import (
     OTP_TTL,
     AccountLockedError,
@@ -76,17 +76,54 @@ async def test_tc_s1_10_pedir_codigo_nuevo_invalida_el_anterior(identity, postgr
     assert (await identity.login(postgres_session, EMAIL, PASSWORD, second)).access_token
 
 
-async def test_tc_s1_10_codigo_equivocado_no_bloquea_la_cuenta(identity, postgres_session):
+async def test_tc_s1_10_tres_codigos_equivocados_descartan_el_codigo(identity, postgres_session):
     code = await identity.request_otp(postgres_session, EMAIL)
 
     for _ in range(3):
         with pytest.raises(InvalidCredentialsError):
             await identity.login(postgres_session, EMAIL, PASSWORD, wrong(code))
 
-    account = await postgres_session.get(InsuredAccountDB, "ins-0001")
-    assert account.locked_until is None and account.failed_attempts == 0
     with pytest.raises(InvalidCredentialsError):
         await identity.login(postgres_session, EMAIL, PASSWORD, code)
+
+
+async def test_tc_s1_10_codigos_y_contrasenas_equivocados_suman_al_bloqueo(identity, postgres_session):
+    code = await identity.request_otp(postgres_session, EMAIL)
+    for _ in range(3):
+        with pytest.raises(InvalidCredentialsError):
+            await identity.login(postgres_session, EMAIL, PASSWORD, wrong(code))
+    with pytest.raises(InvalidCredentialsError):
+        await identity.login(postgres_session, EMAIL, "otra-clave", "000000")
+
+    with pytest.raises(AccountLockedError):
+        await identity.login(postgres_session, EMAIL, "otra-clave", "000000")
+
+
+async def test_tc_s1_10_correo_inexistente_se_bloquea_igual_para_no_revelar_cuentas(identity, postgres_session):
+    for _ in range(4):
+        with pytest.raises(InvalidCredentialsError):
+            await identity.login(postgres_session, "nadie@correo.co", "x", "000000")
+
+    with pytest.raises(AccountLockedError) as locked:
+        await identity.login(postgres_session, "nadie@correo.co", "x", "000000")
+    assert locked.value.retry_after == 15 * 60
+
+
+async def test_tc_s1_10_limite_de_codigos_aplica_igual_a_correos_inexistentes(identity, postgres_session):
+    assert await identity.request_otp(postgres_session, "nadie@correo.co") is None
+
+    with pytest.raises(RateLimitedError):
+        await identity.request_otp(postgres_session, "nadie@correo.co")
+
+
+async def test_tc_s1_10_ingreso_exitoso_reinicia_el_limite_de_codigos(identity, postgres_session, clock):
+    for _ in range(4):
+        await identity.request_otp(postgres_session, EMAIL)
+        clock.advance(timedelta(seconds=61))
+    code = await identity.request_otp(postgres_session, EMAIL)
+    await identity.login(postgres_session, EMAIL, PASSWORD, code)
+
+    assert await identity.request_otp(postgres_session, EMAIL)
 
 
 async def test_tc_s1_10_bloquea_al_quinto_intento_con_contrasena_equivocada(identity, postgres_session, clock):

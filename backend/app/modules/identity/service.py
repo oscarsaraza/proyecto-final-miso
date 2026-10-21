@@ -1,6 +1,7 @@
 """Autenticación del asegurado con contraseña, código por SMS y huella (HU-MOV-02, HU-MOV-12).
 
-Todo el estado vive en PostgreSQL para que las réplicas vean lo mismo.
+Todo el estado vive en PostgreSQL para que las réplicas vean lo mismo. Los límites y el bloqueo
+se llevan por correo, exista o no la cuenta, para no revelar qué correos están registrados.
 """
 import hashlib
 import hmac
@@ -10,7 +11,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, List, Optional, Tuple
 
 import jwt
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -22,6 +24,7 @@ from app.modules.identity.db_models import (
     InsuredDeviceDB,
     InsuredOtpDB,
     LoginAttemptDB,
+    LoginLockDB,
     RevokedTokenDB,
 )
 from app.modules.identity.models import TokenPair
@@ -33,6 +36,7 @@ PURPOSE_LOGIN = "login"
 PURPOSE_RESET = "password_reset"
 
 FAILURE_RESULTS = ("bad_password", "bad_code", "bad_device", "unknown_user", "locked")
+SUCCESS_CHANNELS = ("password", "biometric", "reset")
 
 
 class InvalidCredentialsError(Exception):
@@ -47,13 +51,17 @@ class WeakPasswordError(Exception):
     pass
 
 
+class SamePasswordError(Exception):
+    pass
+
+
 class SmsUnavailableError(Exception):
     pass
 
 
 class AccountLockedError(Exception):
     def __init__(self, locked_until: datetime, retry_after: int):
-        super().__init__("Cuenta bloqueada temporalmente")
+        super().__init__("Ingreso suspendido temporalmente")
         self.locked_until = locked_until
         self.retry_after = retry_after
 
@@ -70,6 +78,10 @@ def _utcnow() -> datetime:
 
 def _sha256(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
+
+
+def _normalize(email: str) -> str:
+    return email.strip().lower()
 
 
 class InsuredAuthService:
@@ -96,13 +108,11 @@ class InsuredAuthService:
     ) -> InsuredAccountDB:
         account = InsuredAccountDB(
             user_id=user_id or str(uuid.uuid4()),
-            email=email.strip().lower(),
+            email=_normalize(email),
             full_name=full_name,
             document_number=document_number,
             phone=phone,
             password_hash=get_password_hash(password),
-            failed_attempts=0,
-            lock_count=0,
             token_version=0,
         )
         session.add(account)
@@ -126,23 +136,28 @@ class InsuredAuthService:
     async def request_otp(
         self, session: AsyncSession, email: str, ip: Optional[str] = None, purpose: str = PURPOSE_LOGIN
     ) -> Optional[str]:
-        """Genera y envía el código. Devuelve None si el correo no existe (no se revela al cliente)."""
+        """Genera y envía el código. Responde igual exista o no el correo; devuelve None si no existe."""
         now = self._clock()
-        email = email.strip().lower()
+        email = _normalize(email)
         await self._check_ip(session, ip, now, otp_request=True)
 
+        hour_ago = now - timedelta(hours=1)
+        last_success = await self._last_success(session, email)
+        since = max(hour_ago, last_success) if last_success else hour_ago
+        requested = await self._attempt_times(
+            session, LoginAttemptDB.email == email, "otp_request", ("success", "unknown_user"), since
+        )
+        retry_after = policy.otp_request_retry_after(requested, now)
         account = await self._find(session, email)
+        if retry_after is not None:
+            await self._audit(session, email, account.user_id if account else None, ip, "otp_request", "rate_limited", now)
+            await session.commit()
+            raise RateLimitedError(retry_after)
+
         if account is None:
             await self._audit(session, email, None, ip, "otp_request", "unknown_user", now)
             await session.commit()
             return None
-
-        requested = await self._attempt_times(session, LoginAttemptDB.user_id == account.user_id, "otp_request", ("success",), now - timedelta(hours=1))
-        retry_after = policy.otp_request_retry_after(requested, now)
-        if retry_after is not None:
-            await self._audit(session, email, account.user_id, ip, "otp_request", "rate_limited", now)
-            await session.commit()
-            raise RateLimitedError(retry_after)
 
         code = f"{secrets.randbelow(1_000_000):06d}"
         await session.execute(
@@ -170,29 +185,28 @@ class InsuredAuthService:
     async def login(
         self, session: AsyncSession, email: str, password: str, otp_code: str, ip: Optional[str] = None
     ) -> TokenPair:
+        """Contraseña y código equivocados cuentan igual: 5 fallos seguidos suspenden el ingreso."""
         now = self._clock()
-        email = email.strip().lower()
+        email = _normalize(email)
         await self._check_ip(session, ip, now)
+        await self._reject_if_locked(session, email, None, ip, "password", now)
 
         account = await self._find(session, email, for_update=True)
         if account is None:
-            await self._audit(session, email, None, ip, "password", "unknown_user", now)
-            await session.commit()
+            await self._register_failure(session, email, None, ip, "password", "unknown_user", now)
             raise InvalidCredentialsError()
-
-        await self._reject_if_locked(session, account, ip, "password", now)
 
         if not verify_password(password, account.password_hash):
-            await self._register_password_failure(session, account, ip, now)
+            await self._register_failure(session, email, account.user_id, ip, "password", "bad_password", now)
             raise InvalidCredentialsError()
 
-        if not await self._consume_code(session, account, PURPOSE_LOGIN, otp_code, now):
-            await self._audit(session, email, account.user_id, ip, "otp", "bad_code", now)
-            await session.commit()
+        otp = await self._verify_code(session, account, PURPOSE_LOGIN, otp_code, now)
+        if otp is None:
+            await self._register_failure(session, email, account.user_id, ip, "otp", "bad_code", now)
             raise InvalidCredentialsError()
 
-        account.failed_attempts = 0
-        account.lock_count = 0
+        await session.delete(otp)
+        await session.execute(delete(LoginLockDB).where(LoginLockDB.email == email))
         await self._audit(session, email, account.user_id, ip, "password", "success", now)
         tokens = self._issue_tokens(account)
         await session.commit()
@@ -211,8 +225,7 @@ class InsuredAuthService:
         account = await session.get(InsuredAccountDB, claims["sub"])
         if account is None or claims.get("ver", 0) != account.token_version:
             raise InvalidTokenError()
-        now = self._clock()
-        if account.locked_until is not None and now < account.locked_until:
+        if await self._active_lock(session, account.email, self._clock()) is not None:
             raise InvalidTokenError()
         await self._revoke_jti(session, claims)
         tokens = self._issue_tokens(account)
@@ -244,12 +257,13 @@ class InsuredAuthService:
             and hmac.compare_digest(device.secret_hash, _sha256(device_secret))
         )
         if not valid:
-            await self._audit(session, f"device:{device_id}", device.user_id if device else None, ip, "biometric", "bad_device", now)
+            label = f"device:{device_id}"[:254]
+            await self._audit(session, label, device.user_id if device else None, ip, "biometric", "bad_device", now)
             await session.commit()
             raise InvalidCredentialsError()
 
         account = await session.get(InsuredAccountDB, device.user_id)
-        await self._reject_if_locked(session, account, ip, "biometric", now)
+        await self._reject_if_locked(session, account.email, account.user_id, ip, "biometric", now)
         device.last_used_at = now
         await self._audit(session, account.email, account.user_id, ip, "biometric", "success", now)
         tokens = self._issue_tokens(account)
@@ -274,11 +288,11 @@ class InsuredAuthService:
     async def reset_password(
         self, session: AsyncSession, email: str, code: str, new_password: str, ip: Optional[str] = None
     ) -> None:
-        """Cambia la contraseña, quita el bloqueo, cierra todas las sesiones y desvincula las huellas."""
+        """Cambia la contraseña, levanta la suspensión, cierra todas las sesiones y desvincula las huellas."""
         if not policy.is_strong_password(new_password):
             raise WeakPasswordError()
         now = self._clock()
-        email = email.strip().lower()
+        email = _normalize(email)
         await self._check_ip(session, ip, now)
 
         account = await self._find(session, email, for_update=True)
@@ -287,57 +301,81 @@ class InsuredAuthService:
             await session.commit()
             raise InvalidCredentialsError()
 
-        if not await self._consume_code(session, account, PURPOSE_RESET, code, now):
+        otp = await self._verify_code(session, account, PURPOSE_RESET, code, now)
+        if otp is None:
             await self._audit(session, email, account.user_id, ip, "reset", "bad_code", now)
             await session.commit()
             raise InvalidCredentialsError()
 
+        if verify_password(new_password, account.password_hash):
+            await session.commit()
+            raise SamePasswordError()
+
+        await session.delete(otp)
         account.password_hash = get_password_hash(new_password)
-        account.failed_attempts = 0
-        account.lock_count = 0
-        account.locked_until = None
         account.token_version += 1
         await session.execute(
             update(InsuredDeviceDB)
             .where(InsuredDeviceDB.user_id == account.user_id, InsuredDeviceDB.revoked_at.is_(None))
             .values(revoked_at=now)
         )
+        await session.execute(delete(LoginLockDB).where(LoginLockDB.email == email))
         await self._audit(session, email, account.user_id, ip, "reset", "success", now)
         await session.commit()
 
     async def _find(self, session: AsyncSession, email: str, for_update: bool = False) -> Optional[InsuredAccountDB]:
-        stmt = select(InsuredAccountDB).where(InsuredAccountDB.email == email.strip().lower())
+        stmt = select(InsuredAccountDB).where(InsuredAccountDB.email == _normalize(email))
         if for_update:
             stmt = stmt.with_for_update()
         return (await session.execute(stmt)).scalars().first()
 
-    async def _reject_if_locked(
-        self, session: AsyncSession, account: InsuredAccountDB, ip: Optional[str], channel: str, now: datetime
-    ) -> None:
-        if account.locked_until is not None and now < account.locked_until:
-            await self._audit(session, account.email, account.user_id, ip, channel, "locked", now)
-            await session.commit()
-            raise AccountLockedError(account.locked_until, policy.seconds_until(account.locked_until, now))
+    async def _active_lock(self, session: AsyncSession, email: str, now: datetime) -> Optional[LoginLockDB]:
+        lock = await session.get(LoginLockDB, email)
+        if lock is not None and lock.locked_until is not None and now < lock.locked_until:
+            return lock
+        return None
 
-    async def _register_password_failure(
-        self, session: AsyncSession, account: InsuredAccountDB, ip: Optional[str], now: datetime
+    async def _reject_if_locked(
+        self, session: AsyncSession, email: str, user_id: Optional[str], ip: Optional[str], channel: str, now: datetime
     ) -> None:
-        account.lock_count = policy.effective_lock_count(account.lock_count, account.locked_until, now)
-        account.failed_attempts += 1
-        await self._audit(session, account.email, account.user_id, ip, "password", "bad_password", now)
-        if account.failed_attempts >= policy.MAX_PASSWORD_FAILURES:
-            account.failed_attempts = 0
-            account.lock_count += 1
-            account.locked_until = now + policy.lock_duration(account.lock_count)
-            await session.execute(delete(InsuredOtpDB).where(InsuredOtpDB.user_id == account.user_id))
+        lock = await self._active_lock(session, email, now)
+        if lock is not None:
+            await self._audit(session, email, user_id, ip, channel, "locked", now)
             await session.commit()
-            raise AccountLockedError(account.locked_until, policy.seconds_until(account.locked_until, now))
+            raise AccountLockedError(lock.locked_until, policy.seconds_until(lock.locked_until, now))
+
+    async def _register_failure(
+        self,
+        session: AsyncSession,
+        email: str,
+        user_id: Optional[str],
+        ip: Optional[str],
+        channel: str,
+        result: str,
+        now: datetime,
+    ) -> None:
+        await session.execute(
+            insert(LoginLockDB).values(email=email, failed_attempts=0, lock_count=0).on_conflict_do_nothing()
+        )
+        stmt = select(LoginLockDB).where(LoginLockDB.email == email).with_for_update()
+        lock = (await session.execute(stmt)).scalars().one()
+        lock.lock_count = policy.effective_lock_count(lock.lock_count, lock.locked_until, now)
+        lock.failed_attempts += 1
+        await self._audit(session, email, user_id, ip, channel, result, now)
+        if lock.failed_attempts >= policy.MAX_PASSWORD_FAILURES:
+            lock.failed_attempts = 0
+            lock.lock_count += 1
+            lock.locked_until = now + policy.lock_duration(lock.lock_count)
+            if user_id is not None:
+                await session.execute(delete(InsuredOtpDB).where(InsuredOtpDB.user_id == user_id))
+            await session.commit()
+            raise AccountLockedError(lock.locked_until, policy.seconds_until(lock.locked_until, now))
         await session.commit()
 
-    async def _consume_code(
+    async def _verify_code(
         self, session: AsyncSession, account: InsuredAccountDB, purpose: str, code: str, now: datetime
-    ) -> bool:
-        """Un código equivocado no bloquea la cuenta: al tercer fallo se descarta y hay que pedir otro."""
+    ) -> Optional[InsuredOtpDB]:
+        """Devuelve el código si es correcto, sin borrarlo. Al tercer error se descarta y hay que pedir otro."""
         stmt = (
             select(InsuredOtpDB)
             .where(InsuredOtpDB.user_id == account.user_id, InsuredOtpDB.purpose == purpose)
@@ -345,17 +383,24 @@ class InsuredAuthService:
         )
         otp = (await session.execute(stmt)).scalars().first()
         if otp is None:
-            return False
+            return None
         if now > otp.expires_at:
             await session.delete(otp)
-            return False
+            return None
         if not hmac.compare_digest(otp.code_hash, self._code_hash(account.user_id, purpose, code)):
             otp.attempts += 1
             if otp.attempts >= policy.MAX_CODE_ATTEMPTS:
                 await session.delete(otp)
-            return False
-        await session.delete(otp)
-        return True
+            return None
+        return otp
+
+    async def _last_success(self, session: AsyncSession, email: str) -> Optional[datetime]:
+        stmt = select(func.max(LoginAttemptDB.created_at)).where(
+            LoginAttemptDB.email == email,
+            LoginAttemptDB.result == "success",
+            LoginAttemptDB.channel.in_(SUCCESS_CHANNELS),
+        )
+        return (await session.execute(stmt)).scalar()
 
     async def _check_ip(self, session: AsyncSession, ip: Optional[str], now: datetime, otp_request: bool = False) -> None:
         if not ip:

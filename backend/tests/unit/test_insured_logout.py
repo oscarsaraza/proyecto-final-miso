@@ -8,6 +8,7 @@ from app.modules.identity.service import (
     AccountLockedError,
     InvalidCredentialsError,
     InvalidTokenError,
+    SamePasswordError,
     WeakPasswordError,
 )
 from tests.conftest import INSURED_EMAIL as EMAIL, INSURED_PASSWORD as PASSWORD
@@ -123,3 +124,18 @@ async def test_recuperar_contrasena_rechaza_claves_debiles(identity, postgres_se
 
     with pytest.raises(WeakPasswordError):
         await identity.reset_password(postgres_session, EMAIL, code, "corta")
+
+
+async def test_recuperar_contrasena_no_acepta_la_misma_y_conserva_el_codigo(identity, postgres_session):
+    code = await identity.forgot_password(postgres_session, EMAIL)
+
+    with pytest.raises(SamePasswordError):
+        await identity.reset_password(postgres_session, EMAIL, code, PASSWORD)
+    await identity.reset_password(postgres_session, EMAIL, code, "NuevaClave2026")
+
+
+async def test_recuperar_contrasena_con_codigo_malo_no_dice_si_la_clave_es_la_misma(identity, postgres_session):
+    await identity.forgot_password(postgres_session, EMAIL)
+
+    with pytest.raises(InvalidCredentialsError):
+        await identity.reset_password(postgres_session, EMAIL, "000000", PASSWORD)

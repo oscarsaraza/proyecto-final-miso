@@ -47,7 +47,7 @@ class AuthViewModelTest {
         Dispatchers.setMain(dispatcher)
         crypto = FakeSessionCrypto()
         store = InMemorySessionStore()
-        SecureSessionRepository(crypto, store).apply { save(credential, encryptionCipher()) }
+        SecureSessionRepository(crypto, store).apply { save(credential, encryptionCipher(), EMAIL, "María Ruiz") }
         repository = SecureSessionRepository(crypto, store)
         authApi = FakeAuthApi()
         viewModel = AuthViewModel(repository, authApi)
@@ -154,19 +154,26 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `TC-S1-09 bloqueo del sensor por intentos fallidos no autentica`() {
+    fun `TC-S1-09 bloqueo del sensor lleva al ingreso con contrasena y codigo`() {
         viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator(result = BiometricResult.LockedOut))
 
         assertEquals(AuthStatus.BIOMETRIC_LOCKED_OUT, viewModel.uiState.value.status)
+        assertTrue(viewModel.uiState.value.showAlternativeAccess)
         assertFalse(viewModel.uiState.value.isAuthenticated)
     }
 
     @Test
-    fun `TC-S1-09 error inesperado del sensor no autentica`() {
+    fun `TC-S1-09 error del sensor lleva al ingreso con contrasena y codigo`() {
         viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator(result = BiometricResult.Error(code = 99)))
 
         assertEquals(AuthStatus.BIOMETRIC_ERROR, viewModel.uiState.value.status)
+        assertTrue(viewModel.uiState.value.showAlternativeAccess)
         assertFalse(viewModel.uiState.value.isAuthenticated)
+    }
+
+    @Test
+    fun `TC-S1-09 la pantalla muestra la cuenta duena de la huella`() {
+        assertEquals("María Ruiz", viewModel.uiState.value.biometricAccountName)
     }
 
     @Test
@@ -277,6 +284,40 @@ class AuthViewModelTest {
         assertEquals(0, viewModel.uiState.value.otpCooldownSeconds)
         viewModel.requestOtp(EMAIL)
         assertEquals(2, authApi.otpCount)
+    }
+
+    @Test
+    fun `TC-S1-10 la espera para reenviar es por correo`() {
+        viewModel.requestOtp(EMAIL)
+
+        assertFalse(viewModel.uiState.value.canRequestOtp(" MARIA.RUIZ@correo.co "))
+        assertTrue(viewModel.uiState.value.canRequestOtp("otro@correo.co"))
+        viewModel.requestOtp("otro@correo.co")
+        assertEquals(2, authApi.otpCount)
+    }
+
+    @Test
+    fun `TC-S1-10 ingresar reinicia la espera para pedir codigo`() {
+        viewModel.requestOtp(EMAIL)
+
+        viewModel.authenticateWithPassword(EMAIL, PASSWORD, OTP, FakeBiometricAuthenticator())
+
+        assertEquals(0, viewModel.uiState.value.otpCooldownSeconds)
+        assertTrue(viewModel.uiState.value.canRequestOtp(EMAIL))
+    }
+
+    @Test
+    fun `TC-S1-10 otra cuenta en el mismo telefono puede pasar la huella a su nombre`() {
+        authApi.loginResult = LoginResult.Success(newTokens, "Pedro Gómez")
+        val authenticator = FakeBiometricAuthenticator()
+
+        viewModel.authenticateWithPassword("pedro@correo.co", PASSWORD, OTP, authenticator)
+        assertTrue(viewModel.uiState.value.offerBiometricEnrollment)
+        assertTrue(viewModel.uiState.value.enrollmentReplacesOther)
+
+        viewModel.enableBiometricUnlock(authenticator)
+        assertEquals("Pedro Gómez", viewModel.uiState.value.biometricAccountName)
+        assertEquals("pedro@correo.co", repository.storedAccountEmail())
     }
 
     @Test
@@ -532,6 +573,25 @@ class AuthViewModelTest {
         viewModel.resetPassword(EMAIL, "123456", "corta", "corta")
         assertEquals(RecoveryError.WEAK_PASSWORD, viewModel.uiState.value.recovery.error)
         assertTrue(repository.hasStoredSession())
+    }
+
+    @Test
+    fun `recuperar contrasena rechaza repetir la contrasena actual`() {
+        viewModel.openPasswordRecovery()
+        authApi.resetResult = ResetResult.SamePassword
+
+        viewModel.resetPassword(EMAIL, "123456", PASSWORD, PASSWORD)
+
+        assertEquals(RecoveryError.SAME_PASSWORD, viewModel.uiState.value.recovery.error)
+        assertFalse(viewModel.uiState.value.recovery.completed)
+    }
+
+    @Test
+    fun `requisitos de la contrasena nueva`() {
+        assertFalse(passwordRulesMet("corta1", "corta1"))
+        assertFalse(passwordRulesMet("sinnumeros", "sinnumeros"))
+        assertFalse(passwordRulesMet("NuevaClave2026", "OtraClave2026"))
+        assertTrue(passwordRulesMet("NuevaClave2026", "NuevaClave2026"))
     }
 
     // TC-S1-12: cierre de sesión seguro y revocación (HU-MOV-12)
