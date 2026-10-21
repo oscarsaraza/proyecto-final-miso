@@ -9,6 +9,7 @@ from app.core.database import Base, get_db_session
 from app.modules.identity.service import insured_auth_service
 from app.modules.auth.service import auth_service
 from app.modules.profile.service import profile_service
+from app.modules.rating.service import rating_service
 
 
 class InMemorySessionTestDouble:
@@ -18,6 +19,9 @@ class InMemorySessionTestDouble:
         self.users = {}
         self.financial_entities = {}
         self.cities = {}
+        self.partners_by_id = {}
+        self.partners_by_client_id = {}
+        self.quotes = {}
 
     async def execute(self, stmt):
         class Result:
@@ -50,6 +54,42 @@ class InMemorySessionTestDouble:
             cities = sorted(self.cities.values(), key=lambda x: getattr(x, "name", ""))
             return Result(cities)
 
+        if "update partners" in sql_str:
+            try:
+                partner_id = stmt.whereclause.right.value
+                partner = self.partners_by_id.get(partner_id)
+                if partner:
+                    partner.quota_used = (partner.quota_used or 0) + 1
+            except Exception:
+                pass
+            return Result([])
+
+        if "from partners" in sql_str:
+            try:
+                where_str = str(stmt.whereclause).lower()
+                val = stmt.whereclause.right.value
+                if "partners.client_id" in where_str:
+                    partner = self.partners_by_client_id.get(val)
+                else:
+                    partner = self.partners_by_id.get(val)
+                return Result([partner] if partner else [])
+            except Exception:
+                return Result([])
+
+        if "from quotes" in sql_str:
+            try:
+                where_str = str(stmt.whereclause).lower()
+                val = stmt.whereclause.right.value
+                if "quotes.quote_id" in where_str:
+                    quote = self.quotes.get(val)
+                    return Result([quote] if quote else [])
+                if "quotes.partner_id" in where_str:
+                    items = [q for q in self.quotes.values() if q.partner_id == val]
+                    items.sort(key=lambda q: q.created_at, reverse=True)
+                    return Result(items)
+            except Exception:
+                return Result([])
+
         try:
             clean_username = stmt.whereclause.right.value
             user = self.users.get(clean_username)
@@ -59,6 +99,7 @@ class InMemorySessionTestDouble:
 
     def add(self, obj):
         from app.modules.profile.models import FinancialEntityDB, CityDB
+        from app.modules.rating.models import PartnerDB, QuoteDB
 
         if isinstance(obj, FinancialEntityDB):
             if not getattr(obj, "id", None):
@@ -68,6 +109,11 @@ class InMemorySessionTestDouble:
             if not getattr(obj, "id", None):
                 obj.id = len(self.cities) + 1
             self.cities[obj.code] = obj
+        elif isinstance(obj, PartnerDB):
+            self.partners_by_id[obj.partner_id] = obj
+            self.partners_by_client_id[obj.client_id] = obj
+        elif isinstance(obj, QuoteDB):
+            self.quotes[obj.quote_id] = obj
         else:
             self.users[obj.username] = obj
 
@@ -94,6 +140,7 @@ async def test_db_session():
     session = InMemorySessionTestDouble()
     await auth_service.seed_default_users(session)
     await profile_service.seed_default_catalogs(session)
+    await rating_service.seed_default_partners(session)
 
     async def override_db():
         yield session
@@ -125,6 +172,7 @@ async def postgres_session():
 
     app.dependency_overrides[get_db_session] = override_db
     async with sessions() as session:
+        await rating_service.seed_default_partners(session)
         yield session
     await engine.dispose()
 

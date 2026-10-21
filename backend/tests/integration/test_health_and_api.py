@@ -169,24 +169,28 @@ async def test_hu_web_01_registro_y_consulta_de_consentimiento(async_client: Asy
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_quote_edge_requiere_socio_y_cotiza(async_client: AsyncClient):
-    """Valida canal quote-edge B2B: 401 si falta X-Partner-Id y cotización con la cabecera."""
+    """Valida canal quote-edge B2B: 401 si falta token Bearer de socio y cotización 200 con token válido (HU-WEB-10)."""
+    from app.core.security import create_partner_access_token
+
     quote_payload = {
         "document_type": "CC",
         "document_number": "1020304050",
         "birth_date": "1990-05-15",
         "insured_amount": 100000000.0,
     }
-    # Sin cabecera -> 401
+    # Sin token Bearer -> 401
     resp_no_header = await async_client.post("/api/v1/quote-edge/quotes", json=quote_payload)
     assert resp_no_header.status_code == 401
 
-    # Con cabecera -> 200 (motor de tarifa de HU-WEB-03)
-    resp_with_header = await async_client.post(
+    # Con token Bearer de socio activo -> 200 (motor de tarifa de HU-WEB-03 y confinamiento HU-WEB-10)
+    partner_token = create_partner_access_token(client_id="banco_aliado", partner_id="banco-aliado-1")
+    resp_with_token = await async_client.post(
         "/api/v1/quote-edge/quotes",
-        headers={"X-Partner-Id": "banco-aliado-1"},
+        headers={"Authorization": f"Bearer {partner_token}"},
         json=quote_payload,
     )
-    assert resp_with_header.status_code == 200
+    assert resp_with_token.status_code == 200
+    assert resp_with_token.json()["partner_id"] == "banco-aliado-1"
 
 
 @pytest.mark.integration
