@@ -112,20 +112,16 @@ class InsuredAuthService:
     async def seed_default_account(self, session: AsyncSession) -> None:
         if settings.ENVIRONMENT == "production":
             return
-        existing = await self._find(session, "maria.ruiz@correo.co")
-        if existing is None:
+        if await self._find(session, "maria.ruiz@correo.co") is None:
             await self.register(
                 session,
                 user_id="ins-0001",
                 email="maria.ruiz@correo.co",
                 full_name="María Ruiz",
                 document_number="1020304050",
-                phone=settings.SEED_INSURED_PHONE,
+                phone="+573000000000",
                 password="Solventa2026!",
             )
-        elif existing.phone != settings.SEED_INSURED_PHONE:
-            existing.phone = settings.SEED_INSURED_PHONE
-            await session.commit()
 
     async def request_otp(
         self, session: AsyncSession, email: str, ip: Optional[str] = None, purpose: str = PURPOSE_LOGIN

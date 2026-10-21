@@ -33,7 +33,6 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: Optional[str] = None
     TWILIO_AUTH_TOKEN: Optional[str] = None
     TWILIO_FROM_NUMBER: Optional[str] = None
-    SEED_INSURED_PHONE: str = "+573000000000"
 
     # Burós externos (ASR-02 / HA-02)
     BUREAU_TIMEOUT_SECONDS: float = 0.400  # 400 ms límite estricto
