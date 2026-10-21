@@ -160,7 +160,7 @@ async def test_recuperar_contrasena_de_correo_inexistente_es_rechazado(identity,
         await identity.reset_password(postgres_session, "nadie@correo.co", "123456", "NuevaClave2026")
 
 
-async def test_semilla_crea_a_maria_una_sola_vez_con_su_clave_de_prueba(postgres_session, clock, sms):
+async def test_semilla_crea_las_cuentas_de_prueba_una_sola_vez(postgres_session, clock, sms):
     from app.modules.identity.service import InsuredAuthService
 
     service = InsuredAuthService(clock=clock, sms_sender=sms)
@@ -169,6 +169,16 @@ async def test_semilla_crea_a_maria_una_sola_vez_con_su_clave_de_prueba(postgres
 
     code = await service.request_otp(postgres_session, EMAIL)
     assert (await service.login(postgres_session, EMAIL, PASSWORD, code)).full_name == "María Ruiz"
+    assert await service._find(postgres_session, "pedro.gomez@correo.co") is not None
+
+
+async def test_sin_archivo_de_semillas_no_crea_cuentas(postgres_session, tmp_path):
+    from app.modules.identity.service import InsuredAuthService
+
+    service = InsuredAuthService()
+    await service.seed_default_account(postgres_session, seed_file=tmp_path / "no-existe.json")
+
+    assert await service._find(postgres_session, EMAIL) is None
 
 
 async def test_semilla_no_se_crea_en_produccion(postgres_session, monkeypatch):

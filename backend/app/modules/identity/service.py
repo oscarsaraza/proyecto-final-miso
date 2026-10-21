@@ -5,9 +5,11 @@ se llevan por correo, exista o no la cuenta, para no revelar qué correos están
 """
 import hashlib
 import hmac
+import json
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
 import jwt
@@ -38,8 +40,8 @@ PURPOSE_RESET = "password_reset"
 FAILURE_RESULTS = ("bad_password", "bad_code", "bad_device", "unknown_user", "locked")
 SUCCESS_CHANNELS = ("password", "biometric", "reset")
 
-# Asegurada de prueba (fuera de producción). Se guarda solo el hash bcrypt; la clave de prueba está en el README.
-SEED_ACCOUNT_DIGEST = "$2b$12$GmQwruCOSE8LbdfWN3f/M.//RWwyrqABuwpzHU8UF4P5VMxYC7jbq"
+# Cuentas de prueba para desarrollo; nunca se cargan en producción. La clave de prueba está en el README.
+SEED_FILE = Path(__file__).resolve().parents[3] / "seeds" / "cuentas_prueba.json"
 
 
 class InvalidCredentialsError(Exception):
@@ -143,19 +145,12 @@ class InsuredAuthService:
         await session.commit()
         return account
 
-    async def seed_default_account(self, session: AsyncSession) -> None:
-        if settings.ENVIRONMENT == "production":
+    async def seed_default_account(self, session: AsyncSession, seed_file: Path = SEED_FILE) -> None:
+        if settings.ENVIRONMENT == "production" or not seed_file.exists():
             return
-        if await self._find(session, "maria.ruiz@correo.co") is None:
-            await self._add_account(
-                session,
-                user_id="ins-0001",
-                email="maria.ruiz@correo.co",
-                full_name="María Ruiz",
-                document_number="1020304050",
-                phone="+573000000000",
-                password_hash=SEED_ACCOUNT_DIGEST,
-            )
+        for seed in json.loads(seed_file.read_text(encoding="utf-8")):
+            if await self._find(session, seed["email"]) is None:
+                await self._add_account(session, **seed)
 
     async def request_otp(
         self, session: AsyncSession, email: str, ip: Optional[str] = None, purpose: str = PURPOSE_LOGIN

@@ -1,0 +1,18 @@
+[
+  {
+    "user_id": "ins-0001",
+    "email": "maria.ruiz@correo.co",
+    "full_name": "María Ruiz",
+    "document_number": "1020304050",
+    "phone": "+573000000000",
+    "password_hash": "$2b$12$GmQwruCOSE8LbdfWN3f/M.//RWwyrqABuwpzHU8UF4P5VMxYC7jbq"
+  },
+  {
+    "user_id": "ins-0002",
+    "email": "pedro.gomez@correo.co",
+    "full_name": "Pedro Gómez",
+    "document_number": "80123456",
+    "phone": "+573000000001",
+    "password_hash": "$2b$12$GmQwruCOSE8LbdfWN3f/M.//RWwyrqABuwpzHU8UF4P5VMxYC7jbq"
+  }
+]
