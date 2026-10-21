@@ -125,6 +125,37 @@ class SecureSessionRepositoryTest {
     }
 
     @Test
+    fun `cuenta sin huella no tiene dispositivo ni se puede desbloquear`() {
+        assertNull(repository.storedDeviceId(MARIA))
+        assertThrows(IllegalStateException::class.java) {
+            repository.unlock(MARIA, repository.encryptionCipher())
+        }
+    }
+
+    @Test
+    fun `limpiar todo borra sesion, cuentas y llave`() {
+        repository.startSession(tokens)
+        bind(maria, MARIA, "María Ruiz")
+
+        repository.clear()
+
+        assertNull(repository.activeSession)
+        assertFalse(repository.hasStoredSession())
+        assertNull(crypto.key)
+    }
+
+    @Test
+    fun `credencial del telefono se compara por valor y rechaza datos mal formados`() {
+        assertEquals(maria, DeviceCredential("device-maria", "secreto-maria"))
+        assertEquals(maria.hashCode(), DeviceCredential("device-maria", "secreto-maria").hashCode())
+        assertFalse(maria == pedro)
+        assertFalse(maria.equals("device-maria"))
+        assertFalse(maria == DeviceCredential("device-maria", "otro"))
+        assertEquals(maria, DeviceCredential.fromBytes(maria.toBytes()))
+        assertThrows(IllegalArgumentException::class.java) { DeviceCredential.fromBytes("sin-separador".toByteArray()) }
+    }
+
+    @Test
     fun `los tokens y el secreto no se exponen al imprimirlos`() {
         assertEquals("SessionTokens(***)", tokens.toString())
         assertEquals("DeviceCredential(device-maria, ***)", maria.toString())

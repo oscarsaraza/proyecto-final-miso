@@ -324,6 +324,23 @@ class AuthViewModelTest {
         assertEquals(2, viewModel.uiState.value.biometricAccounts.size)
     }
 
+    @Test
+    fun `desactivar la huella de una cuenta conserva la de la otra`() {
+        repository.save(DeviceCredential("device-pedro", "s"), repository.encryptionCipher(), PEDRO, "Pedro Gómez")
+        viewModel = AuthViewModel(repository, authApi)
+        authApi.biometricResult = LoginResult.Success(newTokens, "Pedro Gómez")
+        viewModel.selectAccount(PEDRO)
+        viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator())
+
+        viewModel.disableBiometrics()
+        viewModel.requestLogout()
+        viewModel.confirmLogout()
+
+        assertEquals(listOf(BoundAccount(EMAIL, "María Ruiz")), viewModel.uiState.value.biometricAccounts)
+        assertEquals(EMAIL, viewModel.uiState.value.selectedAccountEmail)
+        assertEquals("device-pedro", authApi.lastRevokedDevice)
+    }
+
     // TC-S1-10: acceso alternativo con contraseña y código por SMS (HU-MOV-02)
 
     @Test
@@ -750,6 +767,141 @@ class AuthViewModelTest {
         assertFalse(viewModel.uiState.value.showLogoutConfirmation)
     }
 
+    // Casos de borde
+
+    @Test
+    fun `sensor no disponible durante el dialogo`() {
+        viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator(result = BiometricResult.Unavailable))
+
+        assertEquals(AuthStatus.BIOMETRIC_UNAVAILABLE, viewModel.uiState.value.status)
+    }
+
+    @Test
+    fun `limite del servidor al entrar con huella se informa como sin conexion`() {
+        authApi.biometricResult = LoginResult.TooManyRequests(30)
+
+        viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator())
+
+        assertEquals(AuthStatus.SERVER_UNREACHABLE, viewModel.uiState.value.status)
+    }
+
+    @Test
+    fun `ya autenticado no vuelve a pedir la huella`() {
+        loggedIn()
+        val authenticator = FakeBiometricAuthenticator()
+
+        viewModel.authenticateWithBiometrics(authenticator)
+
+        assertEquals(0, authenticator.promptCount)
+    }
+
+    @Test
+    fun `activar la huella sin sesion activa solo termina el ingreso`() {
+        viewModel.enableBiometricUnlock(FakeBiometricAuthenticator())
+
+        assertTrue(viewModel.uiState.value.isAuthenticated)
+        assertNull(authApi.lastRegisterToken)
+    }
+
+    @Test
+    fun `si el servidor no vincula el telefono se entra sin huella`() {
+        withoutBoundAccounts()
+        authApi.registerFails = true
+        viewModel.authenticateWithPassword(EMAIL, PASSWORD, OTP, FakeBiometricAuthenticator())
+
+        viewModel.enableBiometricUnlock(FakeBiometricAuthenticator())
+
+        assertTrue(viewModel.uiState.value.isAuthenticated)
+        assertFalse(repository.hasStoredSession())
+    }
+
+    @Test
+    fun `si el keystore falla al activar la huella se revoca el telefono`() {
+        withoutBoundAccounts()
+        viewModel.authenticateWithPassword(EMAIL, PASSWORD, OTP, FakeBiometricAuthenticator())
+
+        viewModel.enableBiometricUnlock(FakeBiometricAuthenticator(failure = IllegalStateException("keystore")))
+
+        assertTrue(viewModel.uiState.value.isAuthenticated)
+        assertFalse(repository.hasStoredSession())
+        assertEquals(registeredCredential.deviceId, authApi.lastRevokedDevice)
+    }
+
+    @Test
+    fun `desactivar la huella sin sesion no hace nada`() {
+        viewModel.disableBiometrics()
+
+        assertTrue(repository.isBound(EMAIL))
+        assertNull(authApi.lastRevokedDevice)
+    }
+
+    @Test
+    fun `desactivar la huella de una cuenta sin huella no llama al servidor`() {
+        withoutBoundAccounts()
+        viewModel.authenticateWithPassword(EMAIL, PASSWORD, OTP, FakeBiometricAuthenticator())
+        viewModel.skipBiometricEnrollment()
+
+        viewModel.disableBiometrics()
+
+        assertNull(authApi.lastRevokedDevice)
+    }
+
+    @Test
+    fun `codigo de recuperacion respeta la espera y los errores del servidor`() {
+        viewModel.openPasswordRecovery()
+        viewModel.requestRecoveryCode(EMAIL)
+        viewModel.requestRecoveryCode(EMAIL)
+        assertEquals(EMAIL, authApi.lastForgotEmail)
+
+        val cases = mapOf(
+            OtpResult.TooManyRequests(20) to RecoveryError.TOO_MANY_REQUESTS,
+            OtpResult.SendFailed to RecoveryError.SMS_UNAVAILABLE,
+            OtpResult.Failed to RecoveryError.NETWORK,
+        )
+        cases.forEach { (result, error) ->
+            advanceSeconds(60)
+            authApi.forgotResult = result
+            viewModel.requestRecoveryCode(PEDRO)
+            assertEquals(error, viewModel.uiState.value.recovery.error)
+        }
+    }
+
+    @Test
+    fun `cambiar la contrasena informa limite y falta de conexion`() {
+        viewModel.openPasswordRecovery()
+
+        authApi.resetResult = ResetResult.TooManyRequests(10)
+        viewModel.resetPassword(EMAIL, "123456", "NuevaClave2026", "NuevaClave2026")
+        assertEquals(RecoveryError.TOO_MANY_REQUESTS, viewModel.uiState.value.recovery.error)
+
+        authApi.resetResult = ResetResult.NetworkError
+        viewModel.resetPassword(EMAIL, "123456", "NuevaClave2026", "NuevaClave2026")
+        assertEquals(RecoveryError.NETWORK, viewModel.uiState.value.recovery.error)
+    }
+
+    @Test
+    fun `no envia dos cambios de contrasena a la vez`() {
+        viewModel.openPasswordRecovery()
+        authApi.pendingReset = CompletableDeferred()
+
+        viewModel.resetPassword(EMAIL, "123456", "NuevaClave2026", "NuevaClave2026")
+        viewModel.resetPassword(EMAIL, "123456", "NuevaClave2026", "NuevaClave2026")
+
+        assertEquals(1, authApi.resetCount)
+    }
+
+    @Test
+    fun `un segundo bloqueo reinicia la cuenta regresiva`() {
+        authApi.loginResult = LoginResult.Locked(retryAfterSeconds = 100)
+        viewModel.authenticateWithPassword(EMAIL, "otra", "000000", FakeBiometricAuthenticator())
+        advanceSeconds(100)
+
+        authApi.loginResult = LoginResult.Locked(retryAfterSeconds = 300)
+        viewModel.authenticateWithPassword(EMAIL, "otra", "000000", FakeBiometricAuthenticator())
+
+        assertEquals(300, viewModel.uiState.value.lockedSeconds)
+    }
+
     private inner class FakeAuthApi : AuthApi {
         var otpResult: OtpResult = OtpResult.Sent(debugCode = null)
         var forgotResult: OtpResult = OtpResult.Sent(debugCode = null)
@@ -785,9 +937,12 @@ class AuthViewModelTest {
             return logoutResult
         }
 
-        override suspend fun registerDevice(accessToken: String): DeviceCredential {
+        var registerResult: DeviceCredential? = null
+        var registerFails = false
+
+        override suspend fun registerDevice(accessToken: String): DeviceCredential? {
             lastRegisterToken = accessToken
-            return registeredCredential
+            return if (registerFails) null else registerResult ?: registeredCredential
         }
 
         override suspend fun biometricLogin(credential: DeviceCredential): LoginResult {
@@ -805,9 +960,11 @@ class AuthViewModelTest {
             return forgotResult
         }
 
+        var pendingReset: CompletableDeferred<ResetResult>? = null
+
         override suspend fun resetPassword(email: String, code: String, newPassword: String): ResetResult {
             resetCount++
-            return resetResult
+            return pendingReset?.await() ?: resetResult
         }
     }
 
@@ -822,6 +979,7 @@ class AuthViewModelTest {
         private val availability: BiometricAvailability = BiometricAvailability.AVAILABLE,
         private val result: BiometricResult? = null,
         private val deferred: CompletableDeferred<BiometricResult>? = null,
+        private val failure: Exception? = null,
     ) : BiometricAuthenticator {
         var promptCount = 0
             private set
@@ -833,6 +991,7 @@ class AuthViewModelTest {
         override suspend fun authenticate(cipher: Cipher): BiometricResult {
             promptCount++
             lastCipher = cipher
+            failure?.let { throw it }
             return deferred?.await() ?: result ?: BiometricResult.Success(cipher)
         }
     }

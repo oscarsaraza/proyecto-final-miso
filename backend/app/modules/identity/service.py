@@ -38,6 +38,9 @@ PURPOSE_RESET = "password_reset"
 FAILURE_RESULTS = ("bad_password", "bad_code", "bad_device", "unknown_user", "locked")
 SUCCESS_CHANNELS = ("password", "biometric", "reset")
 
+# Asegurada de prueba (fuera de producción). Se guarda solo el hash bcrypt; la clave de prueba está en el README.
+SEED_ACCOUNT_DIGEST = "$2b$12$GmQwruCOSE8LbdfWN3f/M.//RWwyrqABuwpzHU8UF4P5VMxYC7jbq"
+
 
 class InvalidCredentialsError(Exception):
     pass
@@ -106,13 +109,34 @@ class InsuredAuthService:
         password: str,
         user_id: Optional[str] = None,
     ) -> InsuredAccountDB:
-        account = InsuredAccountDB(
+        return await self._add_account(
+            session,
             user_id=user_id or str(uuid.uuid4()),
-            email=_normalize(email),
+            email=email,
             full_name=full_name,
             document_number=document_number,
             phone=phone,
             password_hash=get_password_hash(password),
+        )
+
+    async def _add_account(
+        self,
+        session: AsyncSession,
+        *,
+        user_id: str,
+        email: str,
+        full_name: str,
+        document_number: str,
+        phone: str,
+        password_hash: str,
+    ) -> InsuredAccountDB:
+        account = InsuredAccountDB(
+            user_id=user_id,
+            email=_normalize(email),
+            full_name=full_name,
+            document_number=document_number,
+            phone=phone,
+            password_hash=password_hash,
             token_version=0,
         )
         session.add(account)
@@ -123,14 +147,14 @@ class InsuredAuthService:
         if settings.ENVIRONMENT == "production":
             return
         if await self._find(session, "maria.ruiz@correo.co") is None:
-            await self.register(
+            await self._add_account(
                 session,
                 user_id="ins-0001",
                 email="maria.ruiz@correo.co",
                 full_name="María Ruiz",
                 document_number="1020304050",
                 phone="+573000000000",
-                password="Solventa2026!",
+                password_hash=SEED_ACCOUNT_DIGEST,
             )
 
     async def request_otp(

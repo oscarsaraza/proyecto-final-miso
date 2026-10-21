@@ -139,3 +139,42 @@ async def test_recuperar_contrasena_con_codigo_malo_no_dice_si_la_clave_es_la_mi
 
     with pytest.raises(InvalidCredentialsError):
         await identity.reset_password(postgres_session, EMAIL, "000000", PASSWORD)
+
+
+async def test_refresh_con_ingreso_suspendido_es_rechazado(identity, postgres_session, tokens):
+    for _ in range(5):
+        with pytest.raises((InvalidCredentialsError, AccountLockedError)):
+            await identity.login(postgres_session, EMAIL, "otra-clave", "000000")
+
+    with pytest.raises(InvalidTokenError):
+        await identity.refresh(postgres_session, tokens.refresh_token)
+
+
+async def test_registrar_dispositivo_de_cuenta_inexistente_es_rechazado(identity, postgres_session):
+    with pytest.raises(InvalidTokenError):
+        await identity.register_device(postgres_session, "ins-9999")
+
+
+async def test_recuperar_contrasena_de_correo_inexistente_es_rechazado(identity, postgres_session):
+    with pytest.raises(InvalidCredentialsError):
+        await identity.reset_password(postgres_session, "nadie@correo.co", "123456", "NuevaClave2026")
+
+
+async def test_semilla_crea_a_maria_una_sola_vez_con_su_clave_de_prueba(postgres_session, clock, sms):
+    from app.modules.identity.service import InsuredAuthService
+
+    service = InsuredAuthService(clock=clock, sms_sender=sms)
+    await service.seed_default_account(postgres_session)
+    await service.seed_default_account(postgres_session)
+
+    code = await service.request_otp(postgres_session, EMAIL)
+    assert (await service.login(postgres_session, EMAIL, PASSWORD, code)).full_name == "María Ruiz"
+
+
+async def test_semilla_no_se_crea_en_produccion(postgres_session, monkeypatch):
+    from app.modules.identity import service as module
+
+    monkeypatch.setattr(module.settings, "ENVIRONMENT", "production")
+    await module.InsuredAuthService().seed_default_account(postgres_session)
+
+    assert await module.InsuredAuthService()._find(postgres_session, EMAIL) is None
