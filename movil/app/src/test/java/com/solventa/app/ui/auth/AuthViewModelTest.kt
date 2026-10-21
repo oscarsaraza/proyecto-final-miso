@@ -134,11 +134,10 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `TC-S1-09 boton de contrasena del dialogo lleva al acceso alternativo con el correo de la cuenta`() {
+    fun `TC-S1-09 boton de contrasena del dialogo lleva al acceso alternativo`() {
         viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator(result = BiometricResult.UseAlternative))
 
         assertTrue(viewModel.uiState.value.showAlternativeAccess)
-        assertEquals(EMAIL, viewModel.uiState.value.prefillEmail)
     }
 
     @Test
@@ -211,22 +210,6 @@ class AuthViewModelTest {
         assertFalse(viewModel.uiState.value.isLocked)
     }
 
-    @Test
-    fun `TC-S1-09 cambiar de usuario abre el ingreso con el correo vacio`() {
-        viewModel.switchUser()
-
-        assertTrue(viewModel.uiState.value.showAlternativeAccess)
-        assertNull(viewModel.uiState.value.prefillEmail)
-        assertTrue(repository.isBound(EMAIL))
-    }
-
-    @Test
-    fun `TC-S1-09 ingresar con contrasena precarga el correo de la cuenta elegida`() {
-        viewModel.onAlternativeAccessSelected()
-
-        assertEquals(EMAIL, viewModel.uiState.value.prefillEmail)
-    }
-
     // TC-S1-11: credencial custodiada en el Keystore (HU-MOV-03)
 
     @Test
@@ -282,7 +265,7 @@ class AuthViewModelTest {
         authApi.loginResult = LoginResult.Success(newTokens, "Pedro Gómez")
         val authenticator = FakeBiometricAuthenticator()
 
-        viewModel.switchUser()
+        viewModel.onAlternativeAccessSelected()
         viewModel.authenticateWithPassword(PEDRO, PASSWORD, OTP, authenticator)
         assertTrue(viewModel.uiState.value.offerBiometricEnrollment)
         viewModel.enableBiometricUnlock(authenticator)
@@ -339,6 +322,10 @@ class AuthViewModelTest {
         assertEquals(listOf(BoundAccount(EMAIL, "María Ruiz")), viewModel.uiState.value.biometricAccounts)
         assertEquals(EMAIL, viewModel.uiState.value.selectedAccountEmail)
         assertEquals("device-pedro", authApi.lastRevokedDevice)
+        assertEquals(AuthStatus.LOGGED_OUT_BIOMETRIC_READY, viewModel.uiState.value.status)
+
+        viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator())
+        assertTrue(viewModel.uiState.value.isAuthenticated)
     }
 
     // TC-S1-10: acceso alternativo con contraseña y código por SMS (HU-MOV-02)
@@ -630,7 +617,6 @@ class AuthViewModelTest {
         viewModel.closePasswordRecovery()
         assertFalse(viewModel.uiState.value.showPasswordRecovery)
         assertTrue(viewModel.uiState.value.showAlternativeAccess)
-        assertNull(viewModel.uiState.value.prefillEmail)
     }
 
     @Test

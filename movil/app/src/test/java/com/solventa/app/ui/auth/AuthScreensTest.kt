@@ -47,7 +47,6 @@ class AuthScreensTest {
         }
 
         compose.onNodeWithText(s(R.string.auth_biometric_subtitle)).assertIsDisplayed()
-        compose.onNodeWithText(s(R.string.auth_switch_user)).assertDoesNotExist()
         compose.onNodeWithContentDescription(s(R.string.auth_sensor_description)).performClick()
         compose.onNodeWithText(s(R.string.auth_use_alternative)).performClick()
 
@@ -56,21 +55,17 @@ class AuthScreensTest {
     }
 
     @Test
-    fun `huella con una cuenta muestra su nombre y permite cambiar de usuario`() {
-        var switched = 0
+    fun `huella con una cuenta muestra su nombre sin lista para elegir`() {
         compose.setContent {
             BiometricLoginScreen(
                 AuthUiState(biometricAccounts = listOf(maria), selectedAccountEmail = maria.email),
                 onAuthenticate = {},
                 onUseAlternative = {},
-                onSwitchUser = { switched++ },
             )
         }
 
         compose.onNodeWithText(s(R.string.auth_biometric_account, "María Ruiz")).assertIsDisplayed()
-        compose.onNodeWithText(s(R.string.auth_switch_user)).performClick()
-
-        assertEquals(1, switched)
+        compose.onNodeWithText("María Ruiz").assertDoesNotExist()
     }
 
     @Test
@@ -133,7 +128,7 @@ class AuthScreensTest {
         var back = 0
         compose.setContent {
             AlternativeLoginScreen(
-                uiState = AuthUiState(prefillEmail = maria.email),
+                uiState = AuthUiState(),
                 onRequestOtp = { otpRequests += it },
                 onSubmit = { email, password, code -> submits += Triple(email, password, code) },
                 onBack = { back++ },
@@ -142,6 +137,7 @@ class AuthScreensTest {
         }
 
         compose.onNodeWithText(s(R.string.auth_submit)).assertIsNotEnabled()
+        compose.onNodeWithText(s(R.string.auth_email)).performTextInput(maria.email)
         compose.onNodeWithText(s(R.string.auth_otp_send)).performClick()
         compose.onNodeWithText(s(R.string.auth_password)).performTextInput("Solventa2026!")
         compose.onNodeWithText(s(R.string.auth_otp)).performTextInput("41a7902x")
@@ -159,7 +155,6 @@ class AuthScreensTest {
     fun `acceso alterno muestra codigo de prueba, espera para reenviar y cuenta regresiva`() {
         var state by mutableStateOf(
             AuthUiState(
-                prefillEmail = maria.email,
                 otpCooldownSeconds = 42,
                 otpCooldownEmail = maria.email,
                 lockedSeconds = 125,
@@ -170,6 +165,7 @@ class AuthScreensTest {
             AlternativeLoginScreen(state, onRequestOtp = {}, onSubmit = { _, _, _ -> }, onBack = {}, onForgotPassword = {})
         }
 
+        compose.onNodeWithText(s(R.string.auth_email)).performTextInput(maria.email)
         compose.onNodeWithText(s(R.string.auth_otp_wait, 42)).assertIsNotEnabled()
         compose.onNodeWithText(s(R.string.auth_otp_sent_debug, "417902")).assertIsDisplayed()
         compose.onNodeWithText(s(R.string.auth_locked_countdown, 2, 5)).assertIsDisplayed()

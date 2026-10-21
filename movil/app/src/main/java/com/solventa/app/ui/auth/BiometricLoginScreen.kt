@@ -24,7 +24,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,7 +47,6 @@ fun BiometricLoginScreen(
     onAuthenticate: () -> Unit,
     onUseAlternative: () -> Unit,
     modifier: Modifier = Modifier,
-    onSwitchUser: () -> Unit = {},
     onSelectAccount: (String) -> Unit = {},
 ) {
     val biometricBlocked = uiState.status in BLOCKING_STATUSES
@@ -123,11 +121,6 @@ fun BiometricLoginScreen(
             )
         }
 
-        if (uiState.biometricAccounts.isNotEmpty()) {
-            TextButton(onClick = onSwitchUser, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.auth_switch_user), textAlign = TextAlign.Center)
-            }
-        }
         if (biometricBlocked) {
             Button(onClick = onUseAlternative, modifier = Modifier.fillMaxWidth().height(48.dp)) {
                 Text(stringResource(R.string.auth_use_alternative))

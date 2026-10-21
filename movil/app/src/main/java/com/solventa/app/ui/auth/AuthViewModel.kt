@@ -85,7 +85,6 @@ data class AuthUiState(
     val offerBiometricEnrollment: Boolean = false,
     val biometricAccounts: List<BoundAccount> = emptyList(),
     val selectedAccountEmail: String? = null,
-    val prefillEmail: String? = null,
     val currentAccountEmail: String? = null,
     val biometricEnabled: Boolean = false,
     val fullName: String? = null,
@@ -126,7 +125,6 @@ class AuthViewModel(
         return state.copy(
             biometricAccounts = accounts,
             selectedAccountEmail = selected,
-            prefillEmail = if (state.showAlternativeAccess) state.prefillEmail else selected,
             biometricEnabled = state.currentAccountEmail?.let(sessionRepository::isBound) ?: false,
         )
     }
@@ -136,7 +134,7 @@ class AuthViewModel(
     }
 
     fun selectAccount(email: String) {
-        _uiState.update { it.copy(selectedAccountEmail = email, prefillEmail = email, status = AuthStatus.IDLE) }
+        _uiState.update { it.copy(selectedAccountEmail = email, status = AuthStatus.IDLE) }
     }
 
     fun authenticateWithBiometrics(authenticator: BiometricAuthenticator) {
@@ -172,11 +170,11 @@ class AuthViewModel(
                 is BiometricResult.Success -> signInWithDevice(email, result.cipher)
                 BiometricResult.Cancelled -> setStatus(AuthStatus.CANCELLED)
                 BiometricResult.UseAlternative -> _uiState.update {
-                    it.copy(status = AuthStatus.IDLE, showAlternativeAccess = true, prefillEmail = email)
+                    it.copy(status = AuthStatus.IDLE, showAlternativeAccess = true)
                 }
-                BiometricResult.LockedOut -> fallBackToPassword(AuthStatus.BIOMETRIC_LOCKED_OUT, email)
+                BiometricResult.LockedOut -> fallBackToPassword(AuthStatus.BIOMETRIC_LOCKED_OUT)
                 BiometricResult.Unavailable -> setStatus(AuthStatus.BIOMETRIC_UNAVAILABLE)
-                is BiometricResult.Error -> fallBackToPassword(AuthStatus.BIOMETRIC_ERROR, email)
+                is BiometricResult.Error -> fallBackToPassword(AuthStatus.BIOMETRIC_ERROR)
             }
         }
     }
@@ -217,22 +215,18 @@ class AuthViewModel(
         _uiState.update { withAccounts(it.copy(status = AuthStatus.SESSION_RESET)) }
     }
 
-    // Si la huella falla, se pasa directo al ingreso con contraseña y código de esa cuenta.
-    private fun fallBackToPassword(status: AuthStatus, email: String) {
-        _uiState.update { it.copy(status = status, showAlternativeAccess = true, prefillEmail = email) }
+    // Si la huella falla, se pasa directo al ingreso con contraseña y código.
+    private fun fallBackToPassword(status: AuthStatus) {
+        _uiState.update { it.copy(status = status, showAlternativeAccess = true) }
     }
 
     private fun setStatus(status: AuthStatus) {
         _uiState.update { it.copy(status = status) }
     }
 
+    // Cualquier cuenta entra por aquí con su correo; si aún no tiene huella en el teléfono, se le ofrece activarla.
     fun onAlternativeAccessSelected() {
-        _uiState.update { it.copy(showAlternativeAccess = true, prefillEmail = it.selectedAccountEmail) }
-    }
-
-    // Otro usuario en el mismo teléfono entra con su correo; al ingresar se le ofrece activar su huella.
-    fun switchUser() {
-        _uiState.update { it.copy(showAlternativeAccess = true, prefillEmail = null) }
+        _uiState.update { it.copy(showAlternativeAccess = true) }
     }
 
     fun onBackToBiometrics() {
@@ -396,7 +390,7 @@ class AuthViewModel(
     fun confirmLogout() {
         val refreshToken = sessionRepository.activeSession?.refreshToken
         val email = _uiState.value.currentAccountEmail
-        val biometricReady = email != null && sessionRepository.isBound(email)
+        val biometricReady = sessionRepository.hasStoredSession()
         sessionRepository.endSession()
         _uiState.value = withAccounts(
             AuthUiState(
@@ -465,7 +459,6 @@ class AuthViewModel(
                             lockedSeconds = 0,
                             failedAttempts = 0,
                             alternativeLogin = AlternativeLoginState(),
-                            prefillEmail = null,
                         )
                     )
                     ResetResult.InvalidCode -> state.copy(recovery = recovery.copy(error = RecoveryError.INVALID_CODE))

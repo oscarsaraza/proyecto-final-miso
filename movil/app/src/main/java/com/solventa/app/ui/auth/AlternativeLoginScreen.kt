@@ -46,7 +46,7 @@ fun AlternativeLoginScreen(
     modifier: Modifier = Modifier,
 ) {
     BackHandler(onBack = onBack)
-    var email by rememberSaveable { mutableStateOf(uiState.prefillEmail.orEmpty()) }
+    var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var otpCode by rememberSaveable { mutableStateOf("") }
     val form = uiState.alternativeLogin
