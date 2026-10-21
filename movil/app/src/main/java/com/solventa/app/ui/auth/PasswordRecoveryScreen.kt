@@ -119,13 +119,14 @@ fun PasswordRecoveryScreen(
             label = stringResource(R.string.recovery_new_password),
             modifier = Modifier.fillMaxWidth(),
         )
+        NewPasswordRequirements(newPassword = newPassword)
         PasswordField(
             value = confirmation,
             onValueChange = { confirmation = it },
             label = stringResource(R.string.recovery_confirm_password),
             modifier = Modifier.fillMaxWidth(),
         )
-        PasswordRequirements(newPassword = newPassword, confirmation = confirmation)
+        MatchRequirement(newPassword = newPassword, confirmation = confirmation)
 
         recovery.error?.let { error ->
             Text(

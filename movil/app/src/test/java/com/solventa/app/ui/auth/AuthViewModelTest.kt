@@ -177,6 +177,17 @@ class AuthViewModelTest {
     }
 
     @Test
+    fun `TC-S1-09 cambiar de usuario abre el ingreso sin el correo de la huella`() {
+        assertEquals(EMAIL, viewModel.uiState.value.biometricAccountEmail)
+
+        viewModel.switchUser()
+
+        assertTrue(viewModel.uiState.value.showAlternativeAccess)
+        assertNull(viewModel.uiState.value.biometricAccountEmail)
+        assertTrue(repository.hasStoredSession())
+    }
+
+    @Test
     fun `TC-S1-09 huella desactivada en el servidor desvincula el telefono`() {
         authApi.biometricResult = LoginResult.InvalidCredentials
 

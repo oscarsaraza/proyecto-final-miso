@@ -188,6 +188,6 @@ async def reset_password(request: PasswordResetRequest, http: Request, db: Async
     except SamePasswordError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="La contraseña nueva debe ser distinta a la actual.",
+            detail="La contraseña no es válida. Elija una diferente.",
         )
     return MessageResponse(message="Contraseña actualizada. Ingrese con su nueva contraseña.")

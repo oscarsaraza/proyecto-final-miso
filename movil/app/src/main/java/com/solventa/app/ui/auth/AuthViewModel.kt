@@ -84,6 +84,7 @@ data class AuthUiState(
     val offerBiometricEnrollment: Boolean = false,
     val biometricEnabled: Boolean = false,
     val biometricAccountName: String? = null,
+    val biometricAccountEmail: String? = null,
     val enrollmentReplacesOther: Boolean = false,
     val fullName: String? = null,
     val showLogoutConfirmation: Boolean = false,
@@ -110,6 +111,7 @@ class AuthViewModel(
         AuthUiState(
             biometricEnabled = sessionRepository.hasStoredSession(),
             biometricAccountName = sessionRepository.storedAccountName(),
+            biometricAccountEmail = sessionRepository.storedAccountEmail(),
         )
     )
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
@@ -201,6 +203,11 @@ class AuthViewModel(
 
     fun onAlternativeAccessSelected() {
         _uiState.update { it.copy(showAlternativeAccess = true) }
+    }
+
+    // Otro usuario en el mismo teléfono entra con su correo; al ingresar se le ofrece tomar la huella.
+    fun switchUser() {
+        _uiState.update { it.copy(showAlternativeAccess = true, biometricAccountEmail = null) }
     }
 
     fun onBackToBiometrics() {
@@ -320,6 +327,7 @@ class AuthViewModel(
                 it.copy(
                     biometricEnabled = sessionRepository.hasStoredSession(),
                     biometricAccountName = sessionRepository.storedAccountName(),
+                    biometricAccountEmail = sessionRepository.storedAccountEmail(),
                 )
             }
             finishLogin()
@@ -367,6 +375,7 @@ class AuthViewModel(
             status = if (biometricReady) AuthStatus.LOGGED_OUT_BIOMETRIC_READY else AuthStatus.LOGGED_OUT,
             biometricEnabled = biometricReady,
             biometricAccountName = sessionRepository.storedAccountName(),
+            biometricAccountEmail = sessionRepository.storedAccountEmail(),
         )
         if (refreshToken != null) {
             viewModelScope.launch { authApi.logout(refreshToken) }

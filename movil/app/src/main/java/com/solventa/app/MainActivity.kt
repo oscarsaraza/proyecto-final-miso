@@ -117,6 +117,7 @@ fun SolventaMobileRoot(
             uiState = uiState,
             onAuthenticate = { viewModel.authenticateWithBiometrics(biometricAuthenticator) },
             onUseAlternative = viewModel::onAlternativeAccessSelected,
+            onSwitchUser = viewModel::switchUser,
             modifier = modifier,
         )
     }

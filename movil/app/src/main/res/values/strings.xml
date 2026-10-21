@@ -6,6 +6,7 @@
     <string name="auth_biometric_title">Ingreso con huella</string>
     <string name="auth_biometric_subtitle">Toque el sensor para ingresar</string>
     <string name="auth_biometric_account">Ingresar como %1$s</string>
+    <string name="auth_switch_user">¿No es %1$s? Ingresar con otro usuario</string>
     <string name="auth_sensor_description">Ingresar con huella</string>
     <string name="auth_use_alternative">Ingresar con contraseña y código</string>
     <string name="auth_status_idle">Toque el sensor para usar su huella</string>
@@ -80,7 +81,7 @@
     <string name="recovery_rule_match">Las dos contraseñas coinciden</string>
     <string name="recovery_rule_met">cumplido</string>
     <string name="recovery_rule_pending">pendiente</string>
-    <string name="recovery_error_same">La contraseña nueva debe ser distinta a la actual.</string>
+    <string name="recovery_error_same">La contraseña no es válida. Elija una diferente.</string>
     <string name="recovery_submit">Cambiar contraseña</string>
     <string name="recovery_done">Contraseña actualizada. Por seguridad se cerraron sus sesiones y se desactivó la huella. Ingrese con su nueva contraseña.</string>
     <string name="recovery_back">Volver al ingreso</string>

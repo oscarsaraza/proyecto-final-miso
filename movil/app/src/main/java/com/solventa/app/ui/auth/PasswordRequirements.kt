@@ -24,12 +24,19 @@ fun mixesLettersAndDigits(password: String) = password.any(Char::isLetter) && pa
 fun passwordRulesMet(password: String, confirmation: String) =
     meetsLength(password) && mixesLettersAndDigits(password) && password == confirmation
 
-// Cada requisito se marca al cumplirse; el lector de pantalla anuncia "cumplido" o "pendiente".
+// Cada requisito va debajo de su campo y se marca al cumplirse; el lector de pantalla anuncia
+// "cumplido" o "pendiente".
 @Composable
-fun PasswordRequirements(newPassword: String, confirmation: String, modifier: Modifier = Modifier) {
+fun NewPasswordRequirements(newPassword: String, modifier: Modifier = Modifier) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Requirement(stringResource(R.string.recovery_rule_length), meetsLength(newPassword))
         Requirement(stringResource(R.string.recovery_rule_mix), mixesLettersAndDigits(newPassword))
+    }
+}
+
+@Composable
+fun MatchRequirement(newPassword: String, confirmation: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
         Requirement(
             stringResource(R.string.recovery_rule_match),
             confirmation.isNotEmpty() && newPassword == confirmation,
