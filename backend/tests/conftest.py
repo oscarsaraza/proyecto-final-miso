@@ -83,7 +83,7 @@ class InMemorySessionTestDouble:
 
 @pytest.fixture(autouse=True)
 def sms_simulado(monkeypatch):
-    """Las pruebas nunca envían SMS reales, sin importar el proveedor del .env local."""
+    """Las pruebas nunca envían SMS reales, aunque el .env local tenga Twilio."""
     monkeypatch.setattr(insured_auth_service, "_sms", ConsoleSmsSender())
 
 
