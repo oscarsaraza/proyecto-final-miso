@@ -8,10 +8,12 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.security import get_password_hash
 from app.modules.rating.models import (
     Coverage,
     PartnerDB,
     PartnerQuoteResponse,
+    PartnerStatus,
     PlanTier,
     PremiumFactor,
     QuoteDB,
@@ -19,6 +21,27 @@ from app.modules.rating.models import (
     QuoteResponse,
     QuoteTierDetail,
 )
+
+DEFAULT_PARTNERS = [
+    {
+        "partner_id": "banco-aliado-1",
+        "client_id": "banco_aliado",
+        "client_secret": "AliadoSecret2026*",
+        "name": "Banco Aliado S.A.",
+        "status": PartnerStatus.ACTIVE.value,
+        "quota_limit": 50000,
+        "quota_used": 0,
+    },
+    {
+        "partner_id": "socio-inactivo-1",
+        "client_id": "socio_inactivo",
+        "client_secret": "Inactivo2026*",
+        "name": "Financiera Inactiva S.A.",
+        "status": PartnerStatus.REVOKED.value,
+        "quota_limit": 1000,
+        "quota_used": 0,
+    },
+]
 
 # Tasa mensual por peso asegurado del prototipo comercial (perfil de referencia: 31-40 años).
 BASE_MONTHLY_RATE = 0.0002736
@@ -206,6 +229,29 @@ class RatingService:
         result = await session.execute(stmt)
         quotes = result.scalars().all()
         return [PartnerQuoteResponse.from_db(q) for q in quotes]
+
+    async def seed_default_partners(self, session: AsyncSession) -> List[PartnerDB]:
+        """Siembra de forma idempotente los socios B2B semilla (activo y revocado) en la base de datos (HU-WEB-10)."""
+        seeded: List[PartnerDB] = []
+        for item in DEFAULT_PARTNERS:
+            stmt = select(PartnerDB).where(PartnerDB.client_id == item["client_id"])
+            existing = (await session.execute(stmt)).scalars().first()
+            if existing:
+                seeded.append(existing)
+                continue
+            partner = PartnerDB(
+                partner_id=item["partner_id"],
+                client_id=item["client_id"],
+                client_secret_hash=get_password_hash(item["client_secret"]),
+                name=item["name"],
+                status=item["status"],
+                quota_limit=item["quota_limit"],
+                quota_used=item["quota_used"],
+            )
+            session.add(partner)
+            seeded.append(partner)
+        await session.commit()
+        return seeded
 
 
 rating_service = RatingService()

@@ -26,12 +26,24 @@ router = APIRouter(prefix="/quote-edge", tags=["Quote Edge B2B"])
     "/auth/token",
     response_model=PartnerTokenResponse,
     status_code=status.HTTP_200_OK,
+    summary="Emitir token JWT de socio B2B (OAuth2 Client Credentials)",
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Token JWT emitido exitosamente con claims de confinamiento del socio.",
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Credenciales inválidas o socio con credenciales revocadas (auditable en CloudWatch).",
+        },
+    },
 )
 async def issue_partner_token(
     request: PartnerTokenRequest,
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Emite un token JWT para un socio B2B mediante el flujo OAuth2 Client Credentials (HU-WEB-10)."""
+    """
+    Autentica un socio de distribución mediante `client_id` y `client_secret` (OAuth2 *Client Credentials*)
+    y retorna un token JWT firmado con `role: "partner"` y el `partner_id` asignado (**HU-WEB-10**).
+    """
     partner = await authenticate_partner(
         session=db,
         client_id=request.client_id,
@@ -53,6 +65,15 @@ async def issue_partner_token(
     "/quotes",
     response_model=PartnerQuoteResponse,
     status_code=status.HTTP_200_OK,
+    summary="Generar cotización desde el canal del socio B2B",
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Cotización calculada, guardada bajo el partner_id del socio y con cuota de uso (quota_used) incrementada.",
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Token ausente, expirado, inválido, de otro rol o de un socio revocado.",
+        },
+    },
 )
 async def create_partner_quote(
     request: QuoteRequest,
@@ -60,7 +81,10 @@ async def create_partner_quote(
     current_partner: PartnerDB = Depends(get_current_partner),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Calcula y registra una cotización B2B confinada al socio autenticado e incrementa su cuota (HU-WEB-10)."""
+    """
+    Calcula y registra una cotización B2B confinada al `partner_id` derivado del token JWT del socio
+    autenticado e incrementa su contador `quota_used` (**HU-WEB-10**).
+    """
     quote = await rating_service.create_quote(
         session=db,
         request=request,
@@ -77,13 +101,28 @@ async def create_partner_quote(
     "/quotes/{quote_id}",
     response_model=PartnerQuoteResponse,
     status_code=status.HTTP_200_OK,
+    summary="Consultar cotización individual del socio B2B",
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Detalle de la cotización perteneciente al socio autenticado.",
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Token de socio ausente, inválido o revocado.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "La cotización no existe o pertenece a otro socio / canal (aislamiento multi-tenant).",
+        },
+    },
 )
 async def get_partner_quote(
     quote_id: str,
     current_partner: PartnerDB = Depends(get_current_partner),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Consulta el detalle de una cotización propia del socio autenticado; retorna 404 si no existe o es de otro socio (HU-WEB-10)."""
+    """
+    Consulta el detalle de una cotización propia del socio autenticado; retorna `404 Not Found`
+    si no existe o si pertenece a otro socio o al canal comercial interno (**HU-WEB-10**).
+    """
     quote = await rating_service.get_partner_quote(
         session=db,
         quote_id=quote_id,
@@ -101,12 +140,24 @@ async def get_partner_quote(
     "/quotes",
     response_model=List[PartnerQuoteResponse],
     status_code=status.HTTP_200_OK,
+    summary="Listar histórico de cotizaciones del socio B2B",
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Listado de cotizaciones confinado exclusivamente al socio autenticado.",
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Token de socio ausente, inválido o revocado.",
+        },
+    },
 )
 async def list_partner_quotes(
     current_partner: PartnerDB = Depends(get_current_partner),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Consulta el listado histórico de cotizaciones generadas exclusivamente por el socio autenticado (HU-WEB-10)."""
+    """
+    Consulta el listado histórico de cotizaciones generadas exclusivamente por el socio autenticado,
+    ordenadas desde la más reciente (**HU-WEB-10**).
+    """
     return await rating_service.list_partner_quotes(
         session=db,
         partner_id=current_partner.partner_id,
