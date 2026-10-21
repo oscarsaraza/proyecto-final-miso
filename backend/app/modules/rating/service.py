@@ -1,14 +1,16 @@
-"""Motor actuarial: desglose de la prima, degradación por latencia del buró y registro de cotizaciones (HU-WEB-03 a 05)."""
+"""Motor actuarial: desglose de la prima, degradación por latencia del buró y registro de cotizaciones (HU-WEB-03 a 05, HU-WEB-10)."""
 import asyncio
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from typing import Awaitable, Callable, List, Tuple
+from typing import Awaitable, Callable, List, Optional, Tuple
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.modules.rating.models import (
     Coverage,
+    PartnerDB,
     PlanTier,
     PremiumFactor,
     QuoteDB,
@@ -149,12 +151,14 @@ class RatingService:
         session: AsyncSession,
         request: QuoteRequest,
         simulated_bureau_delay: float = 0.0,
+        partner_id: Optional[str] = None,
     ) -> QuoteResponse:
-        """Calcula la cotización y la guarda para que la emisión compruebe su vigencia (HU-WEB-05, HA-17)."""
+        """Calcula la cotización y la guarda para que la emisión compruebe su vigencia (HU-WEB-05, HU-WEB-10, HA-17)."""
         quote = await self.calculate_quote(request, simulated_bureau_delay)
         session.add(
             QuoteDB(
                 quote_id=quote.quote_id,
+                partner_id=partner_id,
                 document_number=quote.document_number,
                 status=quote.status,
                 degradation_reason=quote.degradation_reason,
@@ -164,6 +168,12 @@ class RatingService:
                 expires_at=datetime.fromisoformat(quote.expires_at),
             )
         )
+        if partner_id:
+            await session.execute(
+                update(PartnerDB)
+                .where(PartnerDB.partner_id == partner_id)
+                .values(quota_used=PartnerDB.quota_used + 1)
+            )
         await session.commit()
         return quote
 
