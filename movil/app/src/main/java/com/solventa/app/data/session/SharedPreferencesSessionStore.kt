@@ -1,37 +1,60 @@
 package com.solventa.app.data.session
 
 import android.content.Context
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
 import java.util.Base64
 
-// Guarda el texto cifrado por el Keystore y el id público del dispositivo; sin la llave no se puede leer el secreto.
+// Guarda por cuenta el texto cifrado por el Keystore y sus datos públicos; sin la llave no se lee el secreto.
 class SharedPreferencesSessionStore(context: Context) : EncryptedSessionStore {
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    override fun read(): EncryptedSession? {
-        val ciphertext = prefs.getString(KEY_CIPHERTEXT, null) ?: return null
-        val iv = prefs.getString(KEY_IV, null) ?: return null
-        return EncryptedSession(
-            ciphertext = decode(ciphertext),
-            iv = decode(iv),
-            deviceId = prefs.getString(KEY_DEVICE_ID, null),
-            accountEmail = prefs.getString(KEY_ACCOUNT_EMAIL, null),
-            accountName = prefs.getString(KEY_ACCOUNT_NAME, null),
-        )
+    override fun readAll(): List<EncryptedSession> {
+        val raw = prefs.getString(KEY_ACCOUNTS, null) ?: return emptyList()
+        return try {
+            val array = JSONArray(raw)
+            (0 until array.length()).map { i ->
+                val json = array.getJSONObject(i)
+                EncryptedSession(
+                    ciphertext = decode(json.getString("ciphertext")),
+                    iv = decode(json.getString("iv")),
+                    deviceId = json.getString("device_id"),
+                    accountEmail = json.getString("email"),
+                    accountName = json.getString("name"),
+                )
+            }
+        } catch (e: JSONException) {
+            emptyList()
+        }
     }
 
     override fun write(session: EncryptedSession) {
-        prefs.edit()
-            .putString(KEY_CIPHERTEXT, encode(session.ciphertext))
-            .putString(KEY_IV, encode(session.iv))
-            .putString(KEY_DEVICE_ID, session.deviceId)
-            .putString(KEY_ACCOUNT_EMAIL, session.accountEmail)
-            .putString(KEY_ACCOUNT_NAME, session.accountName)
-            .commit()
+        save(readAll().filterNot { it.accountEmail == session.accountEmail } + session)
+    }
+
+    override fun remove(accountEmail: String) {
+        save(readAll().filterNot { it.accountEmail == accountEmail })
     }
 
     override fun clear() {
         prefs.edit().clear().commit()
+    }
+
+    private fun save(sessions: List<EncryptedSession>) {
+        val array = JSONArray()
+        sessions.forEach { session ->
+            array.put(
+                JSONObject()
+                    .put("ciphertext", encode(session.ciphertext))
+                    .put("iv", encode(session.iv))
+                    .put("device_id", session.deviceId)
+                    .put("email", session.accountEmail)
+                    .put("name", session.accountName)
+            )
+        }
+        prefs.edit().clear().putString(KEY_ACCOUNTS, array.toString()).commit()
     }
 
     private fun encode(bytes: ByteArray) = Base64.getEncoder().encodeToString(bytes)
@@ -39,10 +62,6 @@ class SharedPreferencesSessionStore(context: Context) : EncryptedSessionStore {
 
     private companion object {
         const val PREFS_NAME = "solventa_session"
-        const val KEY_CIPHERTEXT = "ciphertext"
-        const val KEY_IV = "iv"
-        const val KEY_DEVICE_ID = "device_id"
-        const val KEY_ACCOUNT_EMAIL = "account_email"
-        const val KEY_ACCOUNT_NAME = "account_name"
+        const val KEY_ACCOUNTS = "accounts"
     }
 }

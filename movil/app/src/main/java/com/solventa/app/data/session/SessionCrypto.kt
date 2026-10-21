@@ -11,16 +11,22 @@ interface SessionCrypto {
     fun deleteKey()
 }
 
+/** Credencial cifrada de una cuenta vinculada; el correo y el nombre son públicos, el secreto no. */
 class EncryptedSession(
     val ciphertext: ByteArray,
     val iv: ByteArray,
-    val deviceId: String? = null,
-    val accountEmail: String? = null,
-    val accountName: String? = null,
+    val deviceId: String,
+    val accountEmail: String,
+    val accountName: String,
 )
 
 interface EncryptedSessionStore {
-    fun read(): EncryptedSession?
+    fun readAll(): List<EncryptedSession>
+
+    /** Reemplaza la credencial de la misma cuenta si ya existía. */
     fun write(session: EncryptedSession)
+
+    fun remove(accountEmail: String)
+
     fun clear()
 }

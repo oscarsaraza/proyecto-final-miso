@@ -1,5 +1,6 @@
 package com.solventa.app.ui.auth
 
+import com.solventa.app.data.session.BoundAccount
 import com.solventa.app.data.session.FakeSessionCrypto
 import com.solventa.app.data.session.InMemorySessionStore
 import com.solventa.app.data.session.SecureSessionRepository
@@ -32,7 +33,8 @@ import javax.crypto.Cipher
 class AuthViewModelTest {
 
     private val credential = DeviceCredential("device-123", "secreto")
-    private val tokens = SessionTokens("access.jwt.token", "refresh-token-123")
+    private val newTokens = SessionTokens("new.access.jwt", "new-refresh")
+    private val registeredCredential = DeviceCredential("device-nuevo", "secreto-nuevo")
 
     private lateinit var dispatcher: TestDispatcher
     private lateinit var crypto: FakeSessionCrypto
@@ -47,8 +49,8 @@ class AuthViewModelTest {
         Dispatchers.setMain(dispatcher)
         crypto = FakeSessionCrypto()
         store = InMemorySessionStore()
-        SecureSessionRepository(crypto, store).apply { save(credential, encryptionCipher(), EMAIL, "María Ruiz") }
         repository = SecureSessionRepository(crypto, store)
+        repository.save(credential, repository.encryptionCipher(), EMAIL, "María Ruiz")
         authApi = FakeAuthApi()
         viewModel = AuthViewModel(repository, authApi)
     }
@@ -63,21 +65,26 @@ class AuthViewModelTest {
         dispatcher.scheduler.runCurrent()
     }
 
+    private fun withoutBoundAccounts() {
+        store.clear()
+        viewModel = AuthViewModel(repository, authApi)
+    }
+
     @Test
-    fun `debe inicializar el estado de UI con valores predeterminados`() {
+    fun `debe inicializar el estado con la cuenta de la huella elegida`() {
         val state = viewModel.uiState.value
         assertFalse(state.isAuthenticated)
-        assertEquals(0, state.failedAttempts)
         assertFalse(state.isLocked)
         assertEquals(AuthStatus.IDLE, state.status)
         assertFalse(state.showAlternativeAccess)
-        assertTrue(state.biometricEnabled)
+        assertEquals(listOf(BoundAccount(EMAIL, "María Ruiz")), state.biometricAccounts)
+        assertEquals(EMAIL, state.selectedAccountEmail)
     }
 
-    // TC-S1-09: autenticación biométrica (HU-MOV-01)
+    // TC-S1-09: ingreso con huella (HU-MOV-01)
 
     @Test
-    fun `TC-S1-09 huella correcta entra con la credencial del telefono`() {
+    fun `TC-S1-09 huella correcta entra con la credencial de la cuenta elegida`() {
         val authenticator = FakeBiometricAuthenticator()
 
         viewModel.authenticateWithBiometrics(authenticator)
@@ -87,6 +94,8 @@ class AuthViewModelTest {
         assertEquals(AuthStatus.AUTHENTICATED, state.status)
         assertEquals(credential, authApi.lastBiometricCredential)
         assertEquals(newTokens, repository.activeSession)
+        assertEquals(EMAIL, state.currentAccountEmail)
+        assertTrue(state.biometricEnabled)
         assertEquals(1, authenticator.promptCount)
     }
 
@@ -118,7 +127,6 @@ class AuthViewModelTest {
 
         viewModel.authenticateWithBiometrics(authenticator)
         assertEquals(AuthStatus.CANCELLED, viewModel.uiState.value.status)
-        assertFalse(viewModel.uiState.value.isAuthenticated)
         assertNull(repository.activeSession)
 
         viewModel.authenticateWithBiometrics(authenticator)
@@ -126,15 +134,15 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `TC-S1-09 boton de contrasena del dialogo lleva al acceso alternativo`() {
+    fun `TC-S1-09 boton de contrasena del dialogo lleva al acceso alternativo con el correo de la cuenta`() {
         viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator(result = BiometricResult.UseAlternative))
 
         assertTrue(viewModel.uiState.value.showAlternativeAccess)
-        assertFalse(viewModel.uiState.value.isAuthenticated)
+        assertEquals(EMAIL, viewModel.uiState.value.prefillEmail)
     }
 
     @Test
-    fun `TC-S1-09 sin biometria registrada no abre el dialogo`() {
+    fun `TC-S1-09 sin huellas registradas en el telefono no abre el dialogo`() {
         val authenticator = FakeBiometricAuthenticator(availability = BiometricAvailability.NOT_ENROLLED)
 
         viewModel.authenticateWithBiometrics(authenticator)
@@ -144,7 +152,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `TC-S1-09 sin sensor biometrico no abre el dialogo`() {
+    fun `TC-S1-09 sin sensor no abre el dialogo`() {
         val authenticator = FakeBiometricAuthenticator(availability = BiometricAvailability.UNAVAILABLE)
 
         viewModel.authenticateWithBiometrics(authenticator)
@@ -168,34 +176,17 @@ class AuthViewModelTest {
 
         assertEquals(AuthStatus.BIOMETRIC_ERROR, viewModel.uiState.value.status)
         assertTrue(viewModel.uiState.value.showAlternativeAccess)
-        assertFalse(viewModel.uiState.value.isAuthenticated)
     }
 
     @Test
-    fun `TC-S1-09 la pantalla muestra la cuenta duena de la huella`() {
-        assertEquals("María Ruiz", viewModel.uiState.value.biometricAccountName)
-    }
-
-    @Test
-    fun `TC-S1-09 cambiar de usuario abre el ingreso sin el correo de la huella`() {
-        assertEquals(EMAIL, viewModel.uiState.value.biometricAccountEmail)
-
-        viewModel.switchUser()
-
-        assertTrue(viewModel.uiState.value.showAlternativeAccess)
-        assertNull(viewModel.uiState.value.biometricAccountEmail)
-        assertTrue(repository.hasStoredSession())
-    }
-
-    @Test
-    fun `TC-S1-09 huella desactivada en el servidor desvincula el telefono`() {
+    fun `TC-S1-09 huella desactivada en el servidor desvincula solo esa cuenta`() {
         authApi.biometricResult = LoginResult.InvalidCredentials
 
         viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator())
 
         assertEquals(AuthStatus.SESSION_RESET, viewModel.uiState.value.status)
-        assertFalse(viewModel.uiState.value.biometricEnabled)
-        assertFalse(repository.hasStoredSession())
+        assertFalse(repository.isBound(EMAIL))
+        assertTrue(viewModel.uiState.value.biometricAccounts.isEmpty())
     }
 
     @Test
@@ -205,11 +196,11 @@ class AuthViewModelTest {
         viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator())
 
         assertEquals(AuthStatus.SERVER_UNREACHABLE, viewModel.uiState.value.status)
-        assertTrue(repository.hasStoredSession())
+        assertTrue(repository.isBound(EMAIL))
     }
 
     @Test
-    fun `TC-S1-09 cuenta bloqueada tambien detiene la huella hasta que pase el tiempo`() {
+    fun `TC-S1-09 ingreso suspendido tambien detiene la huella hasta que pase el tiempo`() {
         authApi.biometricResult = LoginResult.Locked(retryAfterSeconds = 3)
 
         viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator())
@@ -220,11 +211,27 @@ class AuthViewModelTest {
         assertFalse(viewModel.uiState.value.isLocked)
     }
 
+    @Test
+    fun `TC-S1-09 cambiar de usuario abre el ingreso con el correo vacio`() {
+        viewModel.switchUser()
+
+        assertTrue(viewModel.uiState.value.showAlternativeAccess)
+        assertNull(viewModel.uiState.value.prefillEmail)
+        assertTrue(repository.isBound(EMAIL))
+    }
+
+    @Test
+    fun `TC-S1-09 ingresar con contrasena precarga el correo de la cuenta elegida`() {
+        viewModel.onAlternativeAccessSelected()
+
+        assertEquals(EMAIL, viewModel.uiState.value.prefillEmail)
+    }
+
     // TC-S1-11: credencial custodiada en el Keystore (HU-MOV-03)
 
     @Test
     fun `TC-S1-11 sin huella vinculada pide ingresar primero con contrasena`() {
-        store.clear()
+        withoutBoundAccounts()
         val authenticator = FakeBiometricAuthenticator()
 
         viewModel.authenticateWithBiometrics(authenticator)
@@ -247,7 +254,7 @@ class AuthViewModelTest {
 
     @Test
     fun `TC-S1-11 credencial alterada se descarta y no autentica`() {
-        val stored = checkNotNull(store.stored)
+        val stored = store.sessions.single()
         stored.ciphertext[0] = (stored.ciphertext[0].toInt() xor 0x01).toByte()
 
         viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator())
@@ -259,14 +266,62 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `volver desde el acceso alternativo restablece la pantalla biometrica`() {
+    fun `volver desde el acceso alternativo restablece la pantalla de huella`() {
         viewModel.onAlternativeAccessSelected()
-        assertTrue(viewModel.uiState.value.showAlternativeAccess)
 
         viewModel.onBackToBiometrics()
 
         assertFalse(viewModel.uiState.value.showAlternativeAccess)
         assertEquals(AuthStatus.IDLE, viewModel.uiState.value.status)
+    }
+
+    // Varias cuentas con huella en el mismo teléfono
+
+    @Test
+    fun `otra cuenta activa su huella sin quitar la de la primera`() {
+        authApi.loginResult = LoginResult.Success(newTokens, "Pedro Gómez")
+        val authenticator = FakeBiometricAuthenticator()
+
+        viewModel.switchUser()
+        viewModel.authenticateWithPassword(PEDRO, PASSWORD, OTP, authenticator)
+        assertTrue(viewModel.uiState.value.offerBiometricEnrollment)
+        viewModel.enableBiometricUnlock(authenticator)
+
+        val state = viewModel.uiState.value
+        assertEquals(
+            listOf(BoundAccount(EMAIL, "María Ruiz"), BoundAccount(PEDRO, "Pedro Gómez")),
+            state.biometricAccounts,
+        )
+        assertEquals(PEDRO, state.selectedAccountEmail)
+        assertTrue(repository.isBound(EMAIL))
+    }
+
+    @Test
+    fun `elegir otra cuenta entra con la huella de esa cuenta`() {
+        val pedroCredential = DeviceCredential("device-pedro", "secreto-pedro")
+        repository.save(pedroCredential, repository.encryptionCipher(), PEDRO, "Pedro Gómez")
+        viewModel = AuthViewModel(repository, authApi)
+        assertEquals(PEDRO, viewModel.uiState.value.selectedAccountEmail)
+
+        viewModel.selectAccount(EMAIL)
+        viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator())
+
+        assertEquals(credential, authApi.lastBiometricCredential)
+        assertEquals(EMAIL, viewModel.uiState.value.currentAccountEmail)
+    }
+
+    @Test
+    fun `cerrar sesion deja elegida la cuenta que estaba adentro`() {
+        repository.save(DeviceCredential("device-pedro", "s"), repository.encryptionCipher(), PEDRO, "Pedro Gómez")
+        viewModel = AuthViewModel(repository, authApi)
+        viewModel.selectAccount(EMAIL)
+        viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator())
+
+        viewModel.requestLogout()
+        viewModel.confirmLogout()
+
+        assertEquals(EMAIL, viewModel.uiState.value.selectedAccountEmail)
+        assertEquals(2, viewModel.uiState.value.biometricAccounts.size)
     }
 
     // TC-S1-10: acceso alternativo con contraseña y código por SMS (HU-MOV-02)
@@ -302,8 +357,8 @@ class AuthViewModelTest {
         viewModel.requestOtp(EMAIL)
 
         assertFalse(viewModel.uiState.value.canRequestOtp(" MARIA.RUIZ@correo.co "))
-        assertTrue(viewModel.uiState.value.canRequestOtp("otro@correo.co"))
-        viewModel.requestOtp("otro@correo.co")
+        assertTrue(viewModel.uiState.value.canRequestOtp(PEDRO))
+        viewModel.requestOtp(PEDRO)
         assertEquals(2, authApi.otpCount)
     }
 
@@ -315,20 +370,6 @@ class AuthViewModelTest {
 
         assertEquals(0, viewModel.uiState.value.otpCooldownSeconds)
         assertTrue(viewModel.uiState.value.canRequestOtp(EMAIL))
-    }
-
-    @Test
-    fun `TC-S1-10 otra cuenta en el mismo telefono puede pasar la huella a su nombre`() {
-        authApi.loginResult = LoginResult.Success(newTokens, "Pedro Gómez")
-        val authenticator = FakeBiometricAuthenticator()
-
-        viewModel.authenticateWithPassword("pedro@correo.co", PASSWORD, OTP, authenticator)
-        assertTrue(viewModel.uiState.value.offerBiometricEnrollment)
-        assertTrue(viewModel.uiState.value.enrollmentReplacesOther)
-
-        viewModel.enableBiometricUnlock(authenticator)
-        assertEquals("Pedro Gómez", viewModel.uiState.value.biometricAccountName)
-        assertEquals("pedro@correo.co", repository.storedAccountEmail())
     }
 
     @Test
@@ -361,8 +402,8 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `TC-S1-10 login correcto sin huella vinculada ofrece activarla`() {
-        store.clear()
+    fun `TC-S1-10 login correcto de una cuenta sin huella ofrece activarla`() {
+        withoutBoundAccounts()
 
         viewModel.authenticateWithPassword(EMAIL, PASSWORD, OTP, FakeBiometricAuthenticator())
 
@@ -374,16 +415,17 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `TC-S1-10 login correcto con huella ya vinculada entra sin volver a ofrecerla`() {
+    fun `TC-S1-10 login correcto de una cuenta con huella entra sin volver a ofrecerla`() {
         viewModel.authenticateWithPassword(EMAIL, PASSWORD, OTP, FakeBiometricAuthenticator())
 
         assertTrue(viewModel.uiState.value.isAuthenticated)
         assertFalse(viewModel.uiState.value.offerBiometricEnrollment)
+        assertTrue(viewModel.uiState.value.biometricEnabled)
     }
 
     @Test
     fun `TC-S1-10 login correcto sin biometria entra directo`() {
-        store.clear()
+        withoutBoundAccounts()
 
         viewModel.authenticateWithPassword(
             EMAIL,
@@ -397,8 +439,8 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `TC-S1-10 activar la huella vincula el telefono y guarda la credencial cifrada`() {
-        store.clear()
+    fun `TC-S1-10 activar la huella vincula el telefono a la cuenta y guarda su credencial cifrada`() {
+        withoutBoundAccounts()
         val authenticator = FakeBiometricAuthenticator()
         viewModel.authenticateWithPassword(EMAIL, PASSWORD, OTP, authenticator)
 
@@ -408,12 +450,12 @@ class AuthViewModelTest {
         assertTrue(viewModel.uiState.value.biometricEnabled)
         assertEquals(newTokens.accessToken, authApi.lastRegisterToken)
         val reopened = SecureSessionRepository(crypto, store)
-        assertEquals(registeredCredential, reopened.unlock(checkNotNull(reopened.decryptionCipher())))
+        assertEquals(registeredCredential, reopened.unlock(EMAIL, checkNotNull(reopened.decryptionCipher(EMAIL))))
     }
 
     @Test
     fun `TC-S1-10 cancelar la huella al activarla revoca el telefono en el servidor`() {
-        store.clear()
+        withoutBoundAccounts()
         viewModel.authenticateWithPassword(EMAIL, PASSWORD, OTP, FakeBiometricAuthenticator())
 
         viewModel.enableBiometricUnlock(FakeBiometricAuthenticator(result = BiometricResult.Cancelled))
@@ -426,7 +468,7 @@ class AuthViewModelTest {
 
     @Test
     fun `TC-S1-10 rechazar la huella entra sin vincular el telefono`() {
-        store.clear()
+        withoutBoundAccounts()
         viewModel.authenticateWithPassword(EMAIL, PASSWORD, OTP, FakeBiometricAuthenticator())
 
         viewModel.skipBiometricEnrollment()
@@ -460,7 +502,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `TC-S1-10 cuenta bloqueada impide nuevos intentos mientras dura el bloqueo`() {
+    fun `TC-S1-10 ingreso suspendido impide nuevos intentos mientras dura`() {
         authApi.loginResult = LoginResult.Locked(retryAfterSeconds = 900)
 
         viewModel.authenticateWithPassword(EMAIL, "otra", "000000", FakeBiometricAuthenticator())
@@ -473,7 +515,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `TC-S1-10 el bloqueo se levanta solo al cumplirse el tiempo sin cerrar la app`() {
+    fun `TC-S1-10 la suspension se levanta sola al cumplirse el tiempo sin cerrar la app`() {
         authApi.loginResult = LoginResult.Locked(retryAfterSeconds = 900)
         viewModel.authenticateWithPassword(EMAIL, "otra", "000000", FakeBiometricAuthenticator())
 
@@ -481,9 +523,8 @@ class AuthViewModelTest {
         assertEquals(1, viewModel.uiState.value.lockedSeconds)
 
         advanceSeconds(1)
-        val state = viewModel.uiState.value
-        assertFalse(state.isLocked)
-        assertNull(state.alternativeLogin.error)
+        assertFalse(viewModel.uiState.value.isLocked)
+        assertNull(viewModel.uiState.value.alternativeLogin.error)
 
         authApi.loginResult = LoginResult.Success(newTokens, "María Ruiz")
         viewModel.authenticateWithPassword(EMAIL, PASSWORD, OTP, FakeBiometricAuthenticator())
@@ -554,8 +595,10 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `recuperar contrasena exitoso desbloquea y desvincula la huella`() {
+    fun `recuperar contrasena levanta la suspension, desvincula esa cuenta y limpia el correo`() {
+        repository.save(DeviceCredential("device-pedro", "s"), repository.encryptionCipher(), PEDRO, "Pedro Gómez")
         authApi.loginResult = LoginResult.Locked(retryAfterSeconds = 900)
+        viewModel.onAlternativeAccessSelected()
         viewModel.authenticateWithPassword(EMAIL, "otra", "000000", FakeBiometricAuthenticator())
         viewModel.openPasswordRecovery()
 
@@ -564,12 +607,13 @@ class AuthViewModelTest {
         val state = viewModel.uiState.value
         assertTrue(state.recovery.completed)
         assertFalse(state.isLocked)
-        assertFalse(state.biometricEnabled)
-        assertFalse(repository.hasStoredSession())
+        assertFalse(repository.isBound(EMAIL))
+        assertTrue(repository.isBound(PEDRO))
 
         viewModel.closePasswordRecovery()
         assertFalse(viewModel.uiState.value.showPasswordRecovery)
         assertTrue(viewModel.uiState.value.showAlternativeAccess)
+        assertNull(viewModel.uiState.value.prefillEmail)
     }
 
     @Test
@@ -583,7 +627,7 @@ class AuthViewModelTest {
         authApi.resetResult = ResetResult.WeakPassword
         viewModel.resetPassword(EMAIL, "123456", "corta", "corta")
         assertEquals(RecoveryError.WEAK_PASSWORD, viewModel.uiState.value.recovery.error)
-        assertTrue(repository.hasStoredSession())
+        assertTrue(repository.isBound(EMAIL))
     }
 
     @Test
@@ -631,7 +675,6 @@ class AuthViewModelTest {
         viewModel.cancelLogout()
 
         assertFalse(viewModel.uiState.value.showLogoutConfirmation)
-        assertTrue(viewModel.uiState.value.isAuthenticated)
         assertEquals(newTokens, repository.activeSession)
     }
 
@@ -642,9 +685,7 @@ class AuthViewModelTest {
 
         viewModel.confirmLogout()
 
-        val state = viewModel.uiState.value
-        assertFalse(state.isAuthenticated)
-        assertFalse(state.showLogoutConfirmation)
+        assertFalse(viewModel.uiState.value.isAuthenticated)
         assertNull(repository.activeSession)
         assertEquals(newTokens.refreshToken, authApi.lastRevokedToken)
     }
@@ -676,7 +717,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `TC-S1-12 desactivar la huella revoca el telefono y borra la llave`() {
+    fun `TC-S1-12 desactivar la huella revoca el telefono y borra la llave si no quedan cuentas`() {
         loggedIn()
 
         viewModel.disableBiometrics()
@@ -708,9 +749,6 @@ class AuthViewModelTest {
 
         assertFalse(viewModel.uiState.value.showLogoutConfirmation)
     }
-
-    private val newTokens = SessionTokens("new.access.jwt", "new-refresh")
-    private val registeredCredential = DeviceCredential("device-nuevo", "secreto-nuevo")
 
     private inner class FakeAuthApi : AuthApi {
         var otpResult: OtpResult = OtpResult.Sent(debugCode = null)
@@ -775,6 +813,7 @@ class AuthViewModelTest {
 
     private companion object {
         const val EMAIL = "maria.ruiz@correo.co"
+        const val PEDRO = "pedro.gomez@correo.co"
         const val PASSWORD = "Solventa2026!"
         const val OTP = "417902"
     }

@@ -46,7 +46,7 @@ fun AlternativeLoginScreen(
     modifier: Modifier = Modifier,
 ) {
     BackHandler(onBack = onBack)
-    var email by rememberSaveable { mutableStateOf(uiState.biometricAccountEmail.orEmpty()) }
+    var email by rememberSaveable { mutableStateOf(uiState.prefillEmail.orEmpty()) }
     var password by rememberSaveable { mutableStateOf("") }
     var otpCode by rememberSaveable { mutableStateOf("") }
     val form = uiState.alternativeLogin
@@ -155,13 +155,11 @@ fun AlternativeLoginScreen(
 }
 
 @Composable
-fun BiometricEnrollmentDialog(replacesOther: Boolean, onEnable: () -> Unit, onSkip: () -> Unit) {
+fun BiometricEnrollmentDialog(onEnable: () -> Unit, onSkip: () -> Unit) {
     AlertDialog(
         onDismissRequest = onSkip,
         title = { Text(stringResource(R.string.auth_enroll_title)) },
-        text = {
-            Text(stringResource(if (replacesOther) R.string.auth_enroll_replace_message else R.string.auth_enroll_message))
-        },
+        text = { Text(stringResource(R.string.auth_enroll_message)) },
         confirmButton = { TextButton(onClick = onEnable) { Text(stringResource(R.string.auth_enroll_confirm)) } },
         dismissButton = { TextButton(onClick = onSkip) { Text(stringResource(R.string.auth_enroll_skip)) } },
     )

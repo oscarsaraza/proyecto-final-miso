@@ -6,6 +6,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,11 +33,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.solventa.app.R
+import com.solventa.app.data.session.BoundAccount
 import com.solventa.app.ui.theme.SolventaTheme
 
 @Composable
@@ -43,6 +49,7 @@ fun BiometricLoginScreen(
     onUseAlternative: () -> Unit,
     modifier: Modifier = Modifier,
     onSwitchUser: () -> Unit = {},
+    onSelectAccount: (String) -> Unit = {},
 ) {
     val biometricBlocked = uiState.status in BLOCKING_STATUSES
 
@@ -75,13 +82,20 @@ fun BiometricLoginScreen(
             fontWeight = FontWeight.Bold,
         )
         Text(
-            text = uiState.biometricAccountName
-                ?.takeIf { uiState.biometricEnabled }
-                ?.let { stringResource(R.string.auth_biometric_account, it) }
+            text = uiState.selectedAccount
+                ?.let { stringResource(R.string.auth_biometric_account, it.name) }
                 ?: stringResource(R.string.auth_biometric_subtitle),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (uiState.biometricAccounts.size > 1) {
+            Spacer(Modifier.height(12.dp))
+            AccountSelector(
+                accounts = uiState.biometricAccounts,
+                selectedEmail = uiState.selectedAccountEmail,
+                onSelect = onSelectAccount,
+            )
+        }
 
         Column(
             modifier = Modifier
@@ -109,10 +123,9 @@ fun BiometricLoginScreen(
             )
         }
 
-        val accountName = uiState.biometricAccountName?.takeIf { uiState.biometricEnabled }
-        if (accountName != null) {
+        if (uiState.biometricAccounts.isNotEmpty()) {
             TextButton(onClick = onSwitchUser, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.auth_switch_user, accountName), textAlign = TextAlign.Center)
+                Text(stringResource(R.string.auth_switch_user), textAlign = TextAlign.Center)
             }
         }
         if (biometricBlocked) {
@@ -122,6 +135,29 @@ fun BiometricLoginScreen(
         } else {
             OutlinedButton(onClick = onUseAlternative, modifier = Modifier.fillMaxWidth().height(48.dp)) {
                 Text(stringResource(R.string.auth_use_alternative))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountSelector(accounts: List<BoundAccount>, selectedEmail: String?, onSelect: (String) -> Unit) {
+    Column(modifier = Modifier.selectableGroup().fillMaxWidth()) {
+        accounts.forEach { account ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectable(
+                        selected = account.email == selectedEmail,
+                        onClick = { onSelect(account.email) },
+                        role = Role.RadioButton,
+                    )
+                    .padding(vertical = 4.dp),
+            ) {
+                RadioButton(selected = account.email == selectedEmail, onClick = null)
+                Spacer(Modifier.size(8.dp))
+                Text(text = account.name, style = MaterialTheme.typography.bodyLarge)
             }
         }
     }

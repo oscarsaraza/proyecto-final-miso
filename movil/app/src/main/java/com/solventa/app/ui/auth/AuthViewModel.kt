@@ -2,6 +2,7 @@ package com.solventa.app.ui.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.solventa.app.data.session.BoundAccount
 import com.solventa.app.data.session.SecureSessionRepository
 import com.solventa.app.domain.auth.AuthApi
 import com.solventa.app.domain.auth.BiometricAuthenticator
@@ -82,14 +83,18 @@ data class AuthUiState(
     val showPasswordRecovery: Boolean = false,
     val recovery: PasswordRecoveryState = PasswordRecoveryState(),
     val offerBiometricEnrollment: Boolean = false,
+    val biometricAccounts: List<BoundAccount> = emptyList(),
+    val selectedAccountEmail: String? = null,
+    val prefillEmail: String? = null,
+    val currentAccountEmail: String? = null,
     val biometricEnabled: Boolean = false,
-    val biometricAccountName: String? = null,
-    val biometricAccountEmail: String? = null,
-    val enrollmentReplacesOther: Boolean = false,
     val fullName: String? = null,
     val showLogoutConfirmation: Boolean = false,
 ) {
     val isLocked: Boolean get() = lockedSeconds > 0
+
+    val selectedAccount: BoundAccount?
+        get() = biometricAccounts.firstOrNull { it.email == selectedAccountEmail }
 
     // La espera para reenviar aplica al mismo correo; otro correo puede pedir su código.
     fun canRequestOtp(email: String): Boolean =
@@ -99,7 +104,7 @@ data class AuthUiState(
 fun normalizeEmail(email: String): String = email.trim().lowercase()
 
 /**
- * Acceso con huella, acceso alterno con contraseña y código, recuperación de contraseña y
+ * Acceso con huella por cuenta, acceso alterno con contraseña y código, recuperación de contraseña y
  * cierre de sesión (HU-MOV-01, HU-MOV-02, HU-MOV-03, HU-MOV-12).
  */
 class AuthViewModel(
@@ -107,18 +112,32 @@ class AuthViewModel(
     private val authApi: AuthApi,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(
-        AuthUiState(
-            biometricEnabled = sessionRepository.hasStoredSession(),
-            biometricAccountName = sessionRepository.storedAccountName(),
-            biometricAccountEmail = sessionRepository.storedAccountEmail(),
-        )
-    )
+    private val _uiState = MutableStateFlow(withAccounts(AuthUiState()))
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     private var lockJob: Job? = null
     private var otpCooldownJob: Job? = null
-    private var pendingAccountEmail: String? = null
+
+    // Refleja las cuentas con huella guardadas y conserva la elegida si sigue existiendo.
+    private fun withAccounts(state: AuthUiState): AuthUiState {
+        val accounts = sessionRepository.boundAccounts()
+        val selected = state.selectedAccountEmail?.takeIf { email -> accounts.any { it.email == email } }
+            ?: accounts.lastOrNull()?.email
+        return state.copy(
+            biometricAccounts = accounts,
+            selectedAccountEmail = selected,
+            prefillEmail = if (state.showAlternativeAccess) state.prefillEmail else selected,
+            biometricEnabled = state.currentAccountEmail?.let(sessionRepository::isBound) ?: false,
+        )
+    }
+
+    private fun refreshAccounts() {
+        _uiState.update(::withAccounts)
+    }
+
+    fun selectAccount(email: String) {
+        _uiState.update { it.copy(selectedAccountEmail = email, prefillEmail = email, status = AuthStatus.IDLE) }
+    }
 
     fun authenticateWithBiometrics(authenticator: BiometricAuthenticator) {
         val current = _uiState.value
@@ -136,46 +155,54 @@ class AuthViewModel(
             BiometricAvailability.AVAILABLE -> Unit
         }
 
-        if (!sessionRepository.hasStoredSession()) {
-            _uiState.update { it.copy(status = AuthStatus.NO_STORED_SESSION, biometricEnabled = false) }
+        val email = current.selectedAccountEmail
+        if (email == null) {
+            _uiState.update { it.copy(status = AuthStatus.NO_STORED_SESSION) }
             return
         }
-        val cipher = sessionRepository.decryptionCipher()
+        val cipher = sessionRepository.decryptionCipher(email)
         if (cipher == null) {
-            _uiState.update { it.copy(status = AuthStatus.SESSION_RESET, biometricEnabled = false) }
+            _uiState.update { withAccounts(it.copy(status = AuthStatus.SESSION_RESET)) }
             return
         }
 
         _uiState.update { it.copy(status = AuthStatus.AUTHENTICATING) }
         viewModelScope.launch {
             when (val result = authenticator.authenticate(cipher)) {
-                is BiometricResult.Success -> signInWithDevice(result.cipher)
+                is BiometricResult.Success -> signInWithDevice(email, result.cipher)
                 BiometricResult.Cancelled -> setStatus(AuthStatus.CANCELLED)
                 BiometricResult.UseAlternative -> _uiState.update {
-                    it.copy(status = AuthStatus.IDLE, showAlternativeAccess = true)
+                    it.copy(status = AuthStatus.IDLE, showAlternativeAccess = true, prefillEmail = email)
                 }
-                BiometricResult.LockedOut -> fallBackToPassword(AuthStatus.BIOMETRIC_LOCKED_OUT)
+                BiometricResult.LockedOut -> fallBackToPassword(AuthStatus.BIOMETRIC_LOCKED_OUT, email)
                 BiometricResult.Unavailable -> setStatus(AuthStatus.BIOMETRIC_UNAVAILABLE)
-                is BiometricResult.Error -> fallBackToPassword(AuthStatus.BIOMETRIC_ERROR)
+                is BiometricResult.Error -> fallBackToPassword(AuthStatus.BIOMETRIC_ERROR, email)
             }
         }
     }
 
-    private suspend fun signInWithDevice(authenticatedCipher: Cipher) {
+    private suspend fun signInWithDevice(email: String, authenticatedCipher: Cipher) {
         val credential = try {
-            sessionRepository.unlock(authenticatedCipher)
+            sessionRepository.unlock(email, authenticatedCipher)
         } catch (e: Exception) {
-            resetBiometrics()
+            resetBiometrics(email)
             return
         }
         when (val result = authApi.biometricLogin(credential)) {
             is LoginResult.Success -> {
                 sessionRepository.startSession(result.tokens)
                 _uiState.update {
-                    it.copy(status = AuthStatus.AUTHENTICATED, isAuthenticated = true, fullName = result.fullName)
+                    withAccounts(
+                        it.copy(
+                            status = AuthStatus.AUTHENTICATED,
+                            isAuthenticated = true,
+                            fullName = result.fullName,
+                            currentAccountEmail = email,
+                        )
+                    )
                 }
             }
-            LoginResult.InvalidCredentials, LoginResult.InvalidFormat -> resetBiometrics()
+            LoginResult.InvalidCredentials, LoginResult.InvalidFormat -> resetBiometrics(email)
             is LoginResult.Locked -> {
                 setStatus(AuthStatus.ACCOUNT_LOCKED)
                 startLockCountdown(result.retryAfterSeconds)
@@ -184,17 +211,15 @@ class AuthViewModel(
         }
     }
 
-    // El servidor ya no reconoce el teléfono (huella desactivada o contraseña cambiada).
-    private fun resetBiometrics() {
-        sessionRepository.unbindDevice()
-        _uiState.update {
-            it.copy(status = AuthStatus.SESSION_RESET, biometricEnabled = false, biometricAccountName = null)
-        }
+    // El servidor ya no reconoce el teléfono para esa cuenta (huella desactivada o contraseña cambiada).
+    private fun resetBiometrics(email: String) {
+        sessionRepository.unbind(email)
+        _uiState.update { withAccounts(it.copy(status = AuthStatus.SESSION_RESET)) }
     }
 
-    // Si la huella falla, se pasa directo al ingreso con contraseña y código.
-    private fun fallBackToPassword(status: AuthStatus) {
-        _uiState.update { it.copy(status = status, showAlternativeAccess = true) }
+    // Si la huella falla, se pasa directo al ingreso con contraseña y código de esa cuenta.
+    private fun fallBackToPassword(status: AuthStatus, email: String) {
+        _uiState.update { it.copy(status = status, showAlternativeAccess = true, prefillEmail = email) }
     }
 
     private fun setStatus(status: AuthStatus) {
@@ -202,17 +227,19 @@ class AuthViewModel(
     }
 
     fun onAlternativeAccessSelected() {
-        _uiState.update { it.copy(showAlternativeAccess = true) }
+        _uiState.update { it.copy(showAlternativeAccess = true, prefillEmail = it.selectedAccountEmail) }
     }
 
-    // Otro usuario en el mismo teléfono entra con su correo; al ingresar se le ofrece tomar la huella.
+    // Otro usuario en el mismo teléfono entra con su correo; al ingresar se le ofrece activar su huella.
     fun switchUser() {
-        _uiState.update { it.copy(showAlternativeAccess = true, biometricAccountEmail = null) }
+        _uiState.update { it.copy(showAlternativeAccess = true, prefillEmail = null) }
     }
 
     fun onBackToBiometrics() {
         _uiState.update {
-            it.copy(showAlternativeAccess = false, status = AuthStatus.IDLE, alternativeLogin = AlternativeLoginState())
+            withAccounts(
+                it.copy(showAlternativeAccess = false, status = AuthStatus.IDLE, alternativeLogin = AlternativeLoginState())
+            )
         }
     }
 
@@ -248,30 +275,30 @@ class AuthViewModel(
         viewModelScope.launch {
             val result = authApi.login(email.trim(), password, otpCode.trim())
             val accountEmail = normalizeEmail(email)
-            val boundToOther = sessionRepository.hasStoredSession() &&
-                sessionRepository.storedAccountEmail() != accountEmail
             val canEnrollBiometrics = result is LoginResult.Success &&
-                (!sessionRepository.hasStoredSession() || boundToOther) &&
+                !sessionRepository.isBound(accountEmail) &&
                 authenticator.checkAvailability() == BiometricAvailability.AVAILABLE
             if (result is LoginResult.Success) {
                 sessionRepository.startSession(result.tokens)
-                pendingAccountEmail = accountEmail
                 otpCooldownJob?.cancel()
             }
 
             _uiState.update { state ->
                 val form = state.alternativeLogin.copy(isSubmitting = false)
                 when (result) {
-                    is LoginResult.Success -> state.copy(
-                        alternativeLogin = AlternativeLoginState(),
-                        failedAttempts = 0,
-                        otpCooldownSeconds = 0,
-                        otpCooldownEmail = null,
-                        fullName = result.fullName,
-                        offerBiometricEnrollment = canEnrollBiometrics,
-                        enrollmentReplacesOther = canEnrollBiometrics && boundToOther,
-                        isAuthenticated = !canEnrollBiometrics,
-                        status = if (canEnrollBiometrics) state.status else AuthStatus.AUTHENTICATED,
+                    is LoginResult.Success -> withAccounts(
+                        state.copy(
+                            alternativeLogin = AlternativeLoginState(),
+                            failedAttempts = 0,
+                            otpCooldownSeconds = 0,
+                            otpCooldownEmail = null,
+                            fullName = result.fullName,
+                            currentAccountEmail = accountEmail,
+                            selectedAccountEmail = accountEmail,
+                            offerBiometricEnrollment = canEnrollBiometrics,
+                            isAuthenticated = !canEnrollBiometrics,
+                            status = if (canEnrollBiometrics) state.status else AuthStatus.AUTHENTICATED,
+                        )
                     )
                     LoginResult.InvalidCredentials -> state.copy(
                         alternativeLogin = form.copy(error = AlternativeLoginError.INVALID_CREDENTIALS),
@@ -299,36 +326,33 @@ class AuthViewModel(
         }
     }
 
-    // Activar la huella vincula el teléfono en el servidor y cifra esa credencial en el Keystore (HU-MOV-03).
+    // Activar la huella vincula el teléfono a esta cuenta en el servidor y cifra su credencial (HU-MOV-03).
     fun enableBiometricUnlock(authenticator: BiometricAuthenticator) {
         val tokens = sessionRepository.activeSession ?: return finishLogin()
+        val state = _uiState.value
+        val email = state.currentAccountEmail ?: return finishLogin()
+        val fullName = state.fullName ?: email
         viewModelScope.launch {
             val credential = authApi.registerDevice(tokens.accessToken)
             if (credential == null) {
                 finishLogin()
                 return@launch
             }
-            val fullName = _uiState.value.fullName
             val saved = try {
-                if (_uiState.value.enrollmentReplacesOther) sessionRepository.unbindDevice()
                 val result = authenticator.authenticate(sessionRepository.encryptionCipher())
                 if (result is BiometricResult.Success) {
-                    sessionRepository.save(credential, result.cipher, pendingAccountEmail, fullName)
+                    sessionRepository.save(credential, result.cipher, email, fullName)
                     true
                 } else {
                     false
                 }
             } catch (e: Exception) {
-                sessionRepository.unbindDevice()
                 false
             }
-            if (!saved) authApi.revokeDevice(tokens.accessToken, credential.deviceId)
-            _uiState.update {
-                it.copy(
-                    biometricEnabled = sessionRepository.hasStoredSession(),
-                    biometricAccountName = sessionRepository.storedAccountName(),
-                    biometricAccountEmail = sessionRepository.storedAccountEmail(),
-                )
+            if (saved) {
+                _uiState.update { it.copy(selectedAccountEmail = email) }
+            } else {
+                authApi.revokeDevice(tokens.accessToken, credential.deviceId)
             }
             finishLogin()
         }
@@ -338,21 +362,23 @@ class AuthViewModel(
 
     private fun finishLogin() {
         _uiState.update {
-            it.copy(
-                offerBiometricEnrollment = false,
-                enrollmentReplacesOther = false,
-                isAuthenticated = true,
-                status = AuthStatus.AUTHENTICATED,
-                showAlternativeAccess = false,
+            withAccounts(
+                it.copy(
+                    offerBiometricEnrollment = false,
+                    isAuthenticated = true,
+                    status = AuthStatus.AUTHENTICATED,
+                    showAlternativeAccess = false,
+                )
             )
         }
     }
 
     fun disableBiometrics() {
+        val email = _uiState.value.currentAccountEmail ?: return
         val accessToken = sessionRepository.activeSession?.accessToken
-        val deviceId = sessionRepository.storedDeviceId()
-        sessionRepository.unbindDevice()
-        _uiState.update { it.copy(biometricEnabled = false, biometricAccountName = null) }
+        val deviceId = sessionRepository.storedDeviceId(email)
+        sessionRepository.unbind(email)
+        refreshAccounts()
         if (accessToken != null && deviceId != null) {
             viewModelScope.launch { authApi.revokeDevice(accessToken, deviceId) }
         }
@@ -366,16 +392,17 @@ class AuthViewModel(
         _uiState.update { it.copy(showLogoutConfirmation = false) }
     }
 
-    // Se borra la sesión del teléfono y se revoca en el servidor; la huella vinculada se conserva.
+    // Se borra la sesión del teléfono y se revoca en el servidor; las huellas vinculadas se conservan.
     fun confirmLogout() {
         val refreshToken = sessionRepository.activeSession?.refreshToken
+        val email = _uiState.value.currentAccountEmail
+        val biometricReady = email != null && sessionRepository.isBound(email)
         sessionRepository.endSession()
-        val biometricReady = sessionRepository.hasStoredSession()
-        _uiState.value = AuthUiState(
-            status = if (biometricReady) AuthStatus.LOGGED_OUT_BIOMETRIC_READY else AuthStatus.LOGGED_OUT,
-            biometricEnabled = biometricReady,
-            biometricAccountName = sessionRepository.storedAccountName(),
-            biometricAccountEmail = sessionRepository.storedAccountEmail(),
+        _uiState.value = withAccounts(
+            AuthUiState(
+                status = if (biometricReady) AuthStatus.LOGGED_OUT_BIOMETRIC_READY else AuthStatus.LOGGED_OUT,
+                selectedAccountEmail = email,
+            )
         )
         if (refreshToken != null) {
             viewModelScope.launch { authApi.logout(refreshToken) }
@@ -425,19 +452,21 @@ class AuthViewModel(
         viewModelScope.launch {
             val result = authApi.resetPassword(email.trim(), code.trim(), newPassword)
             if (result == ResetResult.Success) {
-                sessionRepository.unbindDevice()
+                // El servidor desvinculó las huellas de esa cuenta; las demás cuentas del teléfono se conservan.
+                sessionRepository.unbind(normalizeEmail(email))
                 lockJob?.cancel()
             }
             _uiState.update { state ->
                 val recovery = state.recovery.copy(isSubmitting = false)
                 when (result) {
-                    ResetResult.Success -> state.copy(
-                        recovery = recovery.copy(completed = true),
-                        biometricEnabled = false,
-                        biometricAccountName = null,
-                        lockedSeconds = 0,
-                        failedAttempts = 0,
-                        alternativeLogin = AlternativeLoginState(),
+                    ResetResult.Success -> withAccounts(
+                        state.copy(
+                            recovery = recovery.copy(completed = true),
+                            lockedSeconds = 0,
+                            failedAttempts = 0,
+                            alternativeLogin = AlternativeLoginState(),
+                            prefillEmail = null,
+                        )
                     )
                     ResetResult.InvalidCode -> state.copy(recovery = recovery.copy(error = RecoveryError.INVALID_CODE))
                     ResetResult.WeakPassword -> state.copy(recovery = recovery.copy(error = RecoveryError.WEAK_PASSWORD))

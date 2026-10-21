@@ -74,7 +74,6 @@ fun SolventaMobileRoot(
 
     if (uiState.offerBiometricEnrollment) {
         BiometricEnrollmentDialog(
-            replacesOther = uiState.enrollmentReplacesOther,
             onEnable = { viewModel.enableBiometricUnlock(biometricAuthenticator) },
             onSkip = viewModel::skipBiometricEnrollment,
         )
@@ -118,6 +117,7 @@ fun SolventaMobileRoot(
             onAuthenticate = { viewModel.authenticateWithBiometrics(biometricAuthenticator) },
             onUseAlternative = viewModel::onAlternativeAccessSelected,
             onSwitchUser = viewModel::switchUser,
+            onSelectAccount = viewModel::selectAccount,
             modifier = modifier,
         )
     }

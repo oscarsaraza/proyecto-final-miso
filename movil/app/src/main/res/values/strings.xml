@@ -6,7 +6,7 @@
     <string name="auth_biometric_title">Ingreso con huella</string>
     <string name="auth_biometric_subtitle">Toque el sensor para ingresar</string>
     <string name="auth_biometric_account">Ingresar como %1$s</string>
-    <string name="auth_switch_user">¿No es %1$s? Ingresar con otro usuario</string>
+    <string name="auth_switch_user">Ingresar con otro usuario</string>
     <string name="auth_sensor_description">Ingresar con huella</string>
     <string name="auth_use_alternative">Ingresar con contraseña y código</string>
     <string name="auth_status_idle">Toque el sensor para usar su huella</string>
@@ -54,7 +54,6 @@
     <string name="auth_back_to_biometrics">Volver al acceso biométrico</string>
     <string name="auth_enroll_title">¿Activar ingreso con huella?</string>
     <string name="auth_enroll_message">La próxima vez entrará con su huella, aunque cierre sesión. El acceso queda cifrado en el almacén protegido del teléfono y puede desactivarlo cuando quiera.</string>
-    <string name="auth_enroll_replace_message">La huella de este teléfono está activa para otra cuenta. Si la activa para esta cuenta, la otra deberá ingresar con contraseña y código.</string>
     <string name="auth_enroll_confirm">Activar</string>
     <string name="auth_enroll_skip">Ahora no</string>
 
