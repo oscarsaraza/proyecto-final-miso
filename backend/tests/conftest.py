@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.main import app
 from app.core.config import settings
 from app.core.database import Base, get_db_session
-from app.core.sms import SmsDeliveryError
+from app.core.sms import ConsoleSmsSender, SmsDeliveryError
 from app.modules.identity.service import InsuredAuthService, insured_auth_service
 from app.modules.auth.service import auth_service
 from app.modules.profile.service import profile_service
@@ -79,6 +79,12 @@ class InMemorySessionTestDouble:
 
     async def refresh(self, user):
         pass
+
+
+@pytest.fixture(autouse=True)
+def sms_simulado(monkeypatch):
+    """Las pruebas nunca envían SMS reales, aunque el .env local tenga Twilio."""
+    monkeypatch.setattr(insured_auth_service, "_sms", ConsoleSmsSender())
 
 
 @pytest.fixture(autouse=True)

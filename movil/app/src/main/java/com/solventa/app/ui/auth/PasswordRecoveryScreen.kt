@@ -27,7 +27,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.solventa.app.R
@@ -114,23 +113,17 @@ fun PasswordRecoveryScreen(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
             modifier = Modifier.fillMaxWidth(),
         )
-        OutlinedTextField(
+        PasswordField(
             value = newPassword,
             onValueChange = { newPassword = it },
-            label = { Text(stringResource(R.string.recovery_new_password)) },
-            supportingText = { Text(stringResource(R.string.recovery_rules)) },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            label = stringResource(R.string.recovery_new_password),
+            supportingText = stringResource(R.string.recovery_rules),
             modifier = Modifier.fillMaxWidth(),
         )
-        OutlinedTextField(
+        PasswordField(
             value = confirmation,
             onValueChange = { confirmation = it },
-            label = { Text(stringResource(R.string.recovery_confirm_password)) },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            label = stringResource(R.string.recovery_confirm_password),
             modifier = Modifier.fillMaxWidth(),
         )
 

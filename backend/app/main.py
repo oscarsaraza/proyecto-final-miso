@@ -25,6 +25,7 @@ from app.modules.identity.service import insured_auth_service
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Inicialización de tablas relacionales y usuario asesor semilla (HU-WEB-13)."""
+    insured_auth_service.sms  # falla al arrancar si la configuración del SMS está incompleta
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)

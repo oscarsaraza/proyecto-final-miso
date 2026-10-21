@@ -31,6 +31,8 @@
     <string name="auth_alternative_subtitle">Ingrese con su correo y valide con el código de un solo uso.</string>
     <string name="auth_email">Correo electrónico</string>
     <string name="auth_password">Contraseña</string>
+    <string name="auth_password_show">Mostrar contraseña</string>
+    <string name="auth_password_hide">Ocultar contraseña</string>
     <string name="auth_otp">Código de seguridad (SMS)</string>
     <string name="auth_otp_send">Enviar código</string>
     <string name="auth_otp_resend">Reenviar</string>

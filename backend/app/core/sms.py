@@ -58,7 +58,12 @@ class TwilioSmsSender:
 
 def get_sms_sender() -> SmsSender:
     if settings.SMS_PROVIDER == "twilio":
-        if not (settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN and settings.TWILIO_FROM_NUMBER):
-            raise RuntimeError("SMS_PROVIDER=twilio requiere TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN y TWILIO_FROM_NUMBER")
+        missing = [
+            name
+            for name in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER")
+            if not getattr(settings, name)
+        ]
+        if missing:
+            raise RuntimeError(f"SMS_PROVIDER=twilio pero faltan en la configuración: {', '.join(missing)}")
         return TwilioSmsSender(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN, settings.TWILIO_FROM_NUMBER)
     return ConsoleSmsSender()
