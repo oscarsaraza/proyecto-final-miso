@@ -4,13 +4,14 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Awaitable, Callable, List, Optional, Tuple
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.modules.rating.models import (
     Coverage,
     PartnerDB,
+    PartnerQuoteResponse,
     PlanTier,
     PremiumFactor,
     QuoteDB,
@@ -176,6 +177,35 @@ class RatingService:
             )
         await session.commit()
         return quote
+
+    async def get_partner_quote(
+        self,
+        session: AsyncSession,
+        quote_id: str,
+        partner_id: str,
+    ) -> Optional[PartnerQuoteResponse]:
+        """Obtiene una cotización solo si existe y pertenece al socio autenticado (HU-WEB-10)."""
+        stmt = select(QuoteDB).where(QuoteDB.quote_id == quote_id)
+        result = await session.execute(stmt)
+        quote = result.scalars().first()
+        if not quote or not quote.partner_id or quote.partner_id != partner_id:
+            return None
+        return PartnerQuoteResponse.from_db(quote)
+
+    async def list_partner_quotes(
+        self,
+        session: AsyncSession,
+        partner_id: str,
+    ) -> List[PartnerQuoteResponse]:
+        """Lista el histórico de cotizaciones del socio autenticado (HU-WEB-10)."""
+        stmt = (
+            select(QuoteDB)
+            .where(QuoteDB.partner_id == partner_id)
+            .order_by(QuoteDB.created_at.desc())
+        )
+        result = await session.execute(stmt)
+        quotes = result.scalars().all()
+        return [PartnerQuoteResponse.from_db(q) for q in quotes]
 
 
 rating_service = RatingService()
