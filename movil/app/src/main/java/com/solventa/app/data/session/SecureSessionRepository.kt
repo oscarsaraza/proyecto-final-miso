@@ -1,9 +1,11 @@
 package com.solventa.app.data.session
 
+import com.solventa.app.domain.auth.DeviceCredential
 import com.solventa.app.domain.auth.SessionTokens
 import javax.crypto.Cipher
 
-// Guardar y desbloquear exigen un Cipher ya autenticado por BiometricPrompt (HU-MOV-03).
+// Los tokens solo viven en memoria. Lo que se guarda, cifrado con la llave que exige huella,
+// es la credencial del teléfono vinculado (HU-MOV-03, HU-MOV-12).
 class SecureSessionRepository(
     private val crypto: SessionCrypto,
     private val store: EncryptedSessionStore,
@@ -15,7 +17,13 @@ class SecureSessionRepository(
         activeSession = tokens
     }
 
+    fun endSession() {
+        activeSession = null
+    }
+
     fun hasStoredSession(): Boolean = store.read() != null
+
+    fun storedDeviceId(): String? = store.read()?.deviceId
 
     fun encryptionCipher(): Cipher = crypto.encryptionCipher()
 
@@ -27,29 +35,32 @@ class SecureSessionRepository(
         }
     }
 
-    fun save(tokens: SessionTokens, authenticatedCipher: Cipher) {
-        val plaintext = tokens.toBytes()
+    fun save(credential: DeviceCredential, authenticatedCipher: Cipher) {
+        val plaintext = credential.toBytes()
         try {
-            store.write(EncryptedSession(authenticatedCipher.doFinal(plaintext), authenticatedCipher.iv))
+            store.write(EncryptedSession(authenticatedCipher.doFinal(plaintext), authenticatedCipher.iv, credential.deviceId))
         } finally {
             plaintext.fill(0)
         }
-        activeSession = tokens
     }
 
-    fun unlock(authenticatedCipher: Cipher): SessionTokens {
-        val stored = checkNotNull(store.read()) { "No hay sesión guardada" }
+    fun unlock(authenticatedCipher: Cipher): DeviceCredential {
+        val stored = checkNotNull(store.read()) { "No hay huella vinculada" }
         val plaintext = authenticatedCipher.doFinal(stored.ciphertext)
         try {
-            return SessionTokens.fromBytes(plaintext).also { activeSession = it }
+            return DeviceCredential.fromBytes(plaintext)
         } finally {
             plaintext.fill(0)
         }
+    }
+
+    fun unbindDevice() {
+        store.clear()
+        crypto.deleteKey()
     }
 
     fun clear() {
-        activeSession = null
-        store.clear()
-        crypto.deleteKey()
+        endSession()
+        unbindDevice()
     }
 }

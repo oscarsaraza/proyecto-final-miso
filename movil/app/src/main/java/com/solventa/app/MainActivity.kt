@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,6 +36,7 @@ import com.solventa.app.ui.auth.AuthViewModel
 import com.solventa.app.ui.auth.BiometricEnrollmentDialog
 import com.solventa.app.ui.auth.BiometricLoginScreen
 import com.solventa.app.ui.auth.LogoutConfirmationDialog
+import com.solventa.app.ui.auth.PasswordRecoveryScreen
 import com.solventa.app.ui.theme.SolventaTheme
 
 // BiometricPrompt requiere una FragmentActivity para mostrar el diálogo del sistema.
@@ -90,13 +92,26 @@ fun SolventaMobileRoot(
     }
 
     if (uiState.showLogoutConfirmation) {
-        LogoutConfirmationDialog(onConfirm = viewModel::confirmLogout, onDismiss = viewModel::cancelLogout)
+        LogoutConfirmationDialog(
+            biometricEnabled = uiState.biometricEnabled,
+            onConfirm = viewModel::confirmLogout,
+            onDismiss = viewModel::cancelLogout,
+        )
     }
 
     when {
         uiState.isAuthenticated -> HomePlaceholder(
             fullName = uiState.fullName,
+            biometricEnabled = uiState.biometricEnabled,
+            onDisableBiometrics = viewModel::disableBiometrics,
             onLogout = viewModel::requestLogout,
+            modifier = modifier,
+        )
+        uiState.showPasswordRecovery -> PasswordRecoveryScreen(
+            uiState = uiState,
+            onRequestCode = viewModel::requestRecoveryCode,
+            onSubmit = viewModel::resetPassword,
+            onClose = viewModel::closePasswordRecovery,
             modifier = modifier,
         )
         uiState.showAlternativeAccess -> AlternativeLoginScreen(
@@ -106,6 +121,7 @@ fun SolventaMobileRoot(
                 viewModel.authenticateWithPassword(email, password, otpCode, biometricAuthenticator)
             },
             onBack = viewModel::onBackToBiometrics,
+            onForgotPassword = viewModel::openPasswordRecovery,
             modifier = modifier,
         )
         else -> BiometricLoginScreen(
@@ -119,7 +135,13 @@ fun SolventaMobileRoot(
 
 // Se reemplaza por la billetera de pólizas en HU-MOV-04.
 @Composable
-private fun HomePlaceholder(fullName: String?, onLogout: () -> Unit, modifier: Modifier = Modifier) {
+private fun HomePlaceholder(
+    fullName: String?,
+    biometricEnabled: Boolean,
+    onDisableBiometrics: () -> Unit,
+    onLogout: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -139,6 +161,18 @@ private fun HomePlaceholder(fullName: String?, onLogout: () -> Unit, modifier: M
         Spacer(Modifier.height(32.dp))
         OutlinedButton(onClick = onLogout) {
             Text(stringResource(R.string.logout_button))
+        }
+        Spacer(Modifier.height(8.dp))
+        if (biometricEnabled) {
+            TextButton(onClick = onDisableBiometrics) {
+                Text(stringResource(R.string.biometric_disable))
+            }
+        } else {
+            Text(
+                text = stringResource(R.string.biometric_disabled),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

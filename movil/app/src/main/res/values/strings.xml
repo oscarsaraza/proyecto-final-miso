@@ -14,9 +14,12 @@
     <string name="auth_status_unavailable">La biometría no está disponible en este teléfono. Ingrese con contraseña y código.</string>
     <string name="auth_status_not_enrolled">No hay huella ni rostro registrados en este teléfono. Ingrese con contraseña y código.</string>
     <string name="auth_status_locked_out">Demasiados intentos fallidos. Ingrese con contraseña y código.</string>
-    <string name="auth_status_no_session">Para activar el acceso biométrico, ingrese primero con contraseña y código.</string>
-    <string name="auth_status_session_reset">Por seguridad, la sesión guardada se reinició. Ingrese con contraseña y código.</string>
+    <string name="auth_status_no_session">La huella aún no está activa en este teléfono. Ingrese con contraseña y código y acepte activarla.</string>
+    <string name="auth_status_session_reset">Por seguridad, el ingreso con huella se desactivó. Ingrese con contraseña y código para activarlo de nuevo.</string>
     <string name="auth_status_logged_out">Cerró sesión en este teléfono. Para volver a entrar use contraseña y código.</string>
+    <string name="auth_status_logged_out_biometric">Cerró sesión. Toque el sensor para volver a entrar con su huella.</string>
+    <string name="auth_status_account_locked">Su cuenta está bloqueada temporalmente por intentos fallidos. Intente más tarde o recupere su contraseña.</string>
+    <string name="auth_status_server_unreachable">No fue posible conectar con Solventa. Revise su conexión e intente de nuevo.</string>
     <string name="auth_status_error">No fue posible verificar su identidad. Intente de nuevo.</string>
 
     <string name="biometric_prompt_title">Ingresar a Solventa</string>
@@ -31,16 +34,22 @@
     <string name="auth_otp">Código de seguridad (SMS)</string>
     <string name="auth_otp_send">Enviar código</string>
     <string name="auth_otp_resend">Reenviar</string>
+    <string name="auth_otp_wait">Reenviar en %1$d s</string>
     <string name="auth_otp_sent">Enviamos un código por SMS. Vence en 5 minutos.</string>
-    <string name="auth_otp_sent_debug">Código de prueba (simula el SMS): %1$s</string>
+    <string name="auth_otp_sent_debug">Código de prueba (simulación del SMS): %1$s</string>
     <string name="auth_submit">Ingresar</string>
     <string name="auth_submitting">Verificando…</string>
-    <string name="auth_error_invalid_credentials">Correo, contraseña o código incorrectos. Al tercer intento fallido la cuenta se bloquea 15 minutos.</string>
-    <string name="auth_error_locked">Cuenta bloqueada por 15 minutos tras 3 intentos fallidos.</string>
+    <string name="auth_error_invalid_credentials">Correo, contraseña o código incorrectos. Tras 5 contraseñas incorrectas la cuenta se bloquea 15 minutos.</string>
+    <string name="auth_error_invalid_format">Revise el formato del correo y que el código tenga 6 dígitos.</string>
+    <string name="auth_error_too_many">Demasiados intentos desde este teléfono. Espere un momento e intente de nuevo.</string>
+    <string name="auth_error_sms">No pudimos enviar el SMS. Intente en unos minutos.</string>
+    <string name="auth_locked_countdown">Cuenta bloqueada. Podrá intentar de nuevo en %1$d:%2$02d.</string>
+    <string name="auth_forgot_password">¿Olvidó su contraseña?</string>
+    <string name="auth_error_locked">Cuenta bloqueada temporalmente por contraseñas incorrectas.</string>
     <string name="auth_error_network">No fue posible conectar con Solventa. Revise su conexión e intente de nuevo.</string>
     <string name="auth_back_to_biometrics">Volver al acceso biométrico</string>
     <string name="auth_enroll_title">¿Activar ingreso con huella o rostro?</string>
-    <string name="auth_enroll_message">La próxima vez entrará en segundos. Su sesión quedará cifrada en el almacén protegido del teléfono.</string>
+    <string name="auth_enroll_message">La próxima vez entrará con su huella, aunque cierre sesión. El acceso queda cifrado en el almacén protegido del teléfono y puede desactivarlo cuando quiera.</string>
     <string name="auth_enroll_confirm">Activar</string>
     <string name="auth_enroll_skip">Ahora no</string>
 
@@ -52,7 +61,23 @@
     <!-- HU-MOV-12: Cierre de sesión -->
     <string name="logout_button">Cerrar sesión</string>
     <string name="logout_title">¿Cerrar sesión?</string>
-    <string name="logout_message">Se desvinculará la sesión activa de este teléfono y se borrarán sus credenciales. Para volver a entrar deberá usar contraseña y código.</string>
+    <string name="logout_message">Se cerrará su sesión en este teléfono y en el servidor.</string>
+    <string name="logout_message_biometric">Se cerrará su sesión en este teléfono y en el servidor. Su huella seguirá activa para volver a entrar; puede desactivarla desde el inicio.</string>
+    <string name="biometric_disable">Desactivar ingreso con huella</string>
+    <string name="biometric_disabled">El ingreso con huella está desactivado en este teléfono.</string>
+    <string name="recovery_title">Recuperar contraseña</string>
+    <string name="recovery_subtitle">Le enviaremos un código por SMS al celular registrado.</string>
+    <string name="recovery_send">Enviar código</string>
+    <string name="recovery_code">Código del SMS</string>
+    <string name="recovery_new_password">Contraseña nueva</string>
+    <string name="recovery_confirm_password">Confirmar contraseña</string>
+    <string name="recovery_rules">Mínimo 8 caracteres, con letras y números.</string>
+    <string name="recovery_submit">Cambiar contraseña</string>
+    <string name="recovery_done">Contraseña actualizada. Por seguridad se cerraron sus sesiones y se desactivó la huella. Ingrese con su nueva contraseña.</string>
+    <string name="recovery_back">Volver al ingreso</string>
+    <string name="recovery_error_code">El código no es válido o venció. Pida uno nuevo.</string>
+    <string name="recovery_error_weak">La contraseña debe tener mínimo 8 caracteres, con letras y números.</string>
+    <string name="recovery_error_mismatch">Las contraseñas no coinciden.</string>
     <string name="logout_confirm">Cerrar sesión</string>
     <string name="logout_cancel">Cancelar</string>
 </resources>

@@ -96,7 +96,7 @@ fun BiometricLoginScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
-                color = if (biometricBlocked || uiState.status == AuthStatus.BIOMETRIC_ERROR) {
+                color = if (biometricBlocked || uiState.status in ERROR_STATUSES) {
                     MaterialTheme.colorScheme.error
                 } else {
                     MaterialTheme.colorScheme.primary
@@ -145,7 +145,10 @@ private val BLOCKING_STATUSES = setOf(
     AuthStatus.NO_STORED_SESSION,
     AuthStatus.SESSION_RESET,
     AuthStatus.LOGGED_OUT,
+    AuthStatus.ACCOUNT_LOCKED,
 )
+
+private val ERROR_STATUSES = setOf(AuthStatus.BIOMETRIC_ERROR, AuthStatus.SERVER_UNREACHABLE)
 
 @StringRes
 private fun AuthStatus.messageRes(): Int = when (this) {
@@ -160,6 +163,9 @@ private fun AuthStatus.messageRes(): Int = when (this) {
     AuthStatus.NO_STORED_SESSION -> R.string.auth_status_no_session
     AuthStatus.SESSION_RESET -> R.string.auth_status_session_reset
     AuthStatus.LOGGED_OUT -> R.string.auth_status_logged_out
+    AuthStatus.LOGGED_OUT_BIOMETRIC_READY -> R.string.auth_status_logged_out_biometric
+    AuthStatus.ACCOUNT_LOCKED -> R.string.auth_status_account_locked
+    AuthStatus.SERVER_UNREACHABLE -> R.string.auth_status_server_unreachable
 }
 
 @Preview(showBackground = true)

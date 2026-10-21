@@ -1,5 +1,6 @@
 package com.solventa.app.data.session
 
+import com.solventa.app.domain.auth.DeviceCredential
 import com.solventa.app.domain.auth.SessionTokens
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -13,6 +14,7 @@ import javax.crypto.AEADBadTagException
 // TC-S1-11: custodia de credenciales en el almacén protegido (HU-MOV-03)
 class SecureSessionRepositoryTest {
 
+    private val credential = DeviceCredential(deviceId = "device-123", secret = "secreto-del-dispositivo")
     private val tokens = SessionTokens(accessToken = "access.jwt.token", refreshToken = "refresh-token-123")
 
     private lateinit var crypto: FakeSessionCrypto
@@ -27,39 +29,34 @@ class SecureSessionRepositoryTest {
     }
 
     @Test
-    fun `TC-S1-11 sin sesion guardada no hay nada que desbloquear`() {
+    fun `TC-S1-11 sin huella vinculada no hay nada que desbloquear`() {
         assertFalse(repository.hasStoredSession())
         assertNull(repository.decryptionCipher())
         assertNull(repository.activeSession)
     }
 
     @Test
-    fun `TC-S1-11 guarda los tokens cifrados y nunca en texto plano`() {
-        repository.save(tokens, repository.encryptionCipher())
+    fun `TC-S1-11 guarda la credencial cifrada y nunca el secreto en texto plano`() {
+        repository.save(credential, repository.encryptionCipher())
 
         val stored = checkNotNull(store.stored)
-        val persisted = String(stored.ciphertext, Charsets.ISO_8859_1)
-        assertFalse(persisted.contains(tokens.accessToken))
-        assertFalse(persisted.contains(tokens.refreshToken))
+        assertFalse(String(stored.ciphertext, Charsets.ISO_8859_1).contains(credential.secret))
         assertEquals(12, stored.iv.size)
+        assertEquals("device-123", repository.storedDeviceId())
         assertTrue(repository.hasStoredSession())
-        assertEquals(tokens, repository.activeSession)
     }
 
     @Test
-    fun `TC-S1-11 desbloquea la sesion con el cipher autenticado`() {
-        repository.save(tokens, repository.encryptionCipher())
+    fun `TC-S1-11 desbloquea la credencial con el cipher autenticado`() {
+        repository.save(credential, repository.encryptionCipher())
         val reopened = SecureSessionRepository(crypto, store)
 
-        val unlocked = reopened.unlock(checkNotNull(reopened.decryptionCipher()))
-
-        assertEquals(tokens, unlocked)
-        assertEquals(tokens, reopened.activeSession)
+        assertEquals(credential, reopened.unlock(checkNotNull(reopened.decryptionCipher())))
     }
 
     @Test
-    fun `TC-S1-11 llave invalidada por cambio de biometria descarta la sesion`() {
-        repository.save(tokens, repository.encryptionCipher())
+    fun `TC-S1-11 llave invalidada por cambio de biometria descarta la credencial`() {
+        repository.save(credential, repository.encryptionCipher())
         crypto.invalidated = true
 
         assertNull(repository.decryptionCipher())
@@ -67,8 +64,8 @@ class SecureSessionRepositoryTest {
     }
 
     @Test
-    fun `TC-S1-11 sesion alterada no se puede descifrar`() {
-        repository.save(tokens, repository.encryptionCipher())
+    fun `TC-S1-11 credencial alterada no se puede descifrar`() {
+        repository.save(credential, repository.encryptionCipher())
         val stored = checkNotNull(store.stored)
         stored.ciphertext[0] = (stored.ciphertext[0].toInt() xor 0x01).toByte()
 
@@ -78,8 +75,20 @@ class SecureSessionRepositoryTest {
     }
 
     @Test
-    fun `TC-S1-11 clear borra la sesion, la llave y la copia en memoria`() {
-        repository.save(tokens, repository.encryptionCipher())
+    fun `TC-S1-12 terminar la sesion conserva la huella vinculada`() {
+        repository.startSession(tokens)
+        repository.save(credential, repository.encryptionCipher())
+
+        repository.endSession()
+
+        assertNull(repository.activeSession)
+        assertTrue(repository.hasStoredSession())
+    }
+
+    @Test
+    fun `TC-S1-11 desvincular borra la credencial y la llave`() {
+        repository.startSession(tokens)
+        repository.save(credential, repository.encryptionCipher())
 
         repository.clear()
 
@@ -89,7 +98,8 @@ class SecureSessionRepositoryTest {
     }
 
     @Test
-    fun `los tokens no se exponen al imprimirlos`() {
+    fun `los tokens y el secreto no se exponen al imprimirlos`() {
         assertEquals("SessionTokens(***)", tokens.toString())
+        assertEquals("DeviceCredential(device-123, ***)", credential.toString())
     }
 }

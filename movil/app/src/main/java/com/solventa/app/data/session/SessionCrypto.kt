@@ -11,7 +11,7 @@ interface SessionCrypto {
     fun deleteKey()
 }
 
-class EncryptedSession(val ciphertext: ByteArray, val iv: ByteArray)
+class EncryptedSession(val ciphertext: ByteArray, val iv: ByteArray, val deviceId: String? = null)
 
 interface EncryptedSessionStore {
     fun read(): EncryptedSession?
