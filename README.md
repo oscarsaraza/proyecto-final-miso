@@ -17,6 +17,8 @@ Su arquitectura implementa un **Monolito Modular API-First con Arquitectura Hexa
 | [`.github/workflows`](.github/workflows/) | Pipelines de CI/CD                                                | GitHub Actions (CI en cada commit, CD a AWS en `main`)        |
 | [`experiments/`](experiments/)            | Experimentos de arquitectura y validaciones de carga E1 y E3      | Python, k6, AWS Cloud                                         |
 | [`docs/`](docs/)                          | Prototipos de navegación interactivos y guía de pruebas manuales  | HTML5, CSS3, JavaScript, Markdown                             |
+| [`sdd/`](sdd/README.md)                   | Framework SDD con seguridad y privacidad obligatorias (ver [`AGENTS.md`](AGENTS.md)) | Markdown, Python 3.11+ (solo biblioteca estándar)        |
+| [`specs/`](specs/)                        | Paquetes de especificación: spec, seguridad, casos de prueba y gate | Markdown                                                      |
 
 ---
 
@@ -351,6 +353,7 @@ Se dispara en **cada commit y pull request sin importar la rama** (`push` y `pul
 2. **`web-ci`**: Instala Node.js 22, ejecuta las pruebas unitarias del portal comercial con Vitest y genera el bundle de producción.
 3. **`mobile-ci`**: Configura Java 17 LTS y Gradle, ejecutando `./gradlew testDebugUnitTest` para la aplicación móvil.
 4. **`terraform-ci`**: Inicializa los módulos de Terraform y valida el formato y sintaxis (`fmt -check`, `validate`).
+5. **`sdd-gate`**: Prueba el validador del framework SDD, valida los paquetes de `specs/` y calcula su gate de seguridad; en los pull requests revisa además secretos en las líneas nuevas, rutas críticas sin spec y dependencias nuevas sin evaluar.
 
 ### 8.2 Despliegue Continuo a AWS (`.github/workflows/deploy.yml`)
 
