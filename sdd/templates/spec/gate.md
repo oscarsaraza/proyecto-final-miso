@@ -8,7 +8,9 @@
 
 <!-- Status: IN_PROGRESS, IMPLEMENTED, SECURITY_TESTS_PENDING, SECURITY_REVIEW_PENDING, RISK_ACCEPTED,
      SECURITY_VERIFIED or BLOCKED. The validator computes the status the evidence supports and rejects a
-     higher declared one. An agent may prepare evidence; it never signs reviews or accepts risk. -->
+     higher declared one. An agent may prepare evidence; it never signs reviews or accepts risk.
+     With "requireSignatures": false in sdd/config.json, the merge request approval is the security review
+     and risk decisions recorded in the spec count as accepted; the two signature tables are optional. -->
 
 ## Definition of Done
 
