@@ -1,13 +1,20 @@
 """Emisión de pólizas: una por cotización vigente, con su evento PolicyIssued en el outbox (HU-WEB-05)."""
 from datetime import datetime, timezone
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.outbox import OutboxMessageDB
-from app.modules.policy.models import POLICY_NUMBER_SEQ, PolicyDB, PolicyIssueRequest, PolicyRecord
+from app.modules.policy.models import (
+    POLICY_NUMBER_SEQ,
+    CardCoverage,
+    InsuredPolicyCard,
+    PolicyDB,
+    PolicyIssueRequest,
+    PolicyRecord,
+)
 from app.modules.rating.models import QuoteDB
 
 
@@ -86,6 +93,38 @@ class PolicyService:
     def activate(self, policy: PolicyDB) -> None:
         """La póliza pagada queda activa (S8: ACTIVA_PAGADA)."""
         policy.status = "ACTIVE"
+
+
+    async def active_for_holder(
+        self, session: AsyncSession, document_number: str, holder_name: str
+    ) -> List[InsuredPolicyCard]:
+        """Pólizas pagadas y vigentes del titular, como tarjetas de la billetera (HU-MOV-04)."""
+        policies = await session.scalars(
+            select(PolicyDB)
+            .where(
+                PolicyDB.insured_document == document_number,
+                PolicyDB.status == "ACTIVE",
+                PolicyDB.valid_until > self.now(),
+            )
+            .order_by(PolicyDB.issued_at)
+        )
+        return [self.card(policy, holder_name) for policy in policies]
+
+    @staticmethod
+    def card(policy: PolicyDB, holder_name: str) -> InsuredPolicyCard:
+        conditions = policy.conditions
+        return InsuredPolicyCard(
+            policy_number=policy.policy_number,
+            plan=conditions["tier"],
+            holder_name=holder_name,
+            coverages=[
+                CardCoverage(name=c["name"], limit=c["limit"])
+                for c in conditions["coverages"]
+                if c.get("included", True)
+            ],
+            valid_from=policy.issued_at,
+            valid_until=policy.valid_until,
+        )
 
 
 policy_service = PolicyService()

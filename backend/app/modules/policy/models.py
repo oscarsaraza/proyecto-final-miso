@@ -41,3 +41,22 @@ class PolicyRecord(BaseModel):
     issued_at: datetime
     valid_until: datetime
     pdf_s3_key: Optional[str] = Field(None, description="Carátula en S3; llega con HU-WEB-16")
+
+
+class CardCoverage(BaseModel):
+    name: str
+    limit: float
+
+
+class InsuredPolicyCard(BaseModel):
+    """Tarjeta de la billetera: sin documento, beneficiarios ni prima (HU-MOV-04)."""
+    policy_number: str
+    plan: PlanTier
+    holder_name: str
+    coverages: List[CardCoverage]
+    valid_from: datetime
+    valid_until: datetime
+
+
+class InsuredPolicies(BaseModel):
+    policies: List[InsuredPolicyCard]

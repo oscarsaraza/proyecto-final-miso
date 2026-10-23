@@ -8,6 +8,7 @@ from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.middleware import TenantContextMiddleware
 from app.bff.experience.router import router as experience_router
 from app.bff.auth.router import router as auth_router
+from app.bff.insured.router import router as insured_router
 from app.modules.auth.models import UserDB  # noqa: F401 - registrar tablas en Base.metadata
 from app.modules.rating.models import QuoteDB  # noqa: F401 - registrar tablas en Base.metadata
 from app.modules.policy.models import PolicyDB  # noqa: F401 - registrar tablas en Base.metadata
@@ -80,6 +81,7 @@ async def health_check():
 # 4. Registro de Routers BFF
 app.include_router(experience_router, prefix=settings.API_V1_STR)
 app.include_router(auth_router, prefix=settings.API_V1_STR)
+app.include_router(insured_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/", tags=["Root"])

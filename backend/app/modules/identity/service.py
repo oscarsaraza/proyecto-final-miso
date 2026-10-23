@@ -289,6 +289,13 @@ class InsuredAuthService:
         await session.commit()
         return tokens
 
+    async def account_for_access(self, session: AsyncSession, claims: dict) -> InsuredAccountDB:
+        """Cuenta del token de acceso; una sesión revocada con token_version deja de valer (HU-MOV-04)."""
+        account = await session.get(InsuredAccountDB, claims["sub"])
+        if account is None or claims.get("ver", 0) != account.token_version:
+            raise InvalidTokenError()
+        return account
+
     async def revoke_device(self, session: AsyncSession, user_id: str, device_id: str) -> None:
         await session.execute(
             update(InsuredDeviceDB)
