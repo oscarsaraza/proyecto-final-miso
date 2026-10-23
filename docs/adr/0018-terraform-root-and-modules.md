@@ -18,7 +18,7 @@ outputs are all typed and described. Seven modules, each with `main.tf`, `variab
 | Module | Resources |
 |---|---|
 | `vpc` | VPC, public and private subnets in two zones, internet gateway, one NAT gateway, routes |
-| `alb` | internet-facing load balancer, security group, target group, HTTP listener |
+| `alb` | load balancer (internal since ADR 0020), security group, target group, HTTP listener |
 | `ecr` | backend image repository, lifecycle policy |
 | `ecs` | cluster, log group, IAM roles, task definition, Fargate service, CPU autoscaling |
 | `rds` | PostgreSQL 16 Multi-AZ, KMS key, subnet group, security group |
@@ -81,7 +81,8 @@ Rules:
 - When next touched: a module gets descriptions on its variables and outputs.
 - `HOTFIX-configuracion-de-produccion` removed the database password default and added the token and
   one-time-code keys as variables without defaults.
-- Not changed by this ADR, each tracked for its own spec: the HTTP-only listener; open egress
+- ADR 0020 made the load balancer private behind a CloudFront VPC origin.
+- Not changed by this ADR, each tracked for its own spec: open egress
   (`0.0.0.0/0`) on the `alb`, `ecs` and `rds` security groups; no deletion protection on the load
   balancer or the database (`skip_final_snapshot = true`).
 
