@@ -87,7 +87,7 @@ jobs:
           python3 -c '
           import subprocess, json, sys
 
-          region = "${{ secrets.AWS_REGION || '\''us-east-1'\'' }}"
+          region = "${{ secrets.AWS_REGION || "us-east-1" }}"
           buckets = ["solventa-web-portal-production", "solventa-documents-production"]
 
           for bucket in buckets:
