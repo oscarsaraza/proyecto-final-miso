@@ -41,6 +41,7 @@ team accepts or changes them.
 | [0015](0015-mobile-navigation.md) | Screen switching by UI state in one activity |
 | [0016](0016-mobile-networking.md) | HTTP with `HttpURLConnection` behind domain interfaces |
 | [0017](0017-mobile-credential-storage.md) | Credentials protected by the Keystore and biometrics; tokens only in memory |
+| [0021](0021-mobile-encrypted-local-database.md) | An encrypted local database per account with Room and SQLCipher |
 
 ## Infrastructure (Terraform)
 
