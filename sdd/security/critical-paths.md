@@ -55,3 +55,16 @@ seed data, deployment scripts. Keep the patterns precise; an over-broad pattern 
 
 | Pattern | Area | Why | Minimum profile |
 |---|---|---|---|
+| backend/app/core/config.py | Configuration | Keys, CORS, ENVIRONMENT and the debug features it controls | HIGH |
+| backend/app/core/security.py | Authentication | Token signing, password hashing, TOTP and role checks | HIGH |
+| backend/app/core/middleware.py | Tenancy | Partner context taken from request headers | HIGH |
+| backend/app/main.py | Configuration | CORS, interactive documentation, seeding and mounted routers | HIGH |
+| backend/seeds/** | Data | Test accounts with credentials | HIGH |
+| web/src/app/core/interceptors/** | Authentication | Where tokens are attached to requests | HIGH |
+| web/src/app/core/guards/** | Authorization | Route access in the portal; the server still decides | MEDIUM |
+| web/src/index.html | Web | Content Security Policy, third-party scripts and fonts | MEDIUM |
+| movil/app/src/main/java/**/data/session/** | Mobile | Keystore keys and stored credentials | HIGH |
+| movil/app/src/main/java/**/MainActivity.kt | Mobile | Screenshot protection and the biometric prompt host | MEDIUM |
+| movil/app/src/main/java/**/SolventaApplication.kt | Mobile | Wiring of session storage and HTTP clients | MEDIUM |
+| movil/app/proguard-rules.pro | Mobile | Release shrinking and obfuscation | MEDIUM |
+| scripts/** | Pipeline | Deployment, credentials and local tunnels | HIGH |

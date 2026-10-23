@@ -60,6 +60,7 @@ Fuera de alcance: el proveedor de SMS; un gestor de secretos; rotar las credenci
 | docker-compose.yml | El backend lee backend/.env |
 | README.md | Secretos de CI y backend/.env |
 | docs/adr/0018-terraform-root-and-modules.md | Regla 5: secretos como variables sin valor por defecto |
+| sdd/security/critical-paths.md | Rutas críticas propias del proyecto: configuración, seguridad, semillas, sesión móvil, interceptores y scripts |
 
 ### Use cases
 
@@ -179,4 +180,5 @@ Regla 5 de docs/adr/0018-terraform-root-and-modules.md: los secretos son variabl
 | T-04 | Variables de Terraform sin valor por defecto, validadas, y entorno de la tarea de ECS | AC-03, AC-04, SR-03 | CTL-04 | DONE | terraform/variables.tf |
 | T-05 | TF_VAR_* desde los secretos de CI en deploy y destroy | AC-03, AC-04, SR-03 | CTL-05 | DONE | .github/workflows/deploy.yml |
 | T-06 | Configuración local: backend/.env.example, docker-compose y README | AC-02 | — | DONE | backend/.env.example |
+| T-08 | Registrar las rutas críticas propias del proyecto para que un cambio en ellas exija un spec | SR-01, SR-03 | CTL-01, CTL-05 | DONE | sdd/security/critical-paths.md |
 | T-07 | Crear en GitHub DB_PASSWORD, JWT_SECRET_KEY y OTP_SECRET_KEY con llaves nuevas antes de fusionar a main | SR-01, SR-03 | CTL-05 | DONE | gh secret list: los tres secretos creados el 2026-10-23 UTC; las llaves se generaron nuevas sin mostrarse y DB_PASSWORD conserva el valor actual |
