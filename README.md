@@ -17,6 +17,8 @@ Su arquitectura implementa un **Monolito Modular API-First con Arquitectura Hexa
 | [`.github/workflows`](.github/workflows/) | Pipelines de CI/CD                                                | GitHub Actions (CI en cada commit, CD a AWS en `main`)        |
 | [`experiments/`](experiments/)            | Experimentos de arquitectura y validaciones de carga E1 y E3      | Python, k6, AWS Cloud                                         |
 | [`docs/`](docs/)                          | Prototipos de navegación interactivos y guía de pruebas manuales  | HTML5, CSS3, JavaScript, Markdown                             |
+| [`sdd/`](sdd/README.md)                   | Framework SDD con seguridad y privacidad obligatorias (ver [`AGENTS.md`](AGENTS.md)) | Markdown, Python 3.11+ (solo biblioteca estándar)        |
+| [`specs/`](specs/)                        | Paquetes de especificación: spec, seguridad, casos de prueba y gate | Markdown                                                      |
 
 ---
 
@@ -111,6 +113,24 @@ El BFF expone la verificación de asegurabilidad sociodemográfica por rango de 
 | Endpoint | Descripción | Respuestas |
 | :------- | :---------- | :--------- |
 | `POST /api/v1/experience/clients/validate` | Valida que el tomador cumpla con el rango asegurable de 18 a 75 años según su fecha de nacimiento. Exige rol `advisor`. | `200` `{"status": "ELIGIBLE", "age": N}` · `400` fuera de rango · `422` formato |
+
+### 2.6 Hooks de git del framework SDD (una vez por copia)
+
+Git no activa los hooks de un repositorio al clonarlo: cada persona los activa una vez en su copia. Requieren Python 3.11+ y `sh` (en Windows, Git Bash).
+
+```bash
+python sdd/tools/sdd.py hooks install     # git usará sdd/hooks (core.hooksPath)
+python sdd/tools/sdd.py doctor            # comprueba Python, configuración y hooks
+python sdd/tools/sdd.py hooks uninstall   # para desactivarlos
+```
+
+| Hook | Bloquea |
+| :--- | :------ |
+| `pre-commit` | Commits directos a `main`, `dev` o `qa` y secretos en los cambios preparados |
+| `commit-msg` | Mensajes fuera de Conventional Commits; en ramas `feature/HU-…`, commits sin la HU y código sin el paquete de la HU en `specs/`; cambios de infraestructura o autenticación sin ADR |
+| `pre-push` | Push a ramas protegidas y force-push |
+
+El job `sdd-gate` del CI valida secretos, rutas críticas, dependencias y specs para todos, pero no revisa que cada commit nombre su HU: eso solo lo hace el hook `commit-msg`. El flujo completo está en [`AGENTS.md`](AGENTS.md) y [`sdd/README.md`](sdd/README.md).
 
 ---
 
@@ -351,6 +371,7 @@ Se dispara en **cada commit y pull request sin importar la rama** (`push` y `pul
 2. **`web-ci`**: Instala Node.js 22, ejecuta las pruebas unitarias del portal comercial con Vitest y genera el bundle de producción.
 3. **`mobile-ci`**: Configura Java 17 LTS y Gradle, ejecutando `./gradlew testDebugUnitTest` para la aplicación móvil.
 4. **`terraform-ci`**: Inicializa los módulos de Terraform y valida el formato y sintaxis (`fmt -check`, `validate`).
+5. **`sdd-gate`**: Prueba el validador del framework SDD, valida los paquetes de `specs/` y calcula su gate de seguridad; en los pull requests revisa además secretos en las líneas nuevas, rutas críticas sin spec y dependencias nuevas sin evaluar.
 
 ### 8.2 Despliegue Continuo a AWS (`.github/workflows/deploy.yml`)
 

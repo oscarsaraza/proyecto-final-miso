@@ -79,3 +79,6 @@ experiments/e1-latencia/resultados/*
 experiments/e3-continuidad/resultados/*
 
 coverage.xml
+
+# SDD: local session state (active spec, worklogs). Never the source of truth.
+.sdd/
