@@ -83,11 +83,13 @@ jobs:
           fi
 
       - name: Limpieza preventiva de buckets S3 gestionados
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
         run: |
           python3 -c '
-          import subprocess, json, sys
+          import os, subprocess, json, sys
 
-          region = "${{ secrets.AWS_REGION || "us-east-1" }}"
+          region = os.environ.get("AWS_REGION", "us-east-1")
           buckets = ["solventa-web-portal-production", "solventa-documents-production"]
 
           for bucket in buckets:
