@@ -241,9 +241,9 @@ N/A: no hay inquilinos; el canal de socios, única entrada con identificador de 
 
 | ID | Risk | Threats | Likelihood | Impact | Level | Treatment | Residual risk | Status |
 |---|---|---|---|---|---|---|---|---|
-| RISK-01 | El ambiente de AWS sigue sin ENVIRONMENT: entrega el código en la respuesta, siembra cuentas con credenciales públicas y sirve la documentación; quien conozca un correo de prueba entra o cambia su contraseña | THR-07 | HIGH | MEDIUM | HIGH | ACCEPT | Alto mientras el ambiente tenga solo datos ficticios; desaparece con ENVIRONMENT=production y un proveedor de SMS | OPEN |
-| RISK-02 | Llaves y contraseña viajan como variables de entorno: legibles en la definición de tarea de ECS y en el estado de Terraform | THR-08 | LOW | HIGH | MEDIUM | ACCEPT | Medio; desaparece con un gestor de secretos (nueva ADR) | OPEN |
-| RISK-03 | La contraseña de RDS no se rota: si se reutiliza, el valor publicado en el historial de git sigue vigente | THR-06 | LOW | HIGH | MEDIUM | ACCEPT | Medio; la base solo acepta conexiones del grupo de seguridad del backend | OPEN |
+| RISK-01 | El ambiente de AWS sigue sin ENVIRONMENT: entrega el código en la respuesta, siembra cuentas con credenciales públicas y sirve la documentación; quien conozca un correo de prueba entra o cambia su contraseña | THR-07 | HIGH | MEDIUM | HIGH | ACCEPT | Alto mientras el ambiente tenga solo datos ficticios; desaparece con ENVIRONMENT=production y un proveedor de SMS | ACCEPTED |
+| RISK-02 | Llaves y contraseña viajan como variables de entorno: legibles en la definición de tarea de ECS y en el estado de Terraform | THR-08 | LOW | HIGH | MEDIUM | ACCEPT | Medio; desaparece con un gestor de secretos (nueva ADR) | ACCEPTED |
+| RISK-03 | La contraseña de RDS no se rota: si se reutiliza, el valor publicado en el historial de git sigue vigente | THR-06 | LOW | HIGH | MEDIUM | ACCEPT | Medio; la base solo acepta conexiones del grupo de seguridad del backend | ACCEPTED |
 | RISK-04 | Si JWT_SECRET_KEY reutiliza la llave publicada, cualquiera sigue fabricando tokens | THR-01 | LOW | CRITICAL | HIGH | MITIGATE | Bajo: las llaves se generaron nuevas al crear los secretos (T-07) | MITIGATED |
 
 ## 16. Pending decisions

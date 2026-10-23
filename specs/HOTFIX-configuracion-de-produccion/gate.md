@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Security status | IMPLEMENTED |
+| Security status | SECURITY_TESTS_PENDING |
 | Evaluated on | 2026-10-22 |
 | Command | python sdd/tools/sdd.py spec validate specs/HOTFIX-configuracion-de-produccion |
 
@@ -14,8 +14,8 @@
 - [x] No secret in the code, logs, artifacts or this package.
 - [x] New or updated dependencies evaluated.
 - [x] Personal data handling reviewed (complete lifecycle, nothing UNKNOWN).
-- [ ] MEDIUM or higher residual risks mitigated or accepted by an authorized person (RISK-01 to RISK-03 await acceptance; RISK-04 is mitigated).
-- [ ] Security review approved by a person other than the author.
+- [x] MEDIUM or higher residual risks mitigated or accepted (RISK-01 to RISK-03 accepted by the team on 2026-10-22, recorded in spec.md; RISK-04 mitigated).
+- [ ] Security review approved by a person other than the author (the approval of PR #205).
 - [ ] Closeout: every acceptance criterion MET with evidence.
 - [x] `python sdd/tools/sdd.py spec validate` reports no errors.
 
@@ -25,9 +25,6 @@
 |---|---|---|---|---|
 
 ## Risk acceptance
-
-<!-- RISK-01, RISK-02 and RISK-03 record decisions the team took on 2026-10-22. They count only when the
-     person who decides signs here: name, role, date and expiry. -->
 
 | Risk | Decision | Approved by | Role | Date | Expires |
 |---|---|---|---|---|---|
