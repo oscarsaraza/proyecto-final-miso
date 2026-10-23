@@ -114,6 +114,24 @@ El BFF expone la verificación de asegurabilidad sociodemográfica por rango de 
 | :------- | :---------- | :--------- |
 | `POST /api/v1/experience/clients/validate` | Valida que el tomador cumpla con el rango asegurable de 18 a 75 años según su fecha de nacimiento. Exige rol `advisor`. | `200` `{"status": "ELIGIBLE", "age": N}` · `400` fuera de rango · `422` formato |
 
+### 2.6 Hooks de git del framework SDD (una vez por copia)
+
+Git no activa los hooks de un repositorio al clonarlo: cada persona los activa una vez en su copia. Requieren Python 3.11+ y `sh` (en Windows, Git Bash).
+
+```bash
+python sdd/tools/sdd.py hooks install     # git usará sdd/hooks (core.hooksPath)
+python sdd/tools/sdd.py doctor            # comprueba Python, configuración y hooks
+python sdd/tools/sdd.py hooks uninstall   # para desactivarlos
+```
+
+| Hook | Bloquea |
+| :--- | :------ |
+| `pre-commit` | Commits directos a `main`, `dev` o `qa` y secretos en los cambios preparados |
+| `commit-msg` | Mensajes fuera de Conventional Commits; en ramas `feature/HU-…`, commits sin la HU y código sin el paquete de la HU en `specs/`; cambios de infraestructura o autenticación sin ADR |
+| `pre-push` | Push a ramas protegidas y force-push |
+
+El job `sdd-gate` del CI valida secretos, rutas críticas, dependencias y specs para todos, pero no revisa que cada commit nombre su HU: eso solo lo hace el hook `commit-msg`. El flujo completo está en [`AGENTS.md`](AGENTS.md) y [`sdd/README.md`](sdd/README.md).
+
 ---
 
 ## 3. Ejecución de Pruebas Automatizadas del Backend (con Poetry)
