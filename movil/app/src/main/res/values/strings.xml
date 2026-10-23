@@ -56,10 +56,24 @@
     <string name="auth_enroll_confirm">Activar</string>
     <string name="auth_enroll_skip">Ahora no</string>
 
-    <!-- Inicio (pendiente) -->
-    <string name="home_title">Bienvenido a Solventa</string>
+    <!-- HU-MOV-04: Billetera de pólizas -->
     <string name="home_title_named">Hola, %1$s</string>
-    <string name="home_subtitle">Aquí verá sus pólizas activas.</string>
+    <string name="wallet_title">Mis pólizas</string>
+    <string name="wallet_loading">Cargando sus pólizas</string>
+    <string name="wallet_offline">Sin conexión. Está viendo la copia guardada en este teléfono.</string>
+    <string name="wallet_needs_connection">Necesita conexión a internet para descargar sus pólizas por primera vez.</string>
+    <string name="wallet_empty">No tiene pólizas vigentes.</string>
+    <string name="wallet_plan">Plan %1$s</string>
+    <string name="wallet_plan_basic">Básico</string>
+    <string name="wallet_plan_standard">Estándar</string>
+    <string name="wallet_plan_premium">Premium</string>
+    <string name="wallet_policy_number">Póliza %1$s</string>
+    <string name="wallet_holder">Titular: %1$s</string>
+    <string name="wallet_validity">Vigente del %1$s al %2$s</string>
+    <string name="wallet_expired">Vencida</string>
+    <string name="wallet_coverage">%1$s: hasta %2$s</string>
+    <string name="auth_status_session_expired">Su sesión venció. Ingrese de nuevo para ver sus pólizas.</string>
+    <string name="auth_error_network_offline">No fue posible conectar con Solventa. Para ver sus pólizas sin conexión, active el ingreso con huella la próxima vez que tenga red.</string>
 
     <!-- HU-MOV-12: Cierre de sesión -->
     <string name="logout_button">Cerrar sesión</string>

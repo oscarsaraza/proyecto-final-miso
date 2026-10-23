@@ -188,7 +188,7 @@ private val BLOCKING_STATUSES = setOf(
     AuthStatus.ACCOUNT_LOCKED,
 )
 
-private val ERROR_STATUSES = setOf(AuthStatus.BIOMETRIC_ERROR, AuthStatus.SERVER_UNREACHABLE)
+private val ERROR_STATUSES = setOf(AuthStatus.BIOMETRIC_ERROR, AuthStatus.SERVER_UNREACHABLE, AuthStatus.SESSION_EXPIRED)
 
 @StringRes
 private fun AuthStatus.messageRes(): Int = when (this) {
@@ -206,6 +206,7 @@ private fun AuthStatus.messageRes(): Int = when (this) {
     AuthStatus.LOGGED_OUT_BIOMETRIC_READY -> R.string.auth_status_logged_out_biometric
     AuthStatus.ACCOUNT_LOCKED -> R.string.auth_status_account_locked
     AuthStatus.SERVER_UNREACHABLE -> R.string.auth_status_server_unreachable
+    AuthStatus.SESSION_EXPIRED -> R.string.auth_status_session_expired
 }
 
 @Preview(showBackground = true)

@@ -11,6 +11,7 @@ import com.solventa.app.domain.auth.BiometricResult
 import com.solventa.app.domain.auth.LoginResult
 import com.solventa.app.domain.auth.OtpResult
 import com.solventa.app.domain.auth.ResetResult
+import com.solventa.app.domain.policies.PolicyStore
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +36,7 @@ enum class AuthStatus {
     LOGGED_OUT_BIOMETRIC_READY,
     ACCOUNT_LOCKED,
     SERVER_UNREACHABLE,
+    SESSION_EXPIRED,
 }
 
 enum class AlternativeLoginError {
@@ -89,6 +91,7 @@ data class AuthUiState(
     val biometricEnabled: Boolean = false,
     val fullName: String? = null,
     val showLogoutConfirmation: Boolean = false,
+    val offline: Boolean = false,
 ) {
     val isLocked: Boolean get() = lockedSeconds > 0
 
@@ -104,11 +107,13 @@ fun normalizeEmail(email: String): String = email.trim().lowercase()
 
 /**
  * Acceso con huella por cuenta, acceso alterno con contraseña y código, recuperación de contraseña y
- * cierre de sesión (HU-MOV-01, HU-MOV-02, HU-MOV-03, HU-MOV-12).
+ * cierre de sesión (HU-MOV-01, HU-MOV-02, HU-MOV-03, HU-MOV-12). Sin red, la huella abre solo la copia de
+ * las pólizas, y la copia se borra al cerrar sesión o cuando el servidor revoca la sesión (HU-MOV-04).
  */
 class AuthViewModel(
     private val sessionRepository: SecureSessionRepository,
     private val authApi: AuthApi,
+    private val policyStore: PolicyStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(withAccounts(AuthUiState()))
@@ -205,13 +210,34 @@ class AuthViewModel(
                 setStatus(AuthStatus.ACCOUNT_LOCKED)
                 startLockCountdown(result.retryAfterSeconds)
             }
-            is LoginResult.TooManyRequests, LoginResult.NetworkError -> setStatus(AuthStatus.SERVER_UNREACHABLE)
+            is LoginResult.TooManyRequests -> setStatus(AuthStatus.SERVER_UNREACHABLE)
+            LoginResult.NetworkError -> enterOffline(email)
         }
     }
+
+    // La huella ya se verificó en el teléfono; sin servidor solo se abre la copia de la cuenta (AC-12).
+    private fun enterOffline(email: String) {
+        val name = sessionRepository.boundAccounts().firstOrNull { it.email == email }?.name
+        _uiState.update {
+            withAccounts(
+                it.copy(
+                    status = AuthStatus.AUTHENTICATED,
+                    isAuthenticated = true,
+                    offline = true,
+                    fullName = name,
+                    currentAccountEmail = email,
+                )
+            )
+        }
+    }
+
+    /** Token para pedir las pólizas; null en el ingreso sin red. */
+    fun accessToken(): String? = sessionRepository.activeSession?.accessToken
 
     // El servidor ya no reconoce el teléfono para esa cuenta (huella desactivada o contraseña cambiada).
     private fun resetBiometrics(email: String) {
         sessionRepository.unbind(email)
+        viewModelScope.launch { policyStore.delete(email) }
         _uiState.update { withAccounts(it.copy(status = AuthStatus.SESSION_RESET)) }
     }
 
@@ -398,9 +424,18 @@ class AuthViewModel(
                 selectedAccountEmail = email,
             )
         )
-        if (refreshToken != null) {
-            viewModelScope.launch { authApi.logout(refreshToken) }
+        viewModelScope.launch {
+            email?.let { policyStore.delete(it) }
+            refreshToken?.let { authApi.logout(it) }
         }
+    }
+
+    // El servidor rechazó el token: la billetera ya borró la copia y se vuelve a pedir el ingreso.
+    fun onSessionExpired() {
+        val email = _uiState.value.currentAccountEmail
+        sessionRepository.endSession()
+        _uiState.value = withAccounts(AuthUiState(status = AuthStatus.SESSION_EXPIRED, selectedAccountEmail = email))
+        email?.let { viewModelScope.launch { policyStore.delete(it) } }
     }
 
     fun openPasswordRecovery() {
@@ -448,6 +483,7 @@ class AuthViewModel(
             if (result == ResetResult.Success) {
                 // El servidor desvinculó las huellas de esa cuenta; las demás cuentas del teléfono se conservan.
                 sessionRepository.unbind(normalizeEmail(email))
+                policyStore.delete(normalizeEmail(email))
                 lockJob?.cancel()
             }
             _uiState.update { state ->

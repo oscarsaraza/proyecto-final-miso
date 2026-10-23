@@ -107,6 +107,7 @@ class AuthScreensTest {
             AuthStatus.LOGGED_OUT_BIOMETRIC_READY to R.string.auth_status_logged_out_biometric,
             AuthStatus.ACCOUNT_LOCKED to R.string.auth_status_account_locked,
             AuthStatus.SERVER_UNREACHABLE to R.string.auth_status_server_unreachable,
+            AuthStatus.SESSION_EXPIRED to R.string.auth_status_session_expired,
         )
         assertEquals(AuthStatus.entries.size, messages.size)
 
@@ -193,7 +194,7 @@ class AuthScreensTest {
             AlternativeLoginError.ACCOUNT_LOCKED to R.string.auth_error_locked,
             AlternativeLoginError.TOO_MANY_REQUESTS to R.string.auth_error_too_many,
             AlternativeLoginError.SMS_UNAVAILABLE to R.string.auth_error_sms,
-            AlternativeLoginError.NETWORK to R.string.auth_error_network,
+            AlternativeLoginError.NETWORK to R.string.auth_error_network_offline,
         )
         assertEquals(AlternativeLoginError.entries.size, messages.size)
 

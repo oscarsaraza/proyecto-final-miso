@@ -123,7 +123,7 @@ fun AlternativeLoginScreen(
                     AlternativeLoginError.ACCOUNT_LOCKED -> stringResource(R.string.auth_error_locked)
                     AlternativeLoginError.TOO_MANY_REQUESTS -> stringResource(R.string.auth_error_too_many)
                     AlternativeLoginError.SMS_UNAVAILABLE -> stringResource(R.string.auth_error_sms)
-                    AlternativeLoginError.NETWORK -> stringResource(R.string.auth_error_network)
+                    AlternativeLoginError.NETWORK -> stringResource(R.string.auth_error_network_offline)
                 },
                 color = MaterialTheme.colorScheme.error,
                 fontWeight = FontWeight.SemiBold,

@@ -1,5 +1,6 @@
 package com.solventa.app.ui.auth
 
+import com.solventa.app.data.policies.InMemoryPolicyStore
 import com.solventa.app.data.session.BoundAccount
 import com.solventa.app.data.session.FakeSessionCrypto
 import com.solventa.app.data.session.InMemorySessionStore
@@ -41,6 +42,7 @@ class AuthViewModelTest {
     private lateinit var store: InMemorySessionStore
     private lateinit var repository: SecureSessionRepository
     private lateinit var authApi: FakeAuthApi
+    private lateinit var policyStore: InMemoryPolicyStore
     private lateinit var viewModel: AuthViewModel
 
     @Before
@@ -52,7 +54,8 @@ class AuthViewModelTest {
         repository = SecureSessionRepository(crypto, store)
         repository.save(credential, repository.encryptionCipher(), EMAIL, "María Ruiz")
         authApi = FakeAuthApi()
-        viewModel = AuthViewModel(repository, authApi)
+        policyStore = InMemoryPolicyStore()
+        viewModel = AuthViewModel(repository, authApi, policyStore)
     }
 
     @After
@@ -67,7 +70,7 @@ class AuthViewModelTest {
 
     private fun withoutBoundAccounts() {
         store.clear()
-        viewModel = AuthViewModel(repository, authApi)
+        viewModel = AuthViewModel(repository, authApi, policyStore)
     }
 
     @Test
@@ -189,13 +192,66 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `TC-S1-09 sin conexion la huella no entra pero conserva el vinculo`() {
+    fun `TC-08 sin conexion la huella abre la billetera sin red y conserva el vinculo`() {
         authApi.biometricResult = LoginResult.NetworkError
 
         viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator())
 
-        assertEquals(AuthStatus.SERVER_UNREACHABLE, viewModel.uiState.value.status)
+        val state = viewModel.uiState.value
+        assertTrue(state.isAuthenticated)
+        assertTrue(state.offline)
+        assertEquals(EMAIL, state.currentAccountEmail)
+        assertEquals("María Ruiz", state.fullName)
+        assertNull(viewModel.accessToken())
         assertTrue(repository.isBound(EMAIL))
+    }
+
+    @Test
+    fun `TC-08 sin conexion y con la huella cancelada no se abre la copia`() {
+        authApi.biometricResult = LoginResult.NetworkError
+
+        viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator(result = BiometricResult.Cancelled))
+
+        assertFalse(viewModel.uiState.value.isAuthenticated)
+        assertNull(authApi.lastBiometricCredential)
+    }
+
+    @Test
+    fun `TC-07 cerrar sesion borra la copia de la cuenta aunque el servidor no responda`() {
+        viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator())
+        policyStore.copies[EMAIL] = emptyList()
+        policyStore.copies[OTHER_EMAIL] = emptyList()
+        authApi.logoutResult = false
+
+        viewModel.requestLogout()
+        viewModel.confirmLogout()
+
+        assertFalse(EMAIL in policyStore.copies)
+        assertTrue(OTHER_EMAIL in policyStore.copies)
+    }
+
+    @Test
+    fun `TC-07 sesion vencida borra la copia, cierra la sesion y pide ingresar`() {
+        viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator())
+        policyStore.copies[EMAIL] = emptyList()
+
+        viewModel.onSessionExpired()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isAuthenticated)
+        assertEquals(AuthStatus.SESSION_EXPIRED, state.status)
+        assertNull(repository.activeSession)
+        assertFalse(EMAIL in policyStore.copies)
+    }
+
+    @Test
+    fun `TC-07 el servidor desconoce el telefono y se borra la copia de esa cuenta`() {
+        authApi.biometricResult = LoginResult.InvalidCredentials
+        policyStore.copies[EMAIL] = emptyList()
+
+        viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator())
+
+        assertFalse(EMAIL in policyStore.copies)
     }
 
     @Test
@@ -283,7 +339,7 @@ class AuthViewModelTest {
     fun `elegir otra cuenta entra con la huella de esa cuenta`() {
         val pedroCredential = DeviceCredential("device-pedro", "secreto-pedro")
         repository.save(pedroCredential, repository.encryptionCipher(), PEDRO, "Pedro Gómez")
-        viewModel = AuthViewModel(repository, authApi)
+        viewModel = AuthViewModel(repository, authApi, policyStore)
         assertEquals(PEDRO, viewModel.uiState.value.selectedAccountEmail)
 
         viewModel.selectAccount(EMAIL)
@@ -296,7 +352,7 @@ class AuthViewModelTest {
     @Test
     fun `cerrar sesion deja elegida la cuenta que estaba adentro`() {
         repository.save(DeviceCredential("device-pedro", "s"), repository.encryptionCipher(), PEDRO, "Pedro Gómez")
-        viewModel = AuthViewModel(repository, authApi)
+        viewModel = AuthViewModel(repository, authApi, policyStore)
         viewModel.selectAccount(EMAIL)
         viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator())
 
@@ -310,7 +366,7 @@ class AuthViewModelTest {
     @Test
     fun `desactivar la huella de una cuenta conserva la de la otra`() {
         repository.save(DeviceCredential("device-pedro", "s"), repository.encryptionCipher(), PEDRO, "Pedro Gómez")
-        viewModel = AuthViewModel(repository, authApi)
+        viewModel = AuthViewModel(repository, authApi, policyStore)
         authApi.biometricResult = LoginResult.Success(newTokens, "Pedro Gómez")
         viewModel.selectAccount(PEDRO)
         viewModel.authenticateWithBiometrics(FakeBiometricAuthenticator())
@@ -956,6 +1012,7 @@ class AuthViewModelTest {
 
     private companion object {
         const val EMAIL = "maria.ruiz@correo.co"
+        const val OTHER_EMAIL = "otra.cuenta@example.com"
         const val PEDRO = "pedro.gomez@correo.co"
         const val PASSWORD = "Solventa2026!"
         const val OTP = "417902"
