@@ -1,7 +1,9 @@
 """Configuración centralizada de la aplicación."""
 from typing import Optional
-from pydantic import model_validator
+from pydantic import SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+MIN_KEY_LENGTH = 32
 
 
 class Settings(BaseSettings):
@@ -11,6 +13,7 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = "development"
+    CORS_ORIGINS: list[str] = []
 
     # Base de datos
     DATABASE_URL: str = "postgresql+asyncpg://solventa_user:solventa_password@localhost:5432/solventa"
@@ -20,8 +23,9 @@ class Settings(BaseSettings):
     DB_PASSWORD: Optional[str] = None
     DB_NAME: Optional[str] = None
 
-    # Seguridad JWT y Autenticación (HU-WEB-13)
-    JWT_SECRET_KEY: str = "solventa_super_secret_jwt_key_for_development_only_change_in_prod"
+    # Llaves sin valor por defecto: cada ambiente define las suyas, una por propósito
+    JWT_SECRET_KEY: SecretStr
+    OTP_SECRET_KEY: SecretStr
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -45,6 +49,24 @@ class Settings(BaseSettings):
     S3_DOCUMENTS_BUCKET: Optional[str] = None
     SQS_EVENTS_URL: Optional[str] = None
 
+    @field_validator("JWT_SECRET_KEY", "OTP_SECRET_KEY")
+    @classmethod
+    def llave_suficiente(cls, value: SecretStr) -> SecretStr:
+        if len(value.get_secret_value()) < MIN_KEY_LENGTH:
+            raise ValueError(f"debe tener al menos {MIN_KEY_LENGTH} caracteres")
+        return value
+
+    @model_validator(mode="after")
+    def llaves_distintas(self) -> "Settings":
+        if self.JWT_SECRET_KEY.get_secret_value() == self.OTP_SECRET_KEY.get_secret_value():
+            raise ValueError("JWT_SECRET_KEY y OTP_SECRET_KEY deben ser distintas")
+        return self
+
+    @property
+    def debug_enabled(self) -> bool:
+        """Código de prueba en respuestas, cuentas sembradas y documentación interactiva."""
+        return self.ENVIRONMENT != "production"
+
     @model_validator(mode="after")
     def assemble_db_connection(self) -> "Settings":
         """Ensambla DATABASE_URL si se proporcionan credenciales individuales de base de datos (RDS)."""
@@ -63,5 +85,17 @@ class Settings(BaseSettings):
         return self
 
 
-settings = Settings()
+def load_settings(**values) -> Settings:
+    """Carga la configuración; si es inválida, nombra los campos sin mostrar ningún valor."""
+    try:
+        return Settings(**values)
+    except ValidationError as exc:
+        problems = "; ".join(
+            f"{'.'.join(str(part) for part in error['loc']) or 'configuración'}: {error['msg']}"
+            for error in exc.errors()
+        )
+        raise RuntimeError(f"Configuración inválida o incompleta: {problems}") from None
+
+
+settings = load_settings()
 

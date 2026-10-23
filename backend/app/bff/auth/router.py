@@ -75,7 +75,7 @@ def _sms_unavailable() -> HTTPException:
 
 
 def _otp_response(code: str | None) -> OtpResponse:
-    expose = insured_auth_service.sms.exposes_code and settings.ENVIRONMENT != "production"
+    expose = insured_auth_service.sms.exposes_code and settings.debug_enabled
     return OtpResponse(
         message=CODE_SENT,
         expires_in=int(OTP_TTL.total_seconds()),

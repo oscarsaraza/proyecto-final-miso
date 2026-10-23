@@ -1,4 +1,10 @@
 """Fixtures comunes para pruebas del backend."""
+import os
+import secrets
+
+os.environ.setdefault("JWT_SECRET_KEY", secrets.token_urlsafe(48))
+os.environ.setdefault("OTP_SECRET_KEY", secrets.token_urlsafe(48))
+
 from datetime import datetime, timedelta, timezone
 
 import pytest
