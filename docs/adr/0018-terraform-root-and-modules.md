@@ -64,8 +64,11 @@ Rules:
 2. One module per AWS component or concern. A new component gets a new module.
 3. Modules do not call each other. The root wires one module's outputs to another's variables.
 4. An external module needs `dependency-review`, an exact version and an ADR.
-5. Secrets appear only as references to a secrets manager: never as a value, a default, a `.tfvars`
-   entry or a plain container environment variable (`secure-coding-terraform`).
+5. Secrets never appear as a value, a default or a committed `.tfvars` entry. They are `sensitive`
+   variables without defaults that CI fills from its encrypted secrets (`TF_VAR_*`), and they reach the
+   container as environment variables. The team chose this over a secrets manager on 2026-10-23
+   (`specs/HOTFIX-configuracion-de-produccion`), accepting that the values are readable in the task
+   definition and the state; moving them to a secrets manager needs a new ADR.
 6. Network, IAM, keys, listeners and base images change only with an ADR. The ADR gate
    (`sdd/tools/sddlib/config.py`) enforces it when a commit adds a security group, IAM resource, KMS
    key, database instance or listener to a `.tf` file, or a `FROM` line to a Dockerfile.
@@ -76,8 +79,9 @@ Rules:
 - Easier: the topology in one file; each module reviewed as one concern.
 - Harder: separating environments later means moving state to new roots, a planned step.
 - When next touched: a module gets descriptions on its variables and outputs.
-- Not changed by this ADR, each tracked for its own spec: the database password as a plain variable
-  with a default and as plain container environment variables; the HTTP-only listener; open egress
+- `HOTFIX-configuracion-de-produccion` removed the database password default and added the token and
+  one-time-code keys as variables without defaults.
+- Not changed by this ADR, each tracked for its own spec: the HTTP-only listener; open egress
   (`0.0.0.0/0`) on the `alb`, `ecs` and `rds` security groups; no deletion protection on the load
   balancer or the database (`skip_final_snapshot = true`).
 
@@ -86,4 +90,5 @@ Rules:
 Module boundaries follow trust boundaries: network (`vpc`, `alb`), compute (`ecr`, `ecs`), data (`rds`,
 `storage_events`) and delivery (`web_hosting`). A change to one is reviewed with its blast radius
 visible. The database, documents bucket and queues use KMS keys created in their modules. Rule 5 keeps
-new secrets out of code and variables. The decision adds no data, keys or trust boundaries.
+secrets out of code and defaults; while they travel as environment variables, anyone who can read the
+ECS task definition or the Terraform state can read them. The decision adds no data, keys or trust boundaries.

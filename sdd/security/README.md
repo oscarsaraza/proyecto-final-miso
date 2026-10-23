@@ -79,11 +79,11 @@ When the mobile, web or infrastructure trigger is YES there must be an applicabl
 | E17 | Forbidden or confused cryptography: reversible or fast password hashing, MD5, SHA-1, DES, RC4, ECB, TLS 1.0/1.1, custom schemes, unauthenticated CBC, HMAC declared as a signature |
 | E18–E20 | Test cases complete, with a valid kind and level; PASS only with evidence; evidence citing `path::test` must exist in the repository |
 | E21 | An EVALUATED dependency has a method, date and result |
-| E22 | ACCEPTED risk only with an authorized person's approval; decisions and acceptances never by an AI agent |
+| E22 | ACCEPTED risk only with an authorized person's approval (unless `requireSignatures` is false); decisions and acceptances never by an AI agent |
 | E23 | The declared gate state does not exceed the computed one |
 | E24 | Profile and triggers are consistent with the inventory and the critical paths |
 | E25 | No secret in the package (blocks the gate) |
-| E26 | A person signs the security review |
+| E26 | A person, never an AI agent, signs the security review |
 | E27 | Valid enumeration values |
 | E28 | A DONE task has evidence |
 | E29 | A production test has a recorded authorization |

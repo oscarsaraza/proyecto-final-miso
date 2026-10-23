@@ -78,6 +78,10 @@ jobs:
 
       - name: Destruir recursos de infraestructura con Terraform
         working-directory: terraform
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+          TF_VAR_jwt_secret_key: ${{ secrets.JWT_SECRET_KEY }}
+          TF_VAR_otp_secret_key: ${{ secrets.OTP_SECRET_KEY }}
         run: terraform destroy -auto-approve
 
       - name: Resumen de apagado

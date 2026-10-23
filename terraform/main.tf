@@ -54,6 +54,8 @@ module "ecs" {
   db_name               = module.rds.db_name
   db_user               = var.db_username
   db_password           = var.db_password
+  jwt_secret_key        = var.jwt_secret_key
+  otp_secret_key        = var.otp_secret_key
   sqs_queue_url         = module.storage_events.sqs_queue_url
   s3_bucket_name        = module.storage_events.s3_bucket_name
 }

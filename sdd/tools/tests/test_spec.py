@@ -43,6 +43,38 @@ class ValidPackage(Scenario):
         self.assertError(self.validate(), "E34", "QR-01")
 
 
+class WithoutSignatures(Scenario):
+    def setUp(self):
+        super().setUp()
+        (self.repo / "sdd" / "config.json").write_text('{"requireSignatures": false}', encoding="utf-8")
+
+    def test_merge_request_approval_replaces_the_review_row(self):
+        self.cut("gate.md", "| Ana Reviewer |", "## Risk acceptance")
+        self.edit("gate.md", "## Security reviews\n", "## Security reviews\n\n| Reviewer | Role | Date | Scope | Result |\n|---|---|---|---|---|\n\n")
+        result = self.validate()
+        self.assertNoErrors(result)
+        self.assertEqual("SECURITY_VERIFIED", result.computed)
+
+    def test_risk_decided_in_the_spec_needs_no_signature(self):
+        self.edit("security.md", "| LOW | LOW | LOW | MITIGATE | Low: uniform 404 | MITIGATED |",
+                  "| MEDIUM | MEDIUM | MEDIUM | ACCEPT | Medium: accepted until the redesign | ACCEPTED |")
+        self.declare("RISK_ACCEPTED")
+        result = self.validate()
+        self.assertNoErrors(result)
+        self.assertEqual("RISK_ACCEPTED", result.computed)
+
+    def test_an_agent_still_cannot_sign(self):
+        self.edit("gate.md", "| Ana Reviewer |", "| Claude |")
+        self.assertError(self.validate(), "E26")
+
+
+class WithSignatures(Scenario):
+    def test_accepted_risk_without_signature_is_rejected(self):
+        self.edit("security.md", "| LOW | LOW | LOW | MITIGATE | Low: uniform 404 | MITIGATED |",
+                  "| MEDIUM | MEDIUM | MEDIUM | ACCEPT | Medium: accepted until the redesign | ACCEPTED |")
+        self.assertError(self.validate(), "E22", "RISK-01")
+
+
 class LowProfile(Scenario):
     fixture = "valid_low"
 

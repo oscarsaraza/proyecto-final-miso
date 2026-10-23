@@ -43,6 +43,18 @@ variable "db_password" {
   sensitive = true
 }
 
+variable "jwt_secret_key" {
+  description = "Llave de firma de los tokens del backend"
+  type        = string
+  sensitive   = true
+}
+
+variable "otp_secret_key" {
+  description = "Llave del MAC de los códigos de un solo uso"
+  type        = string
+  sensitive   = true
+}
+
 variable "sqs_queue_url" {
   type = string
 }

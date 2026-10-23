@@ -7,7 +7,6 @@ from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.middleware import TenantContextMiddleware
 from app.bff.experience.router import router as experience_router
-from app.bff.quote_edge.router import router as quote_edge_router
 from app.bff.auth.router import router as auth_router
 from app.modules.auth.models import UserDB  # noqa: F401 - registrar tablas en Base.metadata
 from app.modules.rating.models import QuoteDB  # noqa: F401 - registrar tablas en Base.metadata
@@ -30,30 +29,37 @@ async def lifespan(app: FastAPI):
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         async with AsyncSessionLocal() as session:
-            await auth_service.seed_default_users(session)
+            if settings.debug_enabled:
+                await auth_service.seed_default_users(session)
             await profile_service.seed_default_catalogs(session)
             await insured_auth_service.seed_default_account(session)
     except Exception as exc:
         print(f"Aviso de inicialización de base de datos en arranque: {exc}")
     yield
 
+
+def docs_urls(enabled: bool) -> dict:
+    """Rutas de la documentación interactiva; apagadas cuando ENVIRONMENT es production."""
+    if not enabled:
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    return {"docs_url": "/docs", "redoc_url": "/redoc", "openapi_url": "/openapi.json"}
+
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description="Backend Monolito Modular API-First para Solventa Seguros Digitales",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
     lifespan=lifespan,
+    **docs_urls(settings.debug_enabled),
 )
 
-# 1. Configuración de CORS para canal Web y socios
+# 1. CORS: solo los orígenes de CORS_ORIGINS; el portal y la API comparten origen detrás de CloudFront
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
 )
 
 # 2. Middleware de Contexto Multi-Tenant (ASR-06 / HA-14)
@@ -73,7 +79,6 @@ async def health_check():
 
 # 4. Registro de Routers BFF
 app.include_router(experience_router, prefix=settings.API_V1_STR)
-app.include_router(quote_edge_router, prefix=settings.API_V1_STR)
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 
 
@@ -81,6 +86,6 @@ app.include_router(auth_router, prefix=settings.API_V1_STR)
 async def root():
     return {
         "message": f"Bienvenido a {settings.PROJECT_NAME}",
-        "docs": "/docs",
+        "docs": "/docs" if settings.debug_enabled else None,
         "health": "/health",
     }

@@ -1,6 +1,12 @@
 """Pruebas de integración del arnés técnico base: Health check (ALB), Root y Placeholders 501."""
+import secrets
+from datetime import datetime, timedelta, timezone
+
+import jwt
 import pytest
 from httpx import AsyncClient
+
+from app.core.security import create_access_token
 
 
 @pytest.mark.integration
@@ -168,25 +174,49 @@ async def test_hu_web_01_registro_y_consulta_de_consentimiento(async_client: Asy
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_quote_edge_requiere_socio_y_cotiza(async_client: AsyncClient):
-    """Valida canal quote-edge B2B: 401 si falta X-Partner-Id y cotización con la cabecera."""
+async def test_tc_06_canal_de_socios_desactivado(async_client: AsyncClient):
+    """El canal quote-edge no se sirve mientras los socios no se autentiquen (HOTFIX-configuracion-de-produccion)."""
     quote_payload = {
         "document_type": "CC",
         "document_number": "1020304050",
         "birth_date": "1990-05-15",
         "insured_amount": 100000000.0,
     }
-    # Sin cabecera -> 401
-    resp_no_header = await async_client.post("/api/v1/quote-edge/quotes", json=quote_payload)
-    assert resp_no_header.status_code == 401
+    for headers in ({}, {"X-Partner-Id": "banco-aliado-1"}):
+        response = await async_client.post("/api/v1/quote-edge/quotes", headers=headers, json=quote_payload)
+        assert response.status_code == 404
 
-    # Con cabecera -> 200 (motor de tarifa de HU-WEB-03)
-    resp_with_header = await async_client.post(
-        "/api/v1/quote-edge/quotes",
-        headers={"X-Partner-Id": "banco-aliado-1"},
-        json=quote_payload,
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_tc_09_token_firmado_con_otra_llave_es_rechazado(async_client: AsyncClient):
+    """Un token firmado con otra llave, como la publicada antes, recibe 401 (HOTFIX-configuracion-de-produccion)."""
+    ahora = datetime.now(timezone.utc)
+    claims = {"sub": "asesor@example.com", "role": "advisor", "type": "access", "iat": ahora, "exp": ahora + timedelta(minutes=5)}
+    falso = jwt.encode(claims, secrets.token_urlsafe(48), algorithm="HS256")
+    valido = create_access_token(subject="asesor@example.com", role="advisor")
+    cuerpo = {"birth_date": "1990-05-15"}
+
+    rechazado = await async_client.post("/api/v1/experience/clients/validate", json=cuerpo, headers={"Authorization": f"Bearer {falso}"})
+    aceptado = await async_client.post("/api/v1/experience/clients/validate", json=cuerpo, headers={"Authorization": f"Bearer {valido}"})
+
+    assert rechazado.status_code == 401
+    assert aceptado.status_code != 401
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_tc_07_cors_no_autoriza_origenes_ajenos(async_client: AsyncClient):
+    """Sin CORS_ORIGINS ningún origen ajeno recibe permiso (HOTFIX-configuracion-de-produccion)."""
+    ajeno = {"Origin": "https://ajeno.example"}
+    preflight = await async_client.options(
+        "/api/v1/experience/auth/login", headers={**ajeno, "Access-Control-Request-Method": "POST"}
     )
-    assert resp_with_header.status_code == 200
+    simple = await async_client.get("/health", headers=ajeno)
+
+    assert "access-control-allow-origin" not in preflight.headers
+    assert "access-control-allow-origin" not in simple.headers
+    assert "access-control-allow-credentials" not in simple.headers
 
 
 @pytest.mark.integration

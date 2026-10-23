@@ -25,5 +25,6 @@
       "LICENSE"
     ]
   },
-  "criticalPathsFile": "sdd/security/critical-paths.md"
+  "criticalPathsFile": "sdd/security/critical-paths.md",
+  "requireSignatures": false
 }

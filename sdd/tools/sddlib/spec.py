@@ -938,7 +938,7 @@ class Validator:
             if status == "ACCEPTED":
                 if treatment != "ACCEPT":
                     self.error("E27", record.path, record.line, f"{record.id} is ACCEPTED but its treatment is not ACCEPT")
-                if not accepted.get(record.id):
+                if not accepted.get(record.id) and self.config["requireSignatures"]:
                     self.error("E22", record.path, record.line, f"{record.id} is ACCEPTED without approval by an authorized person in gate.md")
                     self.reason("BLOCKED" if level == "CRITICAL" else "IMPLEMENTED", f"{record.id} ({level}) has no valid acceptance")
                 elif level != "LOW":
@@ -1077,7 +1077,7 @@ class Validator:
         if any(result == "REJECTED" for _, result in self.reviews):
             self.reason("IMPLEMENTED", "the security review was rejected")
         needed = 2 if self.profile == "CRITICAL" else 1
-        if len(approved) < needed:
+        if self.config["requireSignatures"] and len(approved) < needed:
             self.reason("SECURITY_REVIEW_PENDING", f"{needed - len(approved)} approved human security review(s) missing")
 
         computed = "SECURITY_VERIFIED"

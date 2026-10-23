@@ -33,6 +33,7 @@ DEFAULTS = {
         "allowRead": ["**/.env.example", "**/.env.sample", "**/*.tfvars.example"],
     },
     "criticalPathsFile": "sdd/security/critical-paths.md",
+    "requireSignatures": True,
 }
 
 

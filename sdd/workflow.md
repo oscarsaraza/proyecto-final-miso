@@ -55,6 +55,9 @@ While building and reviewing, the language skills apply to the files touched (`c
 | `RISK_ACCEPTED` | verified, with MEDIUM or higher residual risk accepted in writing by an authorized person |
 | `SECURITY_VERIFIED` | verified, with no residual risk that needs acceptance |
 
+With `"requireSignatures": false` in `sdd/config.json`, the merge request approval counts as the security
+review and risk decisions recorded in the spec count as accepted, without signature rows in `gate.md`.
+
 The state declared in `gate.md` may be more conservative than the computed one, never higher. Done means
 `SECURITY_VERIFIED` or `RISK_ACCEPTED` with a complete closeout.
 

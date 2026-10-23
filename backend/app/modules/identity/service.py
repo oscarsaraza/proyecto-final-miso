@@ -146,7 +146,7 @@ class InsuredAuthService:
         return account
 
     async def seed_default_account(self, session: AsyncSession, seed_file: Path = SEED_FILE) -> None:
-        if settings.ENVIRONMENT == "production" or not seed_file.exists():
+        if not settings.debug_enabled or not seed_file.exists():
             return
         for seed in json.loads(seed_file.read_text(encoding="utf-8")):
             if await self._find(session, seed["email"]) is None:
@@ -471,7 +471,7 @@ class InsuredAuthService:
     @staticmethod
     def _code_hash(user_id: str, purpose: str, code: str) -> str:
         message = f"{user_id}:{purpose}:{code}".encode()
-        return hmac.new(settings.JWT_SECRET_KEY.encode(), message, hashlib.sha256).hexdigest()
+        return hmac.new(settings.OTP_SECRET_KEY.get_secret_value().encode(), message, hashlib.sha256).hexdigest()
 
     @staticmethod
     def _sms_body(code: str, purpose: str) -> str:
