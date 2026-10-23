@@ -54,8 +54,10 @@ def spec_new(args) -> int:
         text = (template.read_text(encoding="utf-8").replace("{{ID}}", identifier).replace("{{TITLE}}", args.title)
                 .replace("{{DATE}}", date.today().isoformat()).replace("{{SPEC_PATH}}", target.relative_to(cfg.root).as_posix()))
         (target / template.name).write_text(text, encoding="utf-8")
+    slug = state.slugify(args.title)
+    branch = f"hotfix/{slug}" if identifier.upper() == "HOTFIX" else f"feature/{identifier}-{slug}"
     print(f"Created {target.relative_to(cfg.root).as_posix()}. Fill every <fill: …>, then run the spec-review skill. "
-          f"Work on the branch feature/{identifier}-{state.slugify(args.title)}.")
+          f"Work on the branch {branch}.")
     return 0
 
 

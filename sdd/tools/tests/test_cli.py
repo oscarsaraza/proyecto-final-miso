@@ -110,6 +110,13 @@ class Cli(GitRepo):
         self.assertIn("feature/PROJ-1-sample", out)
         self.assertIn('"id": "PROJ-1"', self.run_cli(sdd.spec_status)[1])
 
+    def test_hotfix_package_suggests_a_hotfix_branch(self):
+        self.write("sdd/templates/spec/spec.md", "# {{ID}} · {{TITLE}}\n")
+        code, out = self.run_cli(sdd.spec_new, id="HOTFIX", title="Login caido")
+        self.assertEqual(0, code, out)
+        self.assertIn("hotfix/login-caido", out)
+        self.assertNotIn("feature/", out)
+
     def test_marker_on_a_hotfix_branch(self):
         self.git("checkout", "-q", "-b", "hotfix/reset-password")
         self.write("sdd/templates/spec/spec.md", "# {{ID}} · {{TITLE}}\n\n| Field | Value |\n|---|---|\n| ID | {{ID}} |\n")
