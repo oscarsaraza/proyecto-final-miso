@@ -84,30 +84,38 @@ jobs:
 
       - name: Limpieza preventiva de buckets S3 gestionados
         run: |
-          REGION="${{ secrets.AWS_REGION || 'us-east-1' }}"
-          for BUCKET in "solventa-web-portal-production" "solventa-documents-production"; do
-            if aws s3api head-bucket --bucket "$BUCKET" --region "$REGION" 2>/dev/null; then
-              echo "Vaciando exhaustivamente el bucket S3: $BUCKET..."
-              while true; do
-                VERSIONS=$(aws s3api list-object-versions --bucket "$BUCKET" --max-items 1000 --region "$REGION" --output json --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' 2>/dev/null || echo '{"Objects":null}')
-                if [ "$VERSIONS" = '{"Objects":null}' ] || [ -z "$VERSIONS" ] || [ "$VERSIONS" = '{"Objects":[]}' ]; then
-                  break
-                fi
-                aws s3api delete-objects --bucket "$BUCKET" --delete "$VERSIONS" --region "$REGION" 2>/dev/null || true
-              done
+          python3 -c '
+          import subprocess, json, sys
 
-              while true; do
-                MARKERS=$(aws s3api list-object-versions --bucket "$BUCKET" --max-items 1000 --region "$REGION" --output json --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' 2>/dev/null || echo '{"Objects":null}')
-                if [ "$MARKERS" = '{"Objects":null}' ] || [ -z "$MARKERS" ] || [ "$MARKERS" = '{"Objects":[]}' ]; then
-                  break
-                fi
-                aws s3api delete-objects --bucket "$BUCKET" --delete "$MARKERS" --region "$REGION" 2>/dev/null || true
-              done
+          region = "${{ secrets.AWS_REGION || '\''us-east-1'\'' }}"
+          buckets = ["solventa-web-portal-production", "solventa-documents-production"]
 
-              aws s3 rm "s3://$BUCKET" --recursive --region "$REGION" 2>/dev/null || true
-              echo "Bucket $BUCKET vaciado con éxito."
-            fi
-          done
+          for bucket in buckets:
+              check = subprocess.run(["aws", "s3api", "head-bucket", "--bucket", bucket, "--region", region], capture_output=True)
+              if check.returncode != 0:
+                  print(f"Bucket {bucket} no existe o ya fue eliminado.")
+                  continue
+              print(f"Vaciando bucket {bucket}...")
+              while True:
+                  res = subprocess.run([
+                      "aws", "s3api", "list-object-versions", "--bucket", bucket, "--region", region, "--max-items", "1000", "--output", "json"
+                  ], capture_output=True, text=True)
+                  if res.returncode != 0 or not res.stdout.strip():
+                      break
+                  data = json.loads(res.stdout)
+                  objects = []
+                  for v in data.get("Versions") or []:
+                      objects.append({"Key": v["Key"], "VersionId": v["VersionId"]})
+                  for m in data.get("DeleteMarkers") or []:
+                      objects.append({"Key": m["Key"], "VersionId": m["VersionId"]})
+                  if not objects:
+                      break
+                  payload = json.dumps({"Objects": objects, "Quiet": True})
+                  subprocess.run(["aws", "s3api", "delete-objects", "--bucket", bucket, "--region", region, "--delete", payload], check=True)
+                  print(f"Eliminados {len(objects)} objetos/versiones en {bucket}.")
+              subprocess.run(["aws", "s3", "rm", f"s3://{bucket}", "--recursive", "--region", region], capture_output=True)
+              print(f"Bucket {bucket} vaciado completamente.")
+          '
 
       - name: Limpieza preventiva de imágenes en repositorio ECR
         run: |
