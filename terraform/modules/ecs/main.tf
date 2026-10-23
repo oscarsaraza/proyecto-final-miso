@@ -140,6 +140,14 @@ resource "aws_ecs_task_definition" "backend" {
           value = var.db_password
         },
         {
+          name  = "JWT_SECRET_KEY"
+          value = var.jwt_secret_key
+        },
+        {
+          name  = "OTP_SECRET_KEY"
+          value = var.otp_secret_key
+        },
+        {
           name  = "SQS_EVENTS_URL"
           value = var.sqs_queue_url
         },

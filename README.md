@@ -50,7 +50,11 @@ cd backend
 # 1. Instalar dependencias del proyecto
 poetry install
 
-# 2. Iniciar servidor FastAPI con recarga en caliente (hot reload)
+# 2. Crear backend/.env a partir de .env.example y generar JWT_SECRET_KEY y OTP_SECRET_KEY
+#    (obligatorias: sin ellas el backend no arranca)
+cp .env.example .env
+
+# 3. Iniciar servidor FastAPI con recarga en caliente (hot reload)
 poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -67,7 +71,7 @@ python -m venv .venv
 
 #### Opción B: Ejecución en contenedor con Docker Compose
 
-Levanta automáticamente PostgreSQL, Floci y el contenedor del backend (`solventa-backend`):
+Levanta automáticamente PostgreSQL, Floci y el contenedor del backend (`solventa-backend`). El contenedor lee `backend/.env`, que debe existir con `JWT_SECRET_KEY` y `OTP_SECRET_KEY` (paso 2 de la Opción A):
 
 ```bash
 docker compose up -d
@@ -413,6 +417,17 @@ Para el funcionamiento del pipeline de despliegue a AWS en la nube (`deploy.yml`
 | `AWS_ACCESS_KEY_ID`     | **Sí**    | Identificador de clave de acceso del usuario IAM de despliegue     | `AKIAIOSFODNN7EXAMPLE`                     |
 | `AWS_SECRET_ACCESS_KEY` | **Sí**    | Clave de acceso secreta del usuario IAM                            | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
 | `AWS_REGION`            | Opcional  | Región primaria de AWS para el despliegue (por defecto `us-east-1`)| `us-east-1`                                |
+| `DB_PASSWORD`           | **Sí**    | Contraseña de PostgreSQL en RDS (12 a 41 caracteres, sin `/`, `@`, `"` ni espacios) | —                    |
+| `JWT_SECRET_KEY`        | **Sí**    | Llave de firma de los tokens del backend (32 caracteres o más)     | —                                          |
+| `OTP_SECRET_KEY`        | **Sí**    | Llave del MAC de los códigos de un solo uso, distinta de la anterior | —                                        |
+
+Los tres últimos llegan a Terraform como `TF_VAR_*` en `deploy.yml` y `destroy.yml`; sin ellos el despliegue falla antes de cambiar nada. Las llaves se pueden generar y guardar sin mostrarlas en pantalla:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))" | gh secret set JWT_SECRET_KEY
+python -c "import secrets; print(secrets.token_urlsafe(48))" | gh secret set OTP_SECRET_KEY
+gh secret set DB_PASSWORD   # pide el valor sin mostrarlo
+```
 
 > [!NOTE]
 > Para que Terraform y los workflows de GitHub Actions puedan aprovisionar y actualizar la infraestructura sin errores de autorización, debes asociar al usuario de IAM las siguientes **Políticas administradas por AWS (AWS Managed Policies)**:

@@ -4,3 +4,8 @@ project_name            = "solventa"
 aws_region              = "us-east-1"
 use_local_emulator      = true
 local_emulator_endpoint = "http://localhost:4566"
+
+# Solo para el emulador local. En AWS llegan como TF_VAR_* desde los secretos de CI.
+db_password    = "cambiar-clave-local"
+jwt_secret_key = "cambiar-por-una-llave-local-de-32-caracteres-o-mas"
+otp_secret_key = "cambiar-por-otra-llave-local-de-32-caracteres-o-mas"
