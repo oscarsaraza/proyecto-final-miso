@@ -1,0 +1,29 @@
+{
+  "specsDir": "specs",
+  "stateDir": ".sdd",
+  "protectedBranches": [
+    "main",
+    "master",
+    "dev",
+    "develop",
+    "qa"
+  ],
+  "storyBranch": "^(feature|fix)/(?P<story>HU-[A-Z]+-\\d+(?:\\.\\d+)?)-[a-z0-9][a-z0-9.-]*$",
+  "commitPattern": "^(feat|fix|chore|docs|refactor|test|perf|ci|build|security|revert|style)(\\([a-z0-9._/-]+\\))?!?: \\S.+",
+  "spec": {
+    "required": [
+      "**"
+    ],
+    "exempt": [
+      "**/*.md",
+      "docs/**",
+      "specs/**",
+      "sdd/**",
+      ".sdd/**",
+      ".gitignore",
+      ".gitattributes",
+      "LICENSE"
+    ]
+  },
+  "criticalPathsFile": "sdd/security/critical-paths.md"
+}

@@ -193,3 +193,33 @@ jobs:
       - name: Aviso de configuración pendiente
         if: env.SONAR_TOKEN == ''
         run: echo "::notice::SonarCloud omitido - falta configurar el secreto SONAR_TOKEN en el repositorio."
+
+  # 6. Gate SDD: specs, secretos, rutas críticas y dependencias (sdd/README.md)
+  sdd-gate:
+    name: SDD gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Probar el validador y los gates
+        run: python -m unittest discover -s sdd/tools/tests -t sdd/tools/tests
+
+      - name: Validar specs, secretos, rutas críticas y dependencias
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ -n "$BASE_REF" ]; then
+            python sdd/tools/sdd.py gate --base "origin/$BASE_REF"
+          else
+            python sdd/tools/sdd.py gate
+          fi
