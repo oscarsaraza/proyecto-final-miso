@@ -1,3 +1,8 @@
+# Lista administrada de las direcciones con las que CloudFront llega a sus orígenes
+data "aws_ec2_managed_prefix_list" "cloudfront" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
+}
+
 # Security Group para el Application Load Balancer
 resource "aws_security_group" "alb" {
   name        = "${var.project_name}-alb-sg-${var.environment}"
@@ -5,19 +10,11 @@ resource "aws_security_group" "alb" {
   vpc_id      = var.vpc_id
 
   ingress {
-    description = "HTTP desde Internet"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "HTTPS desde Internet"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "HTTP solo desde CloudFront (VPC origin)"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    prefix_list_ids = [data.aws_ec2_managed_prefix_list.cloudfront.id]
   }
 
   egress {
@@ -33,13 +30,13 @@ resource "aws_security_group" "alb" {
   }
 }
 
-# Application Load Balancer Multi-AZ
+# Application Load Balancer interno Multi-AZ: solo CloudFront llega a él por la red privada de AWS
 resource "aws_lb" "main" {
   name               = "${var.project_name}-alb-${var.environment}"
-  internal           = false
+  internal           = true
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = var.public_subnet_ids
+  subnets            = var.private_subnet_ids
 
   enable_deletion_protection = false
 

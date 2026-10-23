@@ -8,10 +8,10 @@ module "vpc" {
 module "alb" {
   source = "./modules/alb"
 
-  project_name      = var.project_name
-  environment       = var.environment
-  vpc_id            = module.vpc.vpc_id
-  public_subnet_ids = module.vpc.public_subnet_ids
+  project_name       = var.project_name
+  environment        = var.environment
+  vpc_id             = module.vpc.vpc_id
+  private_subnet_ids = module.vpc.private_subnet_ids
 }
 
 module "ecr" {
@@ -66,5 +66,6 @@ module "web_hosting" {
   project_name = var.project_name
   environment  = var.environment
   alb_dns_name = module.alb.alb_dns_name
+  alb_arn      = module.alb.alb_arn
 }
 
