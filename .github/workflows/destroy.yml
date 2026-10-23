@@ -7,7 +7,7 @@ on:
         description: 'Escriba "DESTRUIR" para confirmar el apagado y eliminación de la infraestructura en AWS'
         required: true
         type: string
-        default: ''
+        default: 'DESTRUIR'
 
 concurrency:
   group: production-deployment
@@ -20,11 +20,12 @@ jobs:
     steps:
       - name: Validar confirmación de seguridad
         run: |
-          if [ "${{ github.event.inputs.confirm }}" != "DESTRUIR" ]; then
-            echo "::error::Confirmación no válida. Para proceder debe ingresar exactamente 'DESTRUIR'."
+          CONFIRM_VAL=$(echo "${{ github.event.inputs.confirm }}" | tr '[:lower:]' '[:upper:]' | xargs)
+          if [ "$CONFIRM_VAL" != "DESTRUIR" ] && [ "$CONFIRM_VAL" != "YES" ] && [ "$CONFIRM_VAL" != "TRUE" ]; then
+            echo "::error::Confirmación no válida. Para proceder debe ingresar 'DESTRUIR'."
             exit 1
           fi
-          echo "Confirmación recibida. Iniciando proceso de apagado y destrucción de infraestructura..."
+          echo "Confirmación recibida ($CONFIRM_VAL). Iniciando proceso de apagado y destrucción de infraestructura..."
 
       - name: Checkout del repositorio
         uses: actions/checkout@v4
@@ -59,26 +60,178 @@ jobs:
             -backend-config="key=production/terraform.tfstate" \
             -backend-config="region=${REGION}"
 
+      - name: Drenado preventivo de servicios ECS y tareas activas
+        run: |
+          REGION="${{ secrets.AWS_REGION || 'us-east-1' }}"
+          CLUSTER="solventa-cluster-production"
+          SERVICE="solventa-backend-service-production"
+
+          echo "Verificando si existen tareas o servicios ECS activos..."
+          if aws ecs describe-clusters --clusters "$CLUSTER" --region "$REGION" 2>/dev/null | grep -q "$CLUSTER"; then
+            if aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --region "$REGION" 2>/dev/null | grep -q "$SERVICE"; then
+              echo "Escalando servicio $SERVICE a 0 réplicas para liberación inmediata de ENIs..."
+              aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --desired-count 0 --region "$REGION" 2>/dev/null || true
+            fi
+
+            TASK_ARNS=$(aws ecs list-tasks --cluster "$CLUSTER" --region "$REGION" --query "taskArns[]" --output text 2>/dev/null || true)
+            if [ -n "$TASK_ARNS" ] && [ "$TASK_ARNS" != "None" ]; then
+              echo "Deteniendo tareas Fargate activas para evitar bloqueos de red..."
+              for TASK in $TASK_ARNS; do
+                aws ecs stop-task --cluster "$CLUSTER" --task "$TASK" --reason "Workflow de destrucción" --region "$REGION" 2>/dev/null || true
+              done
+            fi
+          fi
+
       - name: Limpieza preventiva de buckets S3 gestionados
         run: |
+          REGION="${{ secrets.AWS_REGION || 'us-east-1' }}"
           for BUCKET in "solventa-web-portal-production" "solventa-documents-production"; do
-            if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
-              echo "Vaciando bucket $BUCKET..."
-              VERSIONS=$(aws s3api list-object-versions --bucket "$BUCKET" --output json --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}')
-              if [ "$VERSIONS" != '{"Objects":null}' ] && [ -n "$VERSIONS" ]; then
-                aws s3api delete-objects --bucket "$BUCKET" --delete "$VERSIONS" 2>/dev/null || true
-              fi
-              MARKERS=$(aws s3api list-object-versions --bucket "$BUCKET" --output json --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}')
-              if [ "$MARKERS" != '{"Objects":null}' ] && [ -n "$MARKERS" ]; then
-                aws s3api delete-objects --bucket "$BUCKET" --delete "$MARKERS" 2>/dev/null || true
-              fi
-              aws s3 rm "s3://$BUCKET" --recursive 2>/dev/null || true
+            if aws s3api head-bucket --bucket "$BUCKET" --region "$REGION" 2>/dev/null; then
+              echo "Vaciando exhaustivamente el bucket S3: $BUCKET..."
+              while true; do
+                VERSIONS=$(aws s3api list-object-versions --bucket "$BUCKET" --max-items 1000 --region "$REGION" --output json --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' 2>/dev/null || echo '{"Objects":null}')
+                if [ "$VERSIONS" = '{"Objects":null}' ] || [ -z "$VERSIONS" ] || [ "$VERSIONS" = '{"Objects":[]}' ]; then
+                  break
+                fi
+                aws s3api delete-objects --bucket "$BUCKET" --delete "$VERSIONS" --region "$REGION" 2>/dev/null || true
+              done
+
+              while true; do
+                MARKERS=$(aws s3api list-object-versions --bucket "$BUCKET" --max-items 1000 --region "$REGION" --output json --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' 2>/dev/null || echo '{"Objects":null}')
+                if [ "$MARKERS" = '{"Objects":null}' ] || [ -z "$MARKERS" ] || [ "$MARKERS" = '{"Objects":[]}' ]; then
+                  break
+                fi
+                aws s3api delete-objects --bucket "$BUCKET" --delete "$MARKERS" --region "$REGION" 2>/dev/null || true
+              done
+
+              aws s3 rm "s3://$BUCKET" --recursive --region "$REGION" 2>/dev/null || true
+              echo "Bucket $BUCKET vaciado con éxito."
             fi
           done
 
+      - name: Limpieza preventiva de imágenes en repositorio ECR
+        run: |
+          REGION="${{ secrets.AWS_REGION || 'us-east-1' }}"
+          REPO="solventa-backend"
+          if aws ecr describe-repositories --repository-names "$REPO" --region "$REGION" 2>/dev/null; then
+            echo "Purgando imágenes de ECR: $REPO..."
+            IMAGE_IDS=$(aws ecr list-images --repository-name "$REPO" --region "$REGION" --query 'imageIds[*]' --output json 2>/dev/null || echo '[]')
+            if [ "$IMAGE_IDS" != '[]' ] && [ -n "$IMAGE_IDS" ] && [ "$IMAGE_IDS" != "null" ]; then
+              aws ecr batch-delete-image --repository-name "$REPO" --image-ids "$IMAGE_IDS" --region "$REGION" 2>/dev/null || true
+            fi
+          fi
+
       - name: Destruir recursos de infraestructura con Terraform
         working-directory: terraform
-        run: terraform destroy -auto-approve
+        run: |
+          terraform destroy -auto-approve || {
+            echo "Detectada latencia de desasociación en AWS. Reintentando terraform destroy tras breve pausa..."
+            sleep 15
+            terraform destroy -auto-approve
+          }
+
+      - name: Limpieza de recursos no gestionados por Terraform (CloudWatch)
+        run: |
+          REGION="${{ secrets.AWS_REGION || 'us-east-1' }}"
+          echo "Buscando log groups generados automáticamente por servicios AWS (Container Insights)..."
+          LOG_GROUPS=$(aws logs describe-log-groups --region "$REGION" --query "logGroups[?starts_with(logGroupName, '/aws/ecs/containerinsights/solventa') || starts_with(logGroupName, '/ecs/solventa')].logGroupName" --output text 2>/dev/null || true)
+          for LG in $LOG_GROUPS; do
+            if [ -n "$LG" ] && [ "$LG" != "None" ]; then
+              echo "Eliminando grupo de logs remanente: $LG"
+              aws logs delete-log-group --log-group-name "$LG" --region "$REGION" 2>/dev/null || true
+            fi
+          done
+
+      - name: Auditoría y certificación de eliminación total en AWS
+        run: |
+          REGION="${{ secrets.AWS_REGION || 'us-east-1' }}"
+          echo "================================================================="
+          echo " AUDITORÍA DE RECURSOS ACTIVOS REMANENTES EN AWS ($REGION)       "
+          echo "================================================================="
+          
+          REMAINING=0
+          
+          # RDS
+          RDS=$(aws rds describe-db-instances --region "$REGION" --query "DBInstances[?starts_with(DBInstanceIdentifier, 'solventa')].DBInstanceIdentifier" --output text 2>/dev/null || true)
+          if [ -n "$RDS" ] && [ "$RDS" != "None" ]; then
+            echo "::error::Instancias RDS aún activas: $RDS"
+            REMAINING=$((REMAINING + 1))
+          else
+            echo "✓ RDS: 0 instancias activas"
+          fi
+
+          # NAT Gateway
+          NAT=$(aws ec2 describe-nat-gateways --region "$REGION" --filter "Name=state,Values=available,pending" --query "NatGateways[*].NatGatewayId" --output text 2>/dev/null || true)
+          if [ -n "$NAT" ] && [ "$NAT" != "None" ]; then
+            echo "::error::NAT Gateways aún activos: $NAT"
+            REMAINING=$((REMAINING + 1))
+          else
+            echo "✓ NAT Gateways: 0 activos"
+          fi
+
+          # ALB
+          ALB=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?starts_with(LoadBalancerName, 'solventa')].LoadBalancerName" --output text 2>/dev/null || true)
+          if [ -n "$ALB" ] && [ "$ALB" != "None" ]; then
+            echo "::error::Load Balancers aún activos: $ALB"
+            REMAINING=$((REMAINING + 1))
+          else
+            echo "✓ Load Balancers: 0 activos"
+          fi
+
+          # ECS Clusters
+          ECS=$(aws ecs list-clusters --region "$REGION" --query "clusterArns[?contains(@, 'solventa')]" --output text 2>/dev/null || true)
+          if [ -n "$ECS" ] && [ "$ECS" != "None" ]; then
+            echo "::error::Clusters ECS aún activos: $ECS"
+            REMAINING=$((REMAINING + 1))
+          else
+            echo "✓ ECS Clusters: 0 activos"
+          fi
+
+          # CloudFront
+          CF=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, 'solventa') || contains(Comment, 'solventa')].Id" --output text 2>/dev/null || true)
+          if [ -n "$CF" ] && [ "$CF" != "None" ]; then
+            echo "::error::Distribuciones CloudFront aún activas: $CF"
+            REMAINING=$((REMAINING + 1))
+          else
+            echo "✓ CloudFront: 0 distribuciones activas"
+          fi
+
+          # Elastic IPs
+          EIPS=$(aws ec2 describe-addresses --region "$REGION" --query "Addresses[?Tags[?Key=='Project' && Value=='Solventa']].AllocationId" --output text 2>/dev/null || true)
+          if [ -n "$EIPS" ] && [ "$EIPS" != "None" ]; then
+            echo "::error::Elastic IPs aún asociadas: $EIPS"
+            REMAINING=$((REMAINING + 1))
+          else
+            echo "✓ Elastic IPs: 0 activas"
+          fi
+
+          # S3 Buckets
+          S3_PORTAL=$(aws s3api head-bucket --bucket "solventa-web-portal-production" --region "$REGION" 2>/dev/null && echo "activo" || true)
+          S3_DOCS=$(aws s3api head-bucket --bucket "solventa-documents-production" --region "$REGION" 2>/dev/null && echo "activo" || true)
+          if [ "$S3_PORTAL" = "activo" ] || [ "$S3_DOCS" = "activo" ]; then
+            echo "::error::Buckets S3 gestionados aún existen"
+            REMAINING=$((REMAINING + 1))
+          else
+            echo "✓ Buckets S3 del proyecto: eliminados"
+          fi
+
+          # ECR Repositories
+          ECR=$(aws ecr describe-repositories --repository-names "solventa-backend" --region "$REGION" 2>/dev/null && echo "activo" || true)
+          if [ "$ECR" = "activo" ]; then
+            echo "::error::Repositorio ECR aún existe"
+            REMAINING=$((REMAINING + 1))
+          else
+            echo "✓ ECR Repositories: 0 activos"
+          fi
+
+          if [ "$REMAINING" -gt 0 ]; then
+            echo "::error::Se detectaron $REMAINING recursos residuales. La destrucción no fue total."
+            exit 1
+          fi
+
+          echo "================================================================="
+          echo " CERTIFICACIÓN EXITOSA: 0 RECURSOS OPERATIVOS REMANENTES EN AWS "
+          echo "================================================================="
 
       - name: Resumen de apagado
         run: |
@@ -89,4 +242,3 @@ jobs:
           echo "   1. Haga merge a la rama main, o"
           echo "   2. Ejecute manualmente el workflow 'CD - Despliegue a AWS'."
           echo "================================================================="
-

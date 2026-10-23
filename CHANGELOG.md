@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Corrección y robustecimiento del workflow de destrucción de infraestructura en AWS (`.github/workflows/destroy.yml`) implementando confirmación de seguridad insensible a mayúsculas/minúsculas y con valor por defecto, drenado y detención preventiva de tareas ECS Fargate para liberación inmediata de ENIs (evitando errores `DependencyViolation`), vaciado exhaustivo y paginado de buckets S3 con soporte de versiones y marcas de eliminación, purga preventiva de imágenes en el repositorio ECR, reintento automático de `terraform destroy` ante latencias de red, eliminación de grupos de registro no gestionados en CloudWatch (Container Insights) y paso automatizado de auditoría y certificación con AWS CLI que valida que 0 recursos permanezcan operativos.
 - Corrección en el asistente del cotizador web (`CotizadorComponent`) para iniciar en el Paso 1 (Identificación) con estado activo.
 - Corrección en `.github/workflows/destroy.yml` asignando `working-directory: terraform` exclusivamente a los pasos que invocan Terraform, evitando errores de inicialización de shell previos al paso de `checkout` del repositorio.
 - `get_password_hash` y `verify_password` usan `bcrypt` directamente: `passlib` 1.7.4 fallaba con `bcrypt` 5.0.0 (versión del lock).

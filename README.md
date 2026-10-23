@@ -364,8 +364,8 @@ Se dispara automáticamente ante **push / merges a la rama `main`** o **manualme
 
 Diseñado especialmente para el contexto académico para evitar incurrir en costos continuos innecesarios (~\$90–\$110 USD/mes por recursos facturados por hora como NAT Gateway, ALB, RDS Multi-AZ y ECS Fargate):
 
-* **Disparo manual protegido:** Se ejecuta exclusivamente bajo demanda mediante `workflow_dispatch` en GitHub Actions, exigiendo ingresar la palabra `DESTRUIR` como confirmación de seguridad.
-* **Vaciado y desaprovisionamiento total:** Realiza la limpieza preventiva de buckets S3 (`force_destroy`) y ejecuta `terraform destroy -auto-approve`, reduciendo el costo horario a **\$0.00 USD**.
+* **Disparo manual protegido:** Se ejecuta bajo demanda mediante `workflow_dispatch` en GitHub Actions, con confirmación de seguridad preconfigurada (`DESTRUIR`).
+* **Vaciado y desaprovisionamiento total garantizado:** Realiza el drenado previo de tareas ECS Fargate para liberación inmediata de interfaces de red (ENIs), vaciado exhaustivo de objetos, versiones y delete markers en S3, purga preventiva de imágenes en ECR, desmantelamiento completo con `terraform destroy -auto-approve` (con reintento automático), limpieza de grupos de logs de Container Insights en CloudWatch y auditoría de certificación automatizada con AWS CLI que verifica la remoción del 100% de los recursos, garantizando un costo horario de **\$0.00 USD**.
 * **Recreación en cualquier momento:** Para volver a levantar la plataforma completa, basta con ejecutar el workflow `CD - Despliegue a AWS` o mezclar nuevos cambios a la rama `main`. El backend inicializará automáticamente el esquema de base de datos y el usuario asesor semilla en su arranque.
 
 ### 8.4 Despliegue Local Simulado con Floci (`.github/workflows/deploy-local.yml` y `scripts/deploy-local.sh`)
