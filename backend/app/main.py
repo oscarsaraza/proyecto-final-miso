@@ -3,13 +3,15 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.middleware import TenantContextMiddleware
 from app.bff.experience.router import router as experience_router
+from app.bff.quote_edge.router import router as quote_edge_router
 from app.bff.auth.router import router as auth_router
 from app.modules.auth.models import UserDB  # noqa: F401 - registrar tablas en Base.metadata
-from app.modules.rating.models import QuoteDB  # noqa: F401 - registrar tablas en Base.metadata
+from app.modules.rating.models import PartnerDB, QuoteDB  # noqa: F401 - registrar tablas en Base.metadata
 from app.modules.policy.models import PolicyDB  # noqa: F401 - registrar tablas en Base.metadata
 from app.core.outbox import OutboxMessageDB  # noqa: F401 - registrar tablas en Base.metadata
 from app.core.idempotency import IdempotencyRecordDB  # noqa: F401 - registrar tablas en Base.metadata
@@ -18,20 +20,24 @@ from app.modules.profile.models import FinancialEntityDB, CityDB  # noqa: F401 -
 from app.modules.identity import db_models as identity_db_models  # noqa: F401 - registrar tablas en Base.metadata
 from app.modules.auth.service import auth_service
 from app.modules.profile.service import profile_service
+from app.modules.rating.service import rating_service
 from app.modules.identity.service import insured_auth_service
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Inicialización de tablas relacionales y usuario asesor semilla (HU-WEB-13)."""
+    """Inicialización de tablas relacionales, usuario asesor y socios B2B semilla (HU-WEB-13, HU-WEB-10)."""
     insured_auth_service.sms  # falla al arrancar si la configuración del SMS está incompleta
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.execute(text("ALTER TABLE quotes ADD COLUMN IF NOT EXISTS partner_id VARCHAR(64)"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_quotes_partner_id ON quotes (partner_id)"))
         async with AsyncSessionLocal() as session:
             if settings.debug_enabled:
                 await auth_service.seed_default_users(session)
             await profile_service.seed_default_catalogs(session)
+            await rating_service.seed_default_partners(session)
             await insured_auth_service.seed_default_account(session)
     except Exception as exc:
         print(f"Aviso de inicialización de base de datos en arranque: {exc}")
@@ -79,6 +85,7 @@ async def health_check():
 
 # 4. Registro de Routers BFF
 app.include_router(experience_router, prefix=settings.API_V1_STR)
+app.include_router(quote_edge_router, prefix=settings.API_V1_STR)
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 
 

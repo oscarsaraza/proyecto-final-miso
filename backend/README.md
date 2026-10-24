@@ -48,6 +48,16 @@ En desarrollo, `/auth/otp` devuelve el código en `debug_code` y existe el asegu
 
 En el alcance del Sprint 1, `/experience/consent` valida el formato del código OTP de 6 dígitos y emula el rechazo ante el código de prueba `'000000'`. La emisión en tiempo real, vencimiento estricto (TTL) e invalidación de un solo uso están programados para el Sprint 2.
 
+### Canal de Socios B2B — Quote Edge (`app/bff/quote_edge`, `app/modules/rating`):
+- `POST /api/v1/quote-edge/auth/token`: autentica socios B2B mediante OAuth2 *Client Credentials* (`client_id` y `client_secret`) y emite un JWT con `role: "partner"` y `partner_id`.
+- `POST /api/v1/quote-edge/quotes`: genera y persiste una cotización confinada al `partner_id` del token e incrementa atómicamente `quota_used`.
+- `GET /api/v1/quote-edge/quotes/{quote_id}`: consulta individual con aislamiento multi-tenant (`404` si no existe o pertenece a otro socio/canal).
+- `GET /api/v1/quote-edge/quotes`: lista el histórico de cotizaciones del socio autenticado.
+
+Socios semilla para pruebas:
+- Activo: `banco_aliado` / `AliadoSecret2026*` (`partner_id`: `banco-aliado-1`).
+- Revocado: `socio_inactivo` / `Inactivo2026*` (`partner_id`: `socio-inactivo-1`).
+
 ## 2. Pruebas Automatizadas
 
 Las pruebas que guardan cotizaciones usan PostgreSQL (`docker compose up -d postgres`) y crean su propia base, `solventa_test`.

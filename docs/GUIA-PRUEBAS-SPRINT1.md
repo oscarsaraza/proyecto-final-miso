@@ -287,7 +287,7 @@ En Swagger, `POST /api/v1/experience/quotes` con:
 **Paso 22 · Factores que suben y bajan** · casos 3.3 y 3.4 · tarea #130
 
 1. Repite con `"birth_date": "1970-01-01"` y `"occupation_risk": 4`. Los factores `age` y `occupation` salen positivos, y el plan `basic` tiene `plan` negativo.
-2. `POST /api/v1/quote-edge/quotes` con el mismo cuerpo: sin la cabecera `X-Partner-Id` da 401, y con ella da 200.
+2. `POST /api/v1/quote-edge/quotes` con el mismo cuerpo: sin token Bearer de socio da 401, y autenticando previamente en `POST /api/v1/quote-edge/auth/token` (`banco_aliado` / `AliadoSecret2026*`) da 200.
 
 **Paso 23 · Pruebas del componente web** · casos 3.5 a 3.7 · tareas #131 y #132
 

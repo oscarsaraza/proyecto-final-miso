@@ -118,7 +118,22 @@ El BFF expone la verificación de asegurabilidad sociodemográfica por rango de 
 | :------- | :---------- | :--------- |
 | `POST /api/v1/experience/clients/validate` | Valida que el tomador cumpla con el rango asegurable de 18 a 75 años según su fecha de nacimiento. Exige rol `advisor`. | `200` `{"status": "ELIGIBLE", "age": N}` · `400` fuera de rango · `422` formato |
 
-### 2.6 Hooks de git del framework SDD (una vez por copia)
+### 2.6 Canal de Socios B2B — Quote Edge (HU-WEB-10)
+
+El BFF expone en `/api/v1/quote-edge` el canal dedicado para socios de distribución B2B con autenticación OAuth2 *Client Credentials*, confinamiento estricto por `partner_id` y auditoría JSON de rechazos:
+
+| Endpoint | Descripción | Respuestas |
+| :------- | :---------- | :--------- |
+| `POST /api/v1/quote-edge/auth/token` | Emite un JWT firmado con `role: "partner"` y `partner_id` a partir de `client_id` y `client_secret`. | `200` token · `401` credenciales inválidas o socio revocado |
+| `POST /api/v1/quote-edge/quotes` | Calcula y persiste la cotización confinada al `partner_id` del socio autenticado e incrementa atómicamente `quota_used`. | `200` cotización · `401` token ausente, inválido o revocado |
+| `GET /api/v1/quote-edge/quotes/{quote_id}` | Consulta una cotización individual verificando pertenencia estricta al socio autenticado. | `200` cotización · `401` no autorizado · `404` no existe o pertenece a otro socio |
+| `GET /api/v1/quote-edge/quotes` | Lista el histórico de cotizaciones generadas exclusivamente por el socio autenticado (`created_at DESC`). | `200` listado · `401` no autorizado |
+
+Socios semilla inicializados automáticamente en el arranque (`lifespan`):
+- **Socio activo:** `client_id`: `banco_aliado` · `client_secret`: `AliadoSecret2026*` (`partner_id`: `banco-aliado-1`).
+- **Socio revocado:** `client_id`: `socio_inactivo` · `client_secret`: `Inactivo2026*` (`partner_id`: `socio-inactivo-1`, estado `REVOKED`).
+
+### 2.7 Hooks de git del framework SDD (una vez por copia)
 
 Git no activa los hooks de un repositorio al clonarlo: cada persona los activa una vez en su copia. Requieren Python 3.11+ y `sh` (en Windows, Git Bash).
 
@@ -334,7 +349,7 @@ La topología en AWS está estructurada de forma modular en [`/terraform`](terra
 - **`modules/rds`**: Base de datos PostgreSQL 16 Multi-AZ con conmutación por error automática y cifrado KMS (`HA-15`).
 - **`modules/storage_events`**: Bucket S3 con versionado y SSE-KMS (`HA-08`) y cola SQS con Dead Letter Queue (DLQ).
 - **`modules/ecr`**: Repositorio de imágenes Docker del backend con escaneo de vulnerabilidades.
-- **`modules/web_hosting`**: Bucket S3 y CDN CloudFront con Origin Access Control (OAC) para el portal web Angular.
+- **`modules/web_hosting`**: Bucket S3 y CDN CloudFront con Origin Access Control (OAC) para el portal web Angular y enrutamiento dinámico sin caché de `/api/*` y `/health` hacia el Application Load Balancer.
 
 ### 7.1 Comprobación y Validación Local
 

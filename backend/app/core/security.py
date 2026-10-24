@@ -1,19 +1,27 @@
-"""Seguridad, hashing, TOTP y tokens JWT (HU-WEB-13)."""
+"""Seguridad, hashing, TOTP, tokens JWT y autenticación B2B de socios (HU-WEB-13, HU-WEB-10)."""
 import base64
 from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
+import json
+import logging
 import struct
 import time
 from typing import Any, Dict, List, Optional
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import bcrypt
 import jwt
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
+from app.core.database import get_db_session
+from app.core.middleware import tenant_context
+from app.modules.rating.models import PartnerDB, PartnerStatus
 
 # bcrypt directo: passlib 1.7.4 falla con bcrypt >= 4.1 al detectar el "wrap bug".
 security_bearer = HTTPBearer(auto_error=False)
+security_logger = logging.getLogger("solventa.security.partner")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -234,3 +242,187 @@ def require_roles(allowed_roles: List[str]):
         return payload
 
     return role_checker
+
+
+def log_partner_security_event(
+    event_code: str,
+    reason: str,
+    client_id: Optional[str] = None,
+    partner_id: Optional[str] = None,
+    endpoint: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Emite evento de seguridad auditable en formato JSON hacia stdout/CloudWatch con severidad WARNING."""
+    event_payload: Dict[str, Any] = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "level": "WARNING",
+        "event": "partner_security_audit",
+        "event_code": event_code,
+        "client_id": client_id,
+        "partner_id": partner_id,
+        "endpoint": endpoint,
+        "reason": reason,
+    }
+    serialized = json.dumps(event_payload, ensure_ascii=False)
+    security_logger.warning(serialized)
+    return event_payload
+
+
+def create_partner_access_token(
+    client_id: str,
+    partner_id: str,
+    expires_delta: Optional[timedelta] = None,
+) -> str:
+    """Genera token JWT firmado para socio B2B con claims sub, partner_id y role='partner'."""
+    delta = expires_delta or timedelta(minutes=settings.PARTNER_TOKEN_EXPIRE_MINUTES)
+    return create_access_token(
+        subject=client_id,
+        role="partner",
+        claims={"partner_id": partner_id},
+        expires_delta=delta,
+    )
+
+
+async def authenticate_partner(
+    session: AsyncSession,
+    client_id: str,
+    client_secret: str,
+    endpoint: str = "/api/v1/quote-edge/auth/token",
+) -> PartnerDB:
+    """Valida las credenciales OAuth2 Client Credentials de un socio B2B y comprueba que esté ACTIVE."""
+    clean_client_id = client_id.strip()
+    stmt = select(PartnerDB).where(PartnerDB.client_id == clean_client_id)
+    result = await session.execute(stmt)
+    partner = result.scalars().first()
+
+    if not partner or not verify_password(client_secret, partner.client_secret_hash):
+        log_partner_security_event(
+            event_code="PARTNER_AUTH_FAILED",
+            reason="Cliente OAuth2 inexistente o credenciales inválidas",
+            client_id=clean_client_id,
+            partner_id=partner.partner_id if partner else None,
+            endpoint=endpoint,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales de socio inválidas",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if partner.status != PartnerStatus.ACTIVE.value:
+        log_partner_security_event(
+            event_code="PARTNER_REVOKED",
+            reason="El socio tiene sus credenciales revocadas o inactivas",
+            client_id=partner.client_id,
+            partner_id=partner.partner_id,
+            endpoint=endpoint,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales del socio revocadas o inactivas",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return partner
+
+
+async def get_current_partner(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
+    session: AsyncSession = Depends(get_db_session),
+) -> PartnerDB:
+    """
+    Dependencia FastAPI de autenticación para el canal de socios B2B (HU-WEB-10).
+    Valida token Bearer, rol 'partner', estado 'ACTIVE' en BD y sincroniza tenant_context.
+    """
+    endpoint = request.url.path
+    if not credentials or not credentials.credentials:
+        log_partner_security_event(
+            event_code="PARTNER_TOKEN_MISSING",
+            reason="Cabecera Authorization Bearer ausente",
+            endpoint=endpoint,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de autenticación de socio requerido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        payload = decode_access_token(credentials.credentials)
+    except jwt.ExpiredSignatureError:
+        log_partner_security_event(
+            event_code="PARTNER_TOKEN_EXPIRED",
+            reason="El token JWT del socio ha expirado",
+            endpoint=endpoint,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de acceso de socio expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except jwt.InvalidTokenError:
+        log_partner_security_event(
+            event_code="PARTNER_TOKEN_INVALID",
+            reason="Firma o estructura de token JWT inválida",
+            endpoint=endpoint,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de acceso de socio inválido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token_type = payload.get("type", "access")
+    role = payload.get("role")
+    partner_id = payload.get("partner_id")
+    client_id = payload.get("sub")
+
+    if token_type != "access" or role != "partner" or not partner_id:
+        log_partner_security_event(
+            event_code="PARTNER_ROLE_MISMATCH",
+            reason="El token no corresponde al canal de socios B2B",
+            client_id=client_id,
+            partner_id=partner_id,
+            endpoint=endpoint,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token no autorizado para el canal de socios B2B",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    stmt = select(PartnerDB).where(PartnerDB.partner_id == partner_id)
+    result = await session.execute(stmt)
+    partner = result.scalars().first()
+
+    if not partner:
+        log_partner_security_event(
+            event_code="PARTNER_AUTH_FAILED",
+            reason="El socio asociado al token no existe",
+            client_id=client_id,
+            partner_id=partner_id,
+            endpoint=endpoint,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Socio no encontrado o no autorizado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if partner.status != PartnerStatus.ACTIVE.value:
+        log_partner_security_event(
+            event_code="PARTNER_REVOKED",
+            reason="El socio se encuentra revocado o inactivo",
+            client_id=partner.client_id,
+            partner_id=partner.partner_id,
+            endpoint=endpoint,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales del socio revocadas o inactivas",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    tenant_context.set(partner.partner_id)
+    return partner
+
