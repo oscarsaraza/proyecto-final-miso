@@ -143,7 +143,7 @@ def create_access_token(
 
     encoded_jwt = jwt.encode(
         to_encode,
-        settings.JWT_SECRET_KEY,
+        settings.JWT_SECRET_KEY.get_secret_value(),
         algorithm=settings.JWT_ALGORITHM,
     )
     return encoded_jwt
@@ -170,7 +170,7 @@ def create_refresh_token(
     }
     return jwt.encode(
         to_encode,
-        settings.JWT_SECRET_KEY,
+        settings.JWT_SECRET_KEY.get_secret_value(),
         algorithm=settings.JWT_ALGORITHM,
     )
 
@@ -179,7 +179,7 @@ def decode_access_token(token: str) -> Dict[str, Any]:
     """Decodifica y valida un token JWT usando la clave y algoritmo configurados."""
     return jwt.decode(
         token,
-        settings.JWT_SECRET_KEY,
+        settings.JWT_SECRET_KEY.get_secret_value(),
         algorithms=[settings.JWT_ALGORITHM],
     )
 
@@ -188,7 +188,7 @@ def decode_refresh_token(token: str) -> Dict[str, Any]:
     """Decodifica y valida un token de refresco JWT."""
     payload = jwt.decode(
         token,
-        settings.JWT_SECRET_KEY,
+        settings.JWT_SECRET_KEY.get_secret_value(),
         algorithms=[settings.JWT_ALGORITHM],
     )
     if payload.get("type") != "refresh":

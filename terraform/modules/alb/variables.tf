@@ -10,6 +10,7 @@ variable "vpc_id" {
   type = string
 }
 
-variable "public_subnet_ids" {
-  type = list(string)
+variable "private_subnet_ids" {
+  description = "Subredes privadas donde vive el balanceador interno"
+  type        = list(string)
 }

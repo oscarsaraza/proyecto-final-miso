@@ -8,10 +8,10 @@ module "vpc" {
 module "alb" {
   source = "./modules/alb"
 
-  project_name      = var.project_name
-  environment       = var.environment
-  vpc_id            = module.vpc.vpc_id
-  public_subnet_ids = module.vpc.public_subnet_ids
+  project_name       = var.project_name
+  environment        = var.environment
+  vpc_id             = module.vpc.vpc_id
+  private_subnet_ids = module.vpc.private_subnet_ids
 }
 
 module "ecr" {
@@ -54,6 +54,8 @@ module "ecs" {
   db_name               = module.rds.db_name
   db_user               = var.db_username
   db_password           = var.db_password
+  jwt_secret_key        = var.jwt_secret_key
+  otp_secret_key        = var.otp_secret_key
   sqs_queue_url         = module.storage_events.sqs_queue_url
   s3_bucket_name        = module.storage_events.s3_bucket_name
 }
@@ -64,5 +66,6 @@ module "web_hosting" {
   project_name = var.project_name
   environment  = var.environment
   alb_dns_name = module.alb.alb_dns_name
+  alb_arn      = module.alb.alb_arn
 }
 

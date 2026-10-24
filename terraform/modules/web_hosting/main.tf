@@ -26,6 +26,65 @@ resource "aws_cloudfront_origin_access_control" "oac" {
   signing_protocol                  = "sigv4"
 }
 
+# VPC origin: CloudFront llega al balanceador interno por la red privada de AWS
+resource "aws_cloudfront_vpc_origin" "alb" {
+  count = var.alb_arn != "" ? 1 : 0
+
+  vpc_origin_endpoint_config {
+    name                   = "${var.project_name}-alb-${var.environment}"
+    arn                    = var.alb_arn
+    http_port              = 80
+    https_port             = 443
+    origin_protocol_policy = "http-only"
+
+    origin_ssl_protocols {
+      items    = ["TLSv1.2"]
+      quantity = 1
+    }
+  }
+}
+
+# Encabezados de seguridad para el portal y la API
+resource "aws_cloudfront_response_headers_policy" "security" {
+  name = "${var.project_name}-security-headers-${var.environment}"
+
+  security_headers_config {
+    strict_transport_security {
+      access_control_max_age_sec = 31536000
+      include_subdomains         = false
+      preload                    = false
+      override                   = true
+    }
+
+    content_type_options {
+      override = true
+    }
+
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+
+    content_security_policy {
+      content_security_policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+      override                = true
+    }
+  }
+}
+
+# Rutas del portal Angular: lo que no es un archivo se sirve como index.html, solo en el origen S3
+resource "aws_cloudfront_function" "spa_routing" {
+  name    = "${var.project_name}-spa-routing-${var.environment}"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = file("${path.module}/spa-routing.js")
+}
+
 # Distribución CloudFront global para Angular SPA
 resource "aws_cloudfront_distribution" "web" {
   enabled             = true
@@ -39,22 +98,19 @@ resource "aws_cloudfront_distribution" "web" {
   }
 
   dynamic "origin" {
-    for_each = var.alb_dns_name != "" ? [1] : []
+    for_each = var.alb_arn != "" ? [1] : []
     content {
       domain_name = var.alb_dns_name
       origin_id   = "ALBOrigin"
 
-      custom_origin_config {
-        http_port              = 80
-        https_port             = 443
-        origin_protocol_policy = "http-only"
-        origin_ssl_protocols   = ["TLSv1.2"]
+      vpc_origin_config {
+        vpc_origin_id = aws_cloudfront_vpc_origin.alb[0].id
       }
     }
   }
 
   dynamic "ordered_cache_behavior" {
-    for_each = var.alb_dns_name != "" ? [1] : []
+    for_each = var.alb_arn != "" ? [1] : []
     content {
       path_pattern     = "/api/*"
       allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
@@ -69,15 +125,16 @@ resource "aws_cloudfront_distribution" "web" {
         }
       }
 
-      viewer_protocol_policy = "redirect-to-https"
-      min_ttl                = 0
-      default_ttl            = 0
-      max_ttl                = 0
+      viewer_protocol_policy     = "redirect-to-https"
+      response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+      min_ttl                    = 0
+      default_ttl                = 0
+      max_ttl                    = 0
     }
   }
 
   dynamic "ordered_cache_behavior" {
-    for_each = var.alb_dns_name != "" ? [1] : []
+    for_each = var.alb_arn != "" ? [1] : []
     content {
       path_pattern     = "/health"
       allowed_methods  = ["GET", "HEAD", "OPTIONS"]
@@ -92,10 +149,11 @@ resource "aws_cloudfront_distribution" "web" {
         }
       }
 
-      viewer_protocol_policy = "redirect-to-https"
-      min_ttl                = 0
-      default_ttl            = 0
-      max_ttl                = 0
+      viewer_protocol_policy     = "redirect-to-https"
+      response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+      min_ttl                    = 0
+      default_ttl                = 0
+      max_ttl                    = 0
     }
   }
 
@@ -111,23 +169,16 @@ resource "aws_cloudfront_distribution" "web" {
       }
     }
 
-    viewer_protocol_policy = "redirect-to-https"
-    min_ttl                = 0
-    default_ttl            = 3600
-    max_ttl                = 86400
-  }
+    viewer_protocol_policy     = "redirect-to-https"
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+    min_ttl                    = 0
+    default_ttl                = 3600
+    max_ttl                    = 86400
 
-  # Soporte para enrutamiento Angular SPA (HTML5 routing)
-  custom_error_response {
-    error_code         = 403
-    response_code      = 200
-    response_page_path = "/index.html"
-  }
-
-  custom_error_response {
-    error_code         = 404
-    response_code      = 200
-    response_page_path = "/index.html"
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.spa_routing.arn
+    }
   }
 
   restrictions {
@@ -153,8 +204,8 @@ resource "aws_s3_bucket_policy" "web" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "AllowCloudFrontServicePrincipalReadOnly"
-        Effect    = "Allow"
+        Sid    = "AllowCloudFrontServicePrincipalReadOnly"
+        Effect = "Allow"
         Principal = {
           Service = "cloudfront.amazonaws.com"
         }

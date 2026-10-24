@@ -1,4 +1,12 @@
 """Fixtures comunes para pruebas del backend."""
+import os
+import secrets
+
+os.environ.setdefault("JWT_SECRET_KEY", secrets.token_urlsafe(48))
+os.environ.setdefault("OTP_SECRET_KEY", secrets.token_urlsafe(48))
+
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy import make_url, text
@@ -6,7 +14,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.main import app
 from app.core.config import settings
 from app.core.database import Base, get_db_session
-from app.modules.identity.service import insured_auth_service
+from app.core.sms import ConsoleSmsSender, SmsDeliveryError
+from app.modules.identity.service import InsuredAuthService, insured_auth_service
 from app.modules.auth.service import auth_service
 from app.modules.profile.service import profile_service
 from app.modules.rating.service import rating_service
@@ -125,12 +134,16 @@ class InMemorySessionTestDouble:
 
 
 @pytest.fixture(autouse=True)
+def sms_simulado(monkeypatch):
+    """Las pruebas nunca envían SMS reales, aunque el .env local tenga Twilio."""
+    monkeypatch.setattr(insured_auth_service, "_sms", ConsoleSmsSender())
+
+
+@pytest.fixture(autouse=True)
 def clean_stores():
     """Limpia los estados en memoria antes de cada test."""
-    insured_auth_service.reset_state()
     profile_service.clear()
     yield
-    insured_auth_service.reset_state()
     profile_service.clear()
 
 
@@ -183,3 +196,72 @@ async def async_client():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
+
+
+INSURED_EMAIL = "maria.ruiz@correo.co"
+INSURED_PASSWORD = "Solventa2026!"
+INSURED_PHONE = "+573001112233"
+
+
+class FakeClock:
+    def __init__(self):
+        self.now = datetime(2026, 10, 9, 12, 0, tzinfo=timezone.utc)
+
+    def __call__(self):
+        return self.now
+
+    def advance(self, delta: timedelta):
+        self.now += delta
+
+
+class RecordingSmsSender:
+    exposes_code = True
+
+    def __init__(self):
+        self.sent = []
+        self.fail = False
+
+    async def send(self, to: str, body: str) -> None:
+        if self.fail:
+            raise SmsDeliveryError("caído")
+        self.sent.append((to, body))
+
+
+@pytest.fixture
+def clock():
+    return FakeClock()
+
+
+@pytest.fixture
+def sms():
+    return RecordingSmsSender()
+
+
+@pytest.fixture
+async def identity(postgres_session, clock, sms):
+    """Servicio de identidad sobre PostgreSQL real con reloj y SMS falsos, y María registrada."""
+    service = InsuredAuthService(clock=clock, sms_sender=sms)
+    await service.register(
+        postgres_session,
+        user_id="ins-0001",
+        email=INSURED_EMAIL,
+        full_name="María Ruiz",
+        document_number="1020304050",
+        phone=INSURED_PHONE,
+        password=INSURED_PASSWORD,
+    )
+    return service
+
+
+@pytest.fixture
+async def seeded_insured(postgres_session):
+    """María registrada para las pruebas de la API, que usan el servicio global."""
+    await insured_auth_service.register(
+        postgres_session,
+        user_id="ins-0001",
+        email=INSURED_EMAIL,
+        full_name="María Ruiz",
+        document_number="1020304050",
+        phone=INSURED_PHONE,
+        password=INSURED_PASSWORD,
+    )

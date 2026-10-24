@@ -17,6 +17,8 @@ Su arquitectura implementa un **Monolito Modular API-First con Arquitectura Hexa
 | [`.github/workflows`](.github/workflows/) | Pipelines de CI/CD                                                | GitHub Actions (CI en cada commit, CD a AWS en `main`)        |
 | [`experiments/`](experiments/)            | Experimentos de arquitectura y validaciones de carga E1 y E3      | Python, k6, AWS Cloud                                         |
 | [`docs/`](docs/)                          | Prototipos de navegación interactivos y guía de pruebas manuales  | HTML5, CSS3, JavaScript, Markdown                             |
+| [`sdd/`](sdd/README.md)                   | Framework SDD con seguridad y privacidad obligatorias (ver [`AGENTS.md`](AGENTS.md)) | Markdown, Python 3.11+ (solo biblioteca estándar)        |
+| [`specs/`](specs/)                        | Paquetes de especificación: spec, seguridad, casos de prueba y gate | Markdown                                                      |
 
 ---
 
@@ -48,7 +50,11 @@ cd backend
 # 1. Instalar dependencias del proyecto
 poetry install
 
-# 2. Iniciar servidor FastAPI con recarga en caliente (hot reload)
+# 2. Crear backend/.env a partir de .env.example y generar JWT_SECRET_KEY y OTP_SECRET_KEY
+#    (obligatorias: sin ellas el backend no arranca)
+cp .env.example .env
+
+# 3. Iniciar servidor FastAPI con recarga en caliente (hot reload)
 poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -65,7 +71,7 @@ python -m venv .venv
 
 #### Opción B: Ejecución en contenedor con Docker Compose
 
-Levanta automáticamente PostgreSQL, Floci y el contenedor del backend (`solventa-backend`):
+Levanta automáticamente PostgreSQL, Floci y el contenedor del backend (`solventa-backend`). El contenedor lee `backend/.env`, que debe existir con `JWT_SECRET_KEY` y `OTP_SECRET_KEY` (paso 2 de la Opción A):
 
 ```bash
 docker compose up -d
@@ -126,6 +132,24 @@ El BFF expone en `/api/v1/quote-edge` el canal dedicado para socios de distribuc
 Socios semilla inicializados automáticamente en el arranque (`lifespan`):
 - **Socio activo:** `client_id`: `banco_aliado` · `client_secret`: `AliadoSecret2026*` (`partner_id`: `banco-aliado-1`).
 - **Socio revocado:** `client_id`: `socio_inactivo` · `client_secret`: `Inactivo2026*` (`partner_id`: `socio-inactivo-1`, estado `REVOKED`).
+
+### 2.7 Hooks de git del framework SDD (una vez por copia)
+
+Git no activa los hooks de un repositorio al clonarlo: cada persona los activa una vez en su copia. Requieren Python 3.11+ y `sh` (en Windows, Git Bash).
+
+```bash
+python sdd/tools/sdd.py hooks install     # git usará sdd/hooks (core.hooksPath)
+python sdd/tools/sdd.py doctor            # comprueba Python, configuración y hooks
+python sdd/tools/sdd.py hooks uninstall   # para desactivarlos
+```
+
+| Hook | Bloquea |
+| :--- | :------ |
+| `pre-commit` | Commits directos a `main`, `dev` o `qa` y secretos en los cambios preparados |
+| `commit-msg` | Mensajes fuera de Conventional Commits; en ramas `feature/HU-…`, commits sin la HU y código sin el paquete de la HU en `specs/`; cambios de infraestructura o autenticación sin ADR |
+| `pre-push` | Push a ramas protegidas y force-push |
+
+El job `sdd-gate` del CI valida secretos, rutas críticas, dependencias y specs para todos, pero no revisa que cada commit nombre su HU: eso solo lo hace el hook `commit-msg`. El flujo completo está en [`AGENTS.md`](AGENTS.md) y [`sdd/README.md`](sdd/README.md).
 
 ---
 
@@ -366,6 +390,7 @@ Se dispara en **cada commit y pull request sin importar la rama** (`push` y `pul
 2. **`web-ci`**: Instala Node.js 22, ejecuta las pruebas unitarias del portal comercial con Vitest y genera el bundle de producción.
 3. **`mobile-ci`**: Configura Java 17 LTS y Gradle, ejecutando `./gradlew testDebugUnitTest` para la aplicación móvil.
 4. **`terraform-ci`**: Inicializa los módulos de Terraform y valida el formato y sintaxis (`fmt -check`, `validate`).
+5. **`sdd-gate`**: Prueba el validador del framework SDD, valida los paquetes de `specs/` y calcula su gate de seguridad; en los pull requests revisa además secretos en las líneas nuevas, rutas críticas sin spec y dependencias nuevas sin evaluar.
 
 ### 8.2 Despliegue Continuo a AWS (`.github/workflows/deploy.yml`)
 
@@ -407,6 +432,17 @@ Para el funcionamiento del pipeline de despliegue a AWS en la nube (`deploy.yml`
 | `AWS_ACCESS_KEY_ID`     | **Sí**    | Identificador de clave de acceso del usuario IAM de despliegue     | `AKIAIOSFODNN7EXAMPLE`                     |
 | `AWS_SECRET_ACCESS_KEY` | **Sí**    | Clave de acceso secreta del usuario IAM                            | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
 | `AWS_REGION`            | Opcional  | Región primaria de AWS para el despliegue (por defecto `us-east-1`)| `us-east-1`                                |
+| `DB_PASSWORD`           | **Sí**    | Contraseña de PostgreSQL en RDS (12 a 41 caracteres, sin `/`, `@`, `"` ni espacios) | —                    |
+| `JWT_SECRET_KEY`        | **Sí**    | Llave de firma de los tokens del backend (32 caracteres o más)     | —                                          |
+| `OTP_SECRET_KEY`        | **Sí**    | Llave del MAC de los códigos de un solo uso, distinta de la anterior | —                                        |
+
+Los tres últimos llegan a Terraform como `TF_VAR_*` en `deploy.yml` y `destroy.yml`; sin ellos el despliegue falla antes de cambiar nada. Las llaves se pueden generar y guardar sin mostrarlas en pantalla:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))" | gh secret set JWT_SECRET_KEY
+python -c "import secrets; print(secrets.token_urlsafe(48))" | gh secret set OTP_SECRET_KEY
+gh secret set DB_PASSWORD   # pide el valor sin mostrarlo
+```
 
 > [!NOTE]
 > Para que Terraform y los workflows de GitHub Actions puedan aprovisionar y actualizar la infraestructura sin errores de autorización, debes asociar al usuario de IAM las siguientes **Políticas administradas por AWS (AWS Managed Policies)**:

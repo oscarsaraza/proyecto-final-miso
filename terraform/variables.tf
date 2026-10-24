@@ -23,10 +23,36 @@ variable "db_username" {
 }
 
 variable "db_password" {
-  description = "Contraseña de la base de datos PostgreSQL en RDS"
+  description = "Contraseña de PostgreSQL en RDS. Sin valor por defecto: llega como TF_VAR_db_password desde los secretos de CI"
   type        = string
   sensitive   = true
-  default     = "SolventaSecurePass2026!"
+
+  validation {
+    condition     = length(var.db_password) >= 12 && length(var.db_password) <= 41 && !can(regex("[/@\" ]", var.db_password))
+    error_message = "db_password debe tener entre 12 y 41 caracteres, sin /, @, comillas dobles ni espacios."
+  }
+}
+
+variable "jwt_secret_key" {
+  description = "Llave de firma de los tokens del backend. Llega como TF_VAR_jwt_secret_key desde los secretos de CI"
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.jwt_secret_key) >= 32
+    error_message = "jwt_secret_key debe tener al menos 32 caracteres."
+  }
+}
+
+variable "otp_secret_key" {
+  description = "Llave del MAC de los códigos de un solo uso, distinta de la de los tokens. Llega como TF_VAR_otp_secret_key"
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.otp_secret_key) >= 32 && var.otp_secret_key != var.jwt_secret_key
+    error_message = "otp_secret_key debe tener al menos 32 caracteres y ser distinta de jwt_secret_key."
+  }
 }
 
 variable "use_local_emulator" {

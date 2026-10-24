@@ -9,11 +9,13 @@ import androidx.compose.ui.res.stringResource
 import com.solventa.app.R
 
 @Composable
-fun LogoutConfirmationDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun LogoutConfirmationDialog(biometricEnabled: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.logout_title)) },
-        text = { Text(stringResource(R.string.logout_message)) },
+        text = {
+            Text(stringResource(if (biometricEnabled) R.string.logout_message_biometric else R.string.logout_message))
+        },
         confirmButton = {
             TextButton(onClick = onConfirm) {
                 Text(stringResource(R.string.logout_confirm), color = MaterialTheme.colorScheme.error)

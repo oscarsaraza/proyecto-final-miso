@@ -36,6 +36,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Endpoints B2B y Aislamiento Multi-Tenant: Refactorización de `POST /api/v1/quote-edge/quotes` con incremento transaccional atómico de `quota_used`, e incorporación de `GET /api/v1/quote-edge/quotes/{quote_id}` (`404 Not Found` ante cotizaciones de otros socios o del canal asesor) y `GET /api/v1/quote-edge/quotes` confinado al socio autenticado.
   - Siembra y Documentación: Inicialización idempotente en `lifespan` de socios semilla (`banco_aliado` activo y `socio_inactivo` revocado), enriquecimiento de esquemas OpenAPI y actualización de `README.md` y `backend/README.md`.
   - Pruebas: Suites unitarias (`tests/unit/test_partner_auth.py`) y de integración (`tests/integration/test_partner_quote_api.py`) validando emisión de tokens, auditoría de rechazos, cuota atómica y aislamiento estricto entre socios.
+- **Framework SDD con seguridad obligatoria (`AGENTS.md`, `sdd/`):**
+  - Paquetes de especificación en `specs/` (Requirements → Design → Tasks, evaluación de seguridad, casos de prueba y gate) con plantillas en `sdd/templates/`.
+  - Roles, skills y reglas en Markdown, independientes de la herramienta de IA.
+  - Seguridad orientada al desarrollo: evaluación proporcional, ciclo de vida de datos, STRIDE, criptografía, catálogo de controles, rutas críticas y referencias verificadas.
+  - Skills por lenguaje (Python, TypeScript/Angular, Kotlin/Android, Terraform) con convenciones y revisión de código, y con patrones de código seguro; skills de UI/UX y accesibilidad (WCAG 2.2 AA).
+  - Requisitos de calidad medibles en el spec y niveles de prueba validados: unitarias, integración, contrato, E2E, rendimiento (carga, estrés, picos, resistencia), accesibilidad y estáticas.
+  - Validador que calcula el gate de seguridad desde la evidencia, escáneres de secretos, dependencias y rutas críticas, y gates como hooks de git; probados con escenarios positivos y negativos.
+  - Trabajo por historia de usuario: rama `feature/HU-…-slug`, paquete `specs/HU-…-slug/` y la HU en cada commit; `hotfix/` como excepción.
+  - La HU se lee del tablero y se copia en el spec; los criterios se marcan como `STATED` (los dice la HU) o `DERIVED` (los necesita la funcionalidad aunque la HU no los diga).
+  - Escenarios derivados de los elementos de cada HU (actores, datos, reglas, estados, pasos, dependencias, tiempo) con su disposición y cobertura validadas.
+  - ADR 0001–0019 (propuestas) por capa en `docs/adr/`: sistema, contrato de API, backend hexagonal, web, móvil e infraestructura.
+  - Job `sdd-gate` en el CI.
 - **HU-WEB-02.1 · Catálogos de bancos y ciudades en base de datos y consumo en cotizador (Issue #163):**
   - Backend: Modelos SQLAlchemy `FinancialEntityDB` (tabla `financial_entities`) y `CityDB` (tabla `cities`) en `app/modules/profile/models.py`. Siembra automática e idempotente en el ciclo de vida de la aplicación (`lifespan`) con el listado completo de 32 entidades bancarias vigiladas por la SFC y las 100 ciudades principales de Colombia según el DANE. Endpoints REST `GET /api/v1/experience/catalogs/financial-entities` y `GET /api/v1/experience/catalogs/cities` en el BFF de experiencia.
   - Web: Interfaces `FinancialEntity` y `City` en `catalog.model.ts`, servicio `CatalogService` para consumo de catálogos, e integración reactiva mediante señales (`financialEntities`, `cities`, `loadingEntities`, `loadingCities`) en `ClientDataStepComponent` con estados de carga y población dinámica de los `<select>` de entidad financiera y ciudad de residencia.

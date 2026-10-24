@@ -1,5 +1,6 @@
 package com.solventa.app.ui.auth
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.solventa.app.R
@@ -42,8 +42,10 @@ fun AlternativeLoginScreen(
     onRequestOtp: (email: String) -> Unit,
     onSubmit: (email: String, password: String, otpCode: String) -> Unit,
     onBack: () -> Unit,
+    onForgotPassword: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    BackHandler(onBack = onBack)
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var otpCode by rememberSaveable { mutableStateOf("") }
@@ -76,13 +78,10 @@ fun AlternativeLoginScreen(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             modifier = Modifier.fillMaxWidth(),
         )
-        OutlinedTextField(
+        PasswordField(
             value = password,
             onValueChange = { password = it },
-            label = { Text(stringResource(R.string.auth_password)) },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            label = stringResource(R.string.auth_password),
             modifier = Modifier.fillMaxWidth(),
         )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -94,8 +93,17 @@ fun AlternativeLoginScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                 modifier = Modifier.weight(1f),
             )
-            OutlinedButton(onClick = { onRequestOtp(email) }, enabled = email.isNotBlank()) {
-                Text(stringResource(if (form.otpSent) R.string.auth_otp_resend else R.string.auth_otp_send))
+            OutlinedButton(
+                onClick = { onRequestOtp(email) },
+                enabled = email.isNotBlank() && uiState.canRequestOtp(email),
+            ) {
+                Text(
+                    when {
+                        !uiState.canRequestOtp(email) -> stringResource(R.string.auth_otp_wait, uiState.otpCooldownSeconds)
+                        form.otpSent -> stringResource(R.string.auth_otp_resend)
+                        else -> stringResource(R.string.auth_otp_send)
+                    }
+                )
             }
         }
         if (form.otpSent) {
@@ -111,11 +119,21 @@ fun AlternativeLoginScreen(
             Text(
                 text = when (error) {
                     AlternativeLoginError.INVALID_CREDENTIALS -> stringResource(R.string.auth_error_invalid_credentials)
+                    AlternativeLoginError.INVALID_FORMAT -> stringResource(R.string.auth_error_invalid_format)
                     AlternativeLoginError.ACCOUNT_LOCKED -> stringResource(R.string.auth_error_locked)
+                    AlternativeLoginError.TOO_MANY_REQUESTS -> stringResource(R.string.auth_error_too_many)
+                    AlternativeLoginError.SMS_UNAVAILABLE -> stringResource(R.string.auth_error_sms)
                     AlternativeLoginError.NETWORK -> stringResource(R.string.auth_error_network)
                 },
                 color = MaterialTheme.colorScheme.error,
                 fontWeight = FontWeight.SemiBold,
+            )
+        }
+
+        if (uiState.isLocked) {
+            Text(
+                text = stringResource(R.string.auth_locked_countdown, uiState.lockedSeconds / 60, uiState.lockedSeconds % 60),
+                color = MaterialTheme.colorScheme.error,
             )
         }
 
@@ -126,6 +144,9 @@ fun AlternativeLoginScreen(
             modifier = Modifier.fillMaxWidth().height(48.dp),
         ) {
             Text(stringResource(if (form.isSubmitting) R.string.auth_submitting else R.string.auth_submit))
+        }
+        TextButton(onClick = onForgotPassword, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.auth_forgot_password))
         }
         OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(48.dp)) {
             Text(stringResource(R.string.auth_back_to_biometrics))
@@ -160,6 +181,7 @@ private fun AlternativeLoginScreenPreview() {
             onRequestOtp = {},
             onSubmit = { _, _, _ -> },
             onBack = {},
+            onForgotPassword = {},
         )
     }
 }

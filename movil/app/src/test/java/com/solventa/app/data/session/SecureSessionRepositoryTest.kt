@@ -1,8 +1,10 @@
 package com.solventa.app.data.session
 
+import com.solventa.app.domain.auth.DeviceCredential
 import com.solventa.app.domain.auth.SessionTokens
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -13,6 +15,8 @@ import javax.crypto.AEADBadTagException
 // TC-S1-11: custodia de credenciales en el almacén protegido (HU-MOV-03)
 class SecureSessionRepositoryTest {
 
+    private val maria = DeviceCredential(deviceId = "device-maria", secret = "secreto-maria")
+    private val pedro = DeviceCredential(deviceId = "device-pedro", secret = "secreto-pedro")
     private val tokens = SessionTokens(accessToken = "access.jwt.token", refreshToken = "refresh-token-123")
 
     private lateinit var crypto: FakeSessionCrypto
@@ -26,70 +30,139 @@ class SecureSessionRepositoryTest {
         repository = SecureSessionRepository(crypto, store)
     }
 
+    private fun bind(credential: DeviceCredential, email: String, name: String) =
+        repository.save(credential, repository.encryptionCipher(), email, name)
+
     @Test
-    fun `TC-S1-11 sin sesion guardada no hay nada que desbloquear`() {
+    fun `TC-S1-11 sin huella vinculada no hay nada que desbloquear`() {
         assertFalse(repository.hasStoredSession())
-        assertNull(repository.decryptionCipher())
+        assertNull(repository.decryptionCipher(MARIA))
         assertNull(repository.activeSession)
     }
 
     @Test
-    fun `TC-S1-11 guarda los tokens cifrados y nunca en texto plano`() {
-        repository.save(tokens, repository.encryptionCipher())
+    fun `TC-S1-11 guarda la credencial cifrada y nunca el secreto en texto plano`() {
+        bind(maria, MARIA, "María Ruiz")
 
-        val stored = checkNotNull(store.stored)
-        val persisted = String(stored.ciphertext, Charsets.ISO_8859_1)
-        assertFalse(persisted.contains(tokens.accessToken))
-        assertFalse(persisted.contains(tokens.refreshToken))
+        val stored = store.sessions.single()
+        assertFalse(String(stored.ciphertext, Charsets.ISO_8859_1).contains(maria.secret))
         assertEquals(12, stored.iv.size)
-        assertTrue(repository.hasStoredSession())
-        assertEquals(tokens, repository.activeSession)
+        assertEquals("device-maria", repository.storedDeviceId(MARIA))
+        assertEquals(listOf(BoundAccount(MARIA, "María Ruiz")), repository.boundAccounts())
     }
 
     @Test
-    fun `TC-S1-11 desbloquea la sesion con el cipher autenticado`() {
-        repository.save(tokens, repository.encryptionCipher())
+    fun `TC-S1-11 cada cuenta desbloquea su propia credencial`() {
+        bind(maria, MARIA, "María Ruiz")
+        bind(pedro, PEDRO, "Pedro Gómez")
         val reopened = SecureSessionRepository(crypto, store)
 
-        val unlocked = reopened.unlock(checkNotNull(reopened.decryptionCipher()))
-
-        assertEquals(tokens, unlocked)
-        assertEquals(tokens, reopened.activeSession)
+        assertEquals(maria, reopened.unlock(MARIA, checkNotNull(reopened.decryptionCipher(MARIA))))
+        assertEquals(pedro, reopened.unlock(PEDRO, checkNotNull(reopened.decryptionCipher(PEDRO))))
     }
 
     @Test
-    fun `TC-S1-11 llave invalidada por cambio de biometria descarta la sesion`() {
-        repository.save(tokens, repository.encryptionCipher())
+    fun `TC-S1-11 volver a activar la huella reemplaza la credencial de esa cuenta`() {
+        bind(maria, MARIA, "María Ruiz")
+        bind(DeviceCredential("device-nuevo", "otro"), MARIA, "María Ruiz")
+
+        assertEquals(1, repository.boundAccounts().size)
+        assertEquals("device-nuevo", repository.storedDeviceId(MARIA))
+    }
+
+    @Test
+    fun `TC-S1-11 llave invalidada por cambio de huellas descarta todas las cuentas`() {
+        bind(maria, MARIA, "María Ruiz")
+        bind(pedro, PEDRO, "Pedro Gómez")
         crypto.invalidated = true
 
-        assertNull(repository.decryptionCipher())
+        assertNull(repository.decryptionCipher(MARIA))
         assertFalse(repository.hasStoredSession())
     }
 
     @Test
-    fun `TC-S1-11 sesion alterada no se puede descifrar`() {
-        repository.save(tokens, repository.encryptionCipher())
-        val stored = checkNotNull(store.stored)
+    fun `TC-S1-11 credencial alterada no se puede descifrar`() {
+        bind(maria, MARIA, "María Ruiz")
+        val stored = store.sessions.single()
         stored.ciphertext[0] = (stored.ciphertext[0].toInt() xor 0x01).toByte()
 
         assertThrows(AEADBadTagException::class.java) {
-            repository.unlock(checkNotNull(repository.decryptionCipher()))
+            repository.unlock(MARIA, checkNotNull(repository.decryptionCipher(MARIA)))
         }
     }
 
     @Test
-    fun `TC-S1-11 clear borra la sesion, la llave y la copia en memoria`() {
-        repository.save(tokens, repository.encryptionCipher())
+    fun `TC-S1-12 terminar la sesion conserva las huellas vinculadas`() {
+        repository.startSession(tokens)
+        bind(maria, MARIA, "María Ruiz")
 
-        repository.clear()
+        repository.endSession()
+
+        assertNull(repository.activeSession)
+        assertTrue(repository.isBound(MARIA))
+    }
+
+    @Test
+    fun `desvincular una cuenta conserva las demas y la llave`() {
+        bind(maria, MARIA, "María Ruiz")
+        bind(pedro, PEDRO, "Pedro Gómez")
+
+        repository.unbind(MARIA)
+
+        assertFalse(repository.isBound(MARIA))
+        assertTrue(repository.isBound(PEDRO))
+        assertNotNull(crypto.key)
+    }
+
+    @Test
+    fun `desvincular la ultima cuenta borra la llave`() {
+        bind(maria, MARIA, "María Ruiz")
+
+        repository.unbind(MARIA)
 
         assertFalse(repository.hasStoredSession())
-        assertNull(repository.activeSession)
         assertNull(crypto.key)
     }
 
     @Test
-    fun `los tokens no se exponen al imprimirlos`() {
+    fun `cuenta sin huella no tiene dispositivo ni se puede desbloquear`() {
+        assertNull(repository.storedDeviceId(MARIA))
+        assertThrows(IllegalStateException::class.java) {
+            repository.unlock(MARIA, repository.encryptionCipher())
+        }
+    }
+
+    @Test
+    fun `limpiar todo borra sesion, cuentas y llave`() {
+        repository.startSession(tokens)
+        bind(maria, MARIA, "María Ruiz")
+
+        repository.clear()
+
+        assertNull(repository.activeSession)
+        assertFalse(repository.hasStoredSession())
+        assertNull(crypto.key)
+    }
+
+    @Test
+    fun `credencial del telefono se compara por valor y rechaza datos mal formados`() {
+        assertEquals(maria, DeviceCredential("device-maria", "secreto-maria"))
+        assertEquals(maria.hashCode(), DeviceCredential("device-maria", "secreto-maria").hashCode())
+        assertFalse(maria == pedro)
+        assertFalse(maria.equals("device-maria"))
+        assertFalse(maria == DeviceCredential("device-maria", "otro"))
+        assertEquals(maria, DeviceCredential.fromBytes(maria.toBytes()))
+        assertThrows(IllegalArgumentException::class.java) { DeviceCredential.fromBytes("sin-separador".toByteArray()) }
+    }
+
+    @Test
+    fun `los tokens y el secreto no se exponen al imprimirlos`() {
         assertEquals("SessionTokens(***)", tokens.toString())
+        assertEquals("DeviceCredential(device-maria, ***)", maria.toString())
+    }
+
+    private companion object {
+        const val MARIA = "maria.ruiz@correo.co"
+        const val PEDRO = "pedro.gomez@correo.co"
     }
 }
