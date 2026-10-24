@@ -18,6 +18,7 @@ from app.core.sms import ConsoleSmsSender, SmsDeliveryError
 from app.modules.identity.service import InsuredAuthService, insured_auth_service
 from app.modules.auth.service import auth_service
 from app.modules.profile.service import profile_service
+from app.modules.rating.service import rating_service
 
 
 class InMemorySessionTestDouble:
@@ -27,6 +28,56 @@ class InMemorySessionTestDouble:
         self.users = {}
         self.financial_entities = {}
         self.cities = {}
+        self.partners_by_id = {}
+        self.partners_by_client_id = {}
+        self.quotes = {}
+        self.policies_by_number = {}
+        self.policies_by_quote = {}
+        self.outbox = []
+
+    async def get(self, model, pk):
+        from app.modules.rating.models import QuoteDB, PartnerDB
+        from app.modules.policy.models import PolicyDB
+        if model is QuoteDB:
+            return self.quotes.get(pk)
+        if model is PartnerDB:
+            return self.partners_by_id.get(pk)
+        if model is PolicyDB:
+            return self.policies_by_number.get(pk)
+        return None
+
+    async def scalar(self, stmt):
+        sql_str = str(stmt).lower()
+        if "next_value" in sql_str or "policy_number_seq" in sql_str:
+            return len(self.policies_by_number) + 1
+        if "insert into policies" in sql_str:
+            params = stmt.compile().params
+            from app.modules.policy.models import PolicyDB
+            policy_num = params.get("policy_number")
+            quote_id = params.get("quote_id")
+            existing = self.policies_by_quote.get(quote_id)
+            if existing:
+                return None
+            policy = PolicyDB(
+                policy_number=policy_num,
+                quote_id=quote_id,
+                partner_id=params.get("partner_id"),
+                insured_document=params.get("insured_document"),
+                beneficiaries=params.get("beneficiaries", []),
+                conditions=params.get("conditions", {}),
+                issued_at=params.get("issued_at"),
+                valid_until=params.get("valid_until"),
+                status="ISSUED",
+            )
+            self.policies_by_number[policy_num] = policy
+            self.policies_by_quote[quote_id] = policy
+            return policy
+        res = await self.execute(stmt)
+        return res.scalars().first()
+
+    async def scalars(self, stmt):
+        res = await self.execute(stmt)
+        return res.scalars()
 
     async def execute(self, stmt):
         class Result:
@@ -59,6 +110,68 @@ class InMemorySessionTestDouble:
             cities = sorted(self.cities.values(), key=lambda x: getattr(x, "name", ""))
             return Result(cities)
 
+        if "update partners" in sql_str:
+            try:
+                partner_id = stmt.whereclause.right.value
+                partner = self.partners_by_id.get(partner_id)
+                if partner:
+                    partner.quota_used = (partner.quota_used or 0) + 1
+            except Exception:
+                pass
+            return Result([])
+
+        if "from partners" in sql_str:
+            try:
+                where_str = str(stmt.whereclause).lower()
+                val = stmt.whereclause.right.value
+                if "partners.client_id" in where_str:
+                    partner = self.partners_by_client_id.get(val)
+                else:
+                    partner = self.partners_by_id.get(val)
+                return Result([partner] if partner else [])
+            except Exception:
+                return Result([])
+
+        if "from quotes" in sql_str:
+            try:
+                where_str = str(stmt.whereclause).lower()
+                val = stmt.whereclause.right.value
+                if "quotes.quote_id" in where_str:
+                    quote = self.quotes.get(val)
+                    return Result([quote] if quote else [])
+                if "quotes.partner_id" in where_str:
+                    items = [q for q in self.quotes.values() if q.partner_id == val]
+                    items.sort(key=lambda q: q.created_at, reverse=True)
+                    return Result(items)
+            except Exception:
+                return Result([])
+
+        if "from policies" in sql_str:
+            try:
+                items = list(self.policies_by_number.values())
+                whereclause = getattr(stmt, "whereclause", None)
+                if whereclause is not None:
+                    where_str = str(whereclause).lower()
+                    clauses = getattr(whereclause, "clauses", [whereclause])
+                    for child in clauses:
+                        child_str = str(child).lower()
+                        if "quote_id" in child_str and hasattr(child, "right"):
+                            val = getattr(child.right, "value", None)
+                            if val:
+                                items = [p for p in items if p.quote_id == val]
+                        if "partner_id" in child_str and hasattr(child, "right"):
+                            val = getattr(child.right, "value", None)
+                            if val:
+                                items = [p for p in items if p.partner_id == val]
+                        if "policy_number" in child_str and hasattr(child, "right"):
+                            val = getattr(child.right, "value", None)
+                            if val:
+                                items = [p for p in items if p.policy_number == val]
+                items.sort(key=lambda p: p.issued_at, reverse=True)
+                return Result(items)
+            except Exception:
+                return Result([])
+
         try:
             clean_username = stmt.whereclause.right.value
             user = self.users.get(clean_username)
@@ -68,6 +181,9 @@ class InMemorySessionTestDouble:
 
     def add(self, obj):
         from app.modules.profile.models import FinancialEntityDB, CityDB
+        from app.modules.rating.models import PartnerDB, QuoteDB
+        from app.modules.policy.models import PolicyDB
+        from app.core.outbox import OutboxMessageDB
 
         if isinstance(obj, FinancialEntityDB):
             if not getattr(obj, "id", None):
@@ -77,6 +193,16 @@ class InMemorySessionTestDouble:
             if not getattr(obj, "id", None):
                 obj.id = len(self.cities) + 1
             self.cities[obj.code] = obj
+        elif isinstance(obj, PartnerDB):
+            self.partners_by_id[obj.partner_id] = obj
+            self.partners_by_client_id[obj.client_id] = obj
+        elif isinstance(obj, QuoteDB):
+            self.quotes[obj.quote_id] = obj
+        elif isinstance(obj, PolicyDB):
+            self.policies_by_number[obj.policy_number] = obj
+            self.policies_by_quote[obj.quote_id] = obj
+        elif isinstance(obj, OutboxMessageDB):
+            self.outbox.append(obj)
         else:
             self.users[obj.username] = obj
 
@@ -107,6 +233,7 @@ async def test_db_session():
     session = InMemorySessionTestDouble()
     await auth_service.seed_default_users(session)
     await profile_service.seed_default_catalogs(session)
+    await rating_service.seed_default_partners(session)
 
     async def override_db():
         yield session
@@ -138,6 +265,7 @@ async def postgres_session():
 
     app.dependency_overrides[get_db_session] = override_db
     async with sessions() as session:
+        await rating_service.seed_default_partners(session)
         yield session
     await engine.dispose()
 
