@@ -16,6 +16,7 @@ class PolicyDB(Base):
 
     policy_number = Column(String(16), primary_key=True)
     quote_id = Column(String(16), ForeignKey("quotes.quote_id"), unique=True, nullable=False)
+    partner_id = Column(String, ForeignKey("partners.partner_id"), nullable=True, index=True)
     insured_document = Column(String, nullable=False)
     beneficiaries = Column(JSON, nullable=False)
     conditions = Column(JSON, nullable=False)
@@ -35,9 +36,32 @@ class PolicyRecord(BaseModel):
 
     policy_number: str
     quote_id: str
+    partner_id: Optional[str] = None
     insured_document: str
     conditions: QuoteTierDetail
     status: str = Field(default="ISSUED")
     issued_at: datetime
     valid_until: datetime
     pdf_s3_key: Optional[str] = Field(None, description="Carátula en S3; llega con HU-WEB-16")
+
+
+class PartnerPolicyIssueRequest(BaseModel):
+    """Solicitud de emisión B2B desde el canal del socio (HU-WEB-14)."""
+    quote_id: str = Field(..., description="Identificador de la cotización calculada por el socio")
+    tier: PlanTier = Field(..., description="Nivel de plan seleccionado para la emisión")
+    beneficiaries: List[dict] = Field(default_factory=list, description="Beneficiarios designados por el asegurado")
+
+
+class PartnerPolicyResponse(BaseModel):
+    """Proyección de lectura CQRS de la póliza emitida confinada al socio B2B (HU-WEB-14, HA-04, HA-14)."""
+    model_config = ConfigDict(from_attributes=True)
+
+    policy_number: str = Field(..., description="Número oficial de póliza POL-YYYY-XXXXX")
+    quote_id: str = Field(..., description="ID de la cotización origen")
+    partner_id: str = Field(..., description="ID del socio B2B propietario de la emisión")
+    insured_document: str = Field(..., description="Número de documento del asegurado")
+    conditions: QuoteTierDetail = Field(..., description="Condiciones del plan contratado")
+    status: str = Field(default="ISSUED", description="Estado de la póliza (ISSUED, ACTIVE, CANCELLED)")
+    issued_at: datetime = Field(..., description="Fecha y hora de emisión")
+    valid_until: datetime = Field(..., description="Fecha y hora de fin de vigencia (1 año)")
+    pdf_s3_key: Optional[str] = Field(None, description="Clave S3 del certificado PDF (HU-WEB-16)")

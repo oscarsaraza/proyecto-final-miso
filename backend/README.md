@@ -48,11 +48,14 @@ En desarrollo, `/auth/otp` devuelve el código en `debug_code` y existe el asegu
 
 En el alcance del Sprint 1, `/experience/consent` valida el formato del código OTP de 6 dígitos y emula el rechazo ante el código de prueba `'000000'`. La emisión en tiempo real, vencimiento estricto (TTL) e invalidación de un solo uso están programados para el Sprint 2.
 
-### Canal de Socios B2B — Quote Edge (`app/bff/quote_edge`, `app/modules/rating`):
+### Canal de Socios B2B — Quote Edge (`app/bff/quote_edge`, `app/modules/rating`, `app/modules/policy`):
 - `POST /api/v1/quote-edge/auth/token`: autentica socios B2B mediante OAuth2 *Client Credentials* (`client_id` y `client_secret`) y emite un JWT con `role: "partner"` y `partner_id`.
 - `POST /api/v1/quote-edge/quotes`: genera y persiste una cotización confinada al `partner_id` del token e incrementa atómicamente `quota_used`.
 - `GET /api/v1/quote-edge/quotes/{quote_id}`: consulta individual con aislamiento multi-tenant (`404` si no existe o pertenece a otro socio/canal).
 - `GET /api/v1/quote-edge/quotes`: lista el histórico de cotizaciones del socio autenticado.
+- `POST /api/v1/quote-edge/policies`: emite una póliza digital atómica e idempotente (`HA-11`) asociada al socio autenticado (`HA-14`).
+- `GET /api/v1/quote-edge/policies/{policy_number}`: consulta el detalle de la póliza emitida verificando confinamiento multi-tenant.
+- `GET /api/v1/quote-edge/policies`: proyección de lectura CQRS del histórico de pólizas emitidas por el socio (`HA-04`).
 
 Socios semilla para pruebas:
 - Activo: `banco_aliado` / `AliadoSecret2026*` (`partner_id`: `banco-aliado-1`).

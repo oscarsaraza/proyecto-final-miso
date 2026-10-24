@@ -1,4 +1,4 @@
-"""Router BFF para socios B2B (quote-edge) con aislamiento multi-tenant y credenciales OAuth2 (HU-WEB-10)."""
+"""Router BFF para socios B2B (quote-edge) con aislamiento multi-tenant y credenciales OAuth2 (HU-WEB-10, HU-WEB-14)."""
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +9,15 @@ from app.core.security import (
     authenticate_partner,
     create_partner_access_token,
     get_current_partner,
+)
+from app.modules.policy.models import (
+    PartnerPolicyIssueRequest,
+    PartnerPolicyResponse,
+)
+from app.modules.policy.service import (
+    QuoteExpiredError,
+    QuoteNotFoundError,
+    policy_service,
 )
 from app.modules.rating.models import (
     PartnerDB,
@@ -59,6 +68,9 @@ async def issue_partner_token(
         expires_in=settings.PARTNER_TOKEN_EXPIRE_MINUTES * 60,
         partner_id=partner.partner_id,
     )
+
+
+# -- Cotizaciones B2B (HU-WEB-10) --------------------------------------------------------------
 
 
 @router.post(
@@ -164,3 +176,123 @@ async def list_partner_quotes(
     )
 
 
+# -- Emisión y Consulta de Pólizas B2B (HU-WEB-14) ----------------------------------------------
+
+
+@router.post(
+    "/policies",
+    response_model=PartnerPolicyResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Emitir póliza digital desde el canal del socio B2B",
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Póliza emitida exitosamente e idempotente ante reintentos (HU-WEB-14).",
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Token ausente, inválido, expirado o de socio revocado.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Cotización inexistente o perteneciente a otro socio / canal (aislamiento multi-tenant).",
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "La cotización ha expirado y no puede ser emitida.",
+        },
+    },
+)
+async def issue_partner_policy(
+    request: PartnerPolicyIssueRequest,
+    current_partner: PartnerDB = Depends(get_current_partner),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Emite una póliza de seguro formalizada a partir de un `quote_id` vigente y perteneciente al socio autenticado (**HU-WEB-14**).
+    Garantiza atomicidad e idempotencia estricta (**HA-11**) y aislamiento multi-tenant (**HA-14**).
+    """
+    try:
+        return await policy_service.issue_partner_policy(
+            session=db,
+            request=request,
+            partner_id=current_partner.partner_id,
+        )
+    except QuoteNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cotización no encontrada",
+        )
+    except QuoteExpiredError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La cotización ha expirado; debe calcular una nueva para emitir",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+
+@router.get(
+    "/policies/{policy_number}",
+    response_model=PartnerPolicyResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Consultar póliza individual del socio B2B",
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Detalle de la póliza emitida perteneciente al socio autenticado.",
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Token de socio ausente, inválido o revocado.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "La póliza no existe o pertenece a otro socio (aislamiento multi-tenant).",
+        },
+    },
+)
+async def get_partner_policy(
+    policy_number: str,
+    current_partner: PartnerDB = Depends(get_current_partner),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Consulta el detalle de una póliza propia del socio autenticado; retorna `404 Not Found`
+    si no existe o si pertenece a otro socio (**HU-WEB-14**, **HA-14**).
+    """
+    policy = await policy_service.get_partner_policy(
+        session=db,
+        policy_number=policy_number,
+        partner_id=current_partner.partner_id,
+    )
+    if not policy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Póliza no encontrada",
+        )
+    return policy
+
+
+@router.get(
+    "/policies",
+    response_model=List[PartnerPolicyResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Listar histórico de pólizas del socio B2B (CQRS)",
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Listado de pólizas emitidas confinado exclusivamente al socio autenticado.",
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Token de socio ausente, inválido o revocado.",
+        },
+    },
+)
+async def list_partner_policies(
+    current_partner: PartnerDB = Depends(get_current_partner),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Consulta el listado histórico de pólizas emitidas por el socio autenticado mediante
+    la vista de lectura optimizada CQRS (**HU-WEB-14**, **HA-04**).
+    """
+    return await policy_service.list_partner_policies(
+        session=db,
+        partner_id=current_partner.partner_id,
+    )

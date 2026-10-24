@@ -118,9 +118,9 @@ El BFF expone la verificación de asegurabilidad sociodemográfica por rango de 
 | :------- | :---------- | :--------- |
 | `POST /api/v1/experience/clients/validate` | Valida que el tomador cumpla con el rango asegurable de 18 a 75 años según su fecha de nacimiento. Exige rol `advisor`. | `200` `{"status": "ELIGIBLE", "age": N}` · `400` fuera de rango · `422` formato |
 
-### 2.6 Canal de Socios B2B — Quote Edge (HU-WEB-10)
+### 2.6 Canal de Socios B2B — Quote Edge (HU-WEB-10, HU-WEB-14)
 
-El BFF expone en `/api/v1/quote-edge` el canal dedicado para socios de distribución B2B con autenticación OAuth2 *Client Credentials*, confinamiento estricto por `partner_id` y auditoría JSON de rechazos:
+El BFF expone en `/api/v1/quote-edge` el canal dedicado para socios de distribución B2B con autenticación OAuth2 *Client Credentials*, confinamiento estricto por `partner_id`, emisión atómica/idempotente de pólizas y auditoría JSON de rechazos:
 
 | Endpoint | Descripción | Respuestas |
 | :------- | :---------- | :--------- |
@@ -128,6 +128,9 @@ El BFF expone en `/api/v1/quote-edge` el canal dedicado para socios de distribuc
 | `POST /api/v1/quote-edge/quotes` | Calcula y persiste la cotización confinada al `partner_id` del socio autenticado e incrementa atómicamente `quota_used`. | `200` cotización · `401` token ausente, inválido o revocado |
 | `GET /api/v1/quote-edge/quotes/{quote_id}` | Consulta una cotización individual verificando pertenencia estricta al socio autenticado. | `200` cotización · `401` no autorizado · `404` no existe o pertenece a otro socio |
 | `GET /api/v1/quote-edge/quotes` | Lista el histórico de cotizaciones generadas exclusivamente por el socio autenticado (`created_at DESC`). | `200` listado · `401` no autorizado |
+| `POST /api/v1/quote-edge/policies` | Emite una póliza digital de forma atómica e idempotente (`HA-11`) asociada al socio autenticado (`HA-14`). | `200` póliza · `401` no autorizado · `404` cotización ajena o no encontrada · `409` cotización expirada |
+| `GET /api/v1/quote-edge/policies/{policy_number}` | Consulta una póliza emitida individual verificando confinamiento estricto por `partner_id`. | `200` póliza · `401` no autorizado · `404` póliza inexistente o de otro socio |
+| `GET /api/v1/quote-edge/policies` | Lista el histórico de pólizas emitidas por el socio mediante la vista de lectura optimizada CQRS (`HA-04`). | `200` listado · `401` no autorizado |
 
 Socios semilla inicializados automáticamente en el arranque (`lifespan`):
 - **Socio activo:** `client_id`: `banco_aliado` · `client_secret`: `AliadoSecret2026*` (`partner_id`: `banco-aliado-1`).
