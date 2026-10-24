@@ -26,7 +26,7 @@ DEFAULT_PARTNERS = [
     {
         "partner_id": "banco-aliado-1",
         "client_id": "banco_aliado",
-        "client_secret": "AliadoSecret2026*",
+        "client_secret_hash": "$2b$12$1Snwq47xfeX/hNNSbHTJRObiDw9imA2NiDyTV3AjMjDIYkZ.N5yC6",
         "name": "Banco Aliado S.A.",
         "status": PartnerStatus.ACTIVE.value,
         "quota_limit": 50000,
@@ -35,7 +35,7 @@ DEFAULT_PARTNERS = [
     {
         "partner_id": "socio-inactivo-1",
         "client_id": "socio_inactivo",
-        "client_secret": "Inactivo2026*",
+        "client_secret_hash": "$2b$12$TpSEIfR99FQddHpj.hzgwe00b39BEmrb56GJSgM963jBb6sZH194W",
         "name": "Financiera Inactiva S.A.",
         "status": PartnerStatus.REVOKED.value,
         "quota_limit": 1000,
@@ -242,7 +242,7 @@ class RatingService:
             partner = PartnerDB(
                 partner_id=item["partner_id"],
                 client_id=item["client_id"],
-                client_secret_hash=get_password_hash(item["client_secret"]),
+                client_secret_hash=item.get("client_secret_hash") or get_password_hash(item.get("client_secret", "")),
                 name=item["name"],
                 status=item["status"],
                 quota_limit=item["quota_limit"],
