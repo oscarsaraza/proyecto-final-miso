@@ -118,14 +118,14 @@ El BFF expone la verificación de asegurabilidad sociodemográfica por rango de 
 | :------- | :---------- | :--------- |
 | `POST /api/v1/experience/clients/validate` | Valida que el tomador cumpla con el rango asegurable de 18 a 75 años según su fecha de nacimiento. Exige rol `advisor`. | `200` `{"status": "ELIGIBLE", "age": N}` · `400` fuera de rango · `422` formato |
 
-### 2.6 Canal de Socios B2B — Quote Edge (HU-WEB-10)
+### 2.6 Canal de Socios B2B — Quote Edge (HU-WEB-10, HU-WEB-11)
 
-El BFF expone en `/api/v1/quote-edge` el canal dedicado para socios de distribución B2B con autenticación OAuth2 *Client Credentials*, confinamiento estricto por `partner_id` y auditoría JSON de rechazos:
+El BFF expone en `/api/v1/quote-edge` el canal dedicado para socios de distribución B2B con autenticación OAuth2 *Client Credentials*, confinamiento estricto por `partner_id`, idempotencia de reintentos por socio y clave (`Idempotency-Key`) y auditoría JSON de rechazos:
 
 | Endpoint | Descripción | Respuestas |
 | :------- | :---------- | :--------- |
 | `POST /api/v1/quote-edge/auth/token` | Emite un JWT firmado con `role: "partner"` y `partner_id` a partir de `client_id` y `client_secret`. | `200` token · `401` credenciales inválidas o socio revocado |
-| `POST /api/v1/quote-edge/quotes` | Calcula y persiste la cotización confinada al `partner_id` del socio autenticado e incrementa atómicamente `quota_used`. | `200` cotización · `401` token ausente, inválido o revocado |
+| `POST /api/v1/quote-edge/quotes` | Calcula y persiste la cotización confinada al `partner_id` e incrementa `quota_used`. Exige `Idempotency-Key`; reintentos idénticos repiten respuesta sin duplicar ni descontar cuota; discrepancias retornan conflicto; claves con >24h expiran. | `200` cotización · `400` clave ausente o vacía · `401` no autorizado · `409` conflicto de payload |
 | `GET /api/v1/quote-edge/quotes/{quote_id}` | Consulta una cotización individual verificando pertenencia estricta al socio autenticado. | `200` cotización · `401` no autorizado · `404` no existe o pertenece a otro socio |
 | `GET /api/v1/quote-edge/quotes` | Lista el histórico de cotizaciones generadas exclusivamente por el socio autenticado (`created_at DESC`). | `200` listado · `401` no autorizado |
 

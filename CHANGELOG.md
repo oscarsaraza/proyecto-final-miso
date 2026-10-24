@@ -30,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Actualización de la documentación en `README.md` y `backend/README.md`, sustituyendo la referencia residual de LocalStack por Floci e incorporando instrucciones explícitas para la ejecución del servidor backend mediante Poetry (`uvicorn`) y Docker Compose.
 
 ### Added
+- **HU-WEB-11 · Reintentar una cotización sin crear registros duplicados (#179, #180):**
+  - Backend e Idempotencia B2B: Validación del encabezado `Idempotency-Key` en `POST /api/v1/quote-edge/quotes` con rechazo inmediato `400 Bad Request` ante valor vacío.
+  - Persistencia y Aislamiento por Socio: Persistencia atómica de cotizaciones B2B calculadas en la tabla `idempotency_records` bajo clave primaria compuesta `(partner_id, idempotency_key)`, garantizando que dos socios no colisionen aunque utilicen la misma clave.
+  - Reintentos Idempotentes: Devolución directa de la respuesta previa con status `200 OK` ante reenvíos con misma clave y payload idéntico, sin recalcular primas, sin generar registros duplicados en `quotes` y sin incrementar la cuota mensual de consumo (`quota_used`).
+  - Detección de Conflictos: Cálculo de hash canónico SHA-256 del cuerpo JSON de la petición y rechazo con `409 Conflict` ante discrepancias de contenido para una clave activa.
+  - Expiración Temporal de 24 Horas: Lógica de vigencia en `app.core.idempotency` que expira registros con más de 24 horas de antigüedad y los trata automáticamente como nuevas cotizaciones.
+  - Pruebas Automatizadas: Suite integral en `backend/tests/unit/test_quote_edge_idempotency.py` con 100% de cobertura en los módulos de idempotencia y router de Quote Edge, validando clave requerida, reintentos exitosos, detección de conflictos 409, expiración a 24 horas, aislamiento multi-tenant y concurrencia sin duplicados.
 - **HU-WEB-10 · Cotización desde el canal del socio con credenciales propias (#175, #176, #177, #178):**
   - Backend: Modelo relacional `PartnerDB` (tabla `partners`) con hash `bcrypt`, control de estado (`ACTIVE` / `REVOKED`), `quota_limit` y `quota_used`, y extensión de `QuoteDB` con columna indexada `partner_id`.
   - Seguridad y Auditoría: Flujo OAuth2 *Client Credentials* en `POST /api/v1/quote-edge/auth/token`, dependencia `get_current_partner` con sincronización de `tenant_context`, y emisión de logs JSON estructurados con severidad `WARNING` hacia `stdout`/CloudWatch ante rechazos HTTP 401 (`PARTNER_AUTH_FAILED`, `PARTNER_REVOKED`, `PARTNER_TOKEN_MISSING`, `PARTNER_TOKEN_EXPIRED`, `PARTNER_TOKEN_INVALID`, `PARTNER_ROLE_MISMATCH`).

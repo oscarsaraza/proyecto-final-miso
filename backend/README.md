@@ -48,9 +48,9 @@ En desarrollo, `/auth/otp` devuelve el código en `debug_code` y existe el asegu
 
 En el alcance del Sprint 1, `/experience/consent` valida el formato del código OTP de 6 dígitos y emula el rechazo ante el código de prueba `'000000'`. La emisión en tiempo real, vencimiento estricto (TTL) e invalidación de un solo uso están programados para el Sprint 2.
 
-### Canal de Socios B2B — Quote Edge (`app/bff/quote_edge`, `app/modules/rating`):
+### Canal de Socios B2B — Quote Edge (`app/bff/quote_edge`, `app/modules/rating`, `app/core/idempotency`):
 - `POST /api/v1/quote-edge/auth/token`: autentica socios B2B mediante OAuth2 *Client Credentials* (`client_id` y `client_secret`) y emite un JWT con `role: "partner"` y `partner_id`.
-- `POST /api/v1/quote-edge/quotes`: genera y persiste una cotización confinada al `partner_id` del token e incrementa atómicamente `quota_used`.
+- `POST /api/v1/quote-edge/quotes`: genera y persiste una cotización confinada al `partner_id` del token e incrementa atómicamente `quota_used`. Exige el encabezado `Idempotency-Key` (`400 Bad Request` ante valor vacío). Reintentos con la misma clave y payload devuelven `200 OK` con la respuesta original sin duplicar cotizaciones ni incrementar la cuota; cambios en el payload con la misma clave son rechazados con `409 Conflict`. Claves con más de 24 horas expiran y se procesan como solicitudes nuevas (HU-WEB-11).
 - `GET /api/v1/quote-edge/quotes/{quote_id}`: consulta individual con aislamiento multi-tenant (`404` si no existe o pertenece a otro socio/canal).
 - `GET /api/v1/quote-edge/quotes`: lista el histórico de cotizaciones del socio autenticado.
 

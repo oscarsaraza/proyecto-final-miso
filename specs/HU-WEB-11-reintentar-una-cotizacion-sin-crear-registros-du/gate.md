@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Security status | IN_PROGRESS |
+| Security status | SECURITY_VERIFIED |
 | Evaluated on | 2026-10-24 |
 | Command | python sdd/tools/sdd.py spec validate specs/HU-WEB-11-reintentar-una-cotizacion-sin-crear-registros-du |
 
