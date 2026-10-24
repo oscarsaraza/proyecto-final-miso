@@ -1,10 +1,11 @@
-"""Router BFF para socios B2B (quote-edge) con aislamiento multi-tenant y credenciales OAuth2 (HU-WEB-10)."""
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+"""Router BFF para socios B2B (quote-edge) con aislamiento multi-tenant y credenciales OAuth2 (HU-WEB-10, HU-WEB-11)."""
+from typing import List, Optional
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db_session
+from app.core.idempotency import find_response, save_response, IdempotencyConflictError
 from app.core.security import (
     authenticate_partner,
     create_partner_access_token,
@@ -70,13 +71,20 @@ async def issue_partner_token(
         status.HTTP_200_OK: {
             "description": "Cotización calculada, guardada bajo el partner_id del socio y con cuota de uso (quota_used) incrementada.",
         },
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "Encabezado Idempotency-Key ausente o vacío (HU-WEB-11).",
+        },
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Token ausente, expirado, inválido, de otro rol o de un socio revocado.",
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "La clave de idempotencia ya fue utilizada con una solicitud de cotización diferente (HU-WEB-11).",
         },
     },
 )
 async def create_partner_quote(
     request: QuoteRequest,
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     simulated_delay: float = 0.0,
     current_partner: PartnerDB = Depends(get_current_partner),
     db: AsyncSession = Depends(get_db_session),
@@ -84,17 +92,56 @@ async def create_partner_quote(
     """
     Calcula y registra una cotización B2B confinada al `partner_id` derivado del token JWT del socio
     autenticado e incrementa su contador `quota_used` (**HU-WEB-10**).
+    Garantiza idempotencia por socio y clave: si la misma clave y payload se reenvían,
+    retorna la cotización previa sin duplicar registros en base de datos (**HU-WEB-11**).
     """
+    if not idempotency_key or not idempotency_key.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El encabezado 'Idempotency-Key' es obligatorio para cotizaciones B2B.",
+        )
+
+    cleaned_key = idempotency_key.strip()
+    try:
+        saved = await find_response(
+            session=db,
+            partner_id=current_partner.partner_id,
+            idempotency_key=cleaned_key,
+            request=request,
+        )
+    except IdempotencyConflictError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflicto de idempotencia: la clave ya fue utilizada con una solicitud diferente.",
+        )
+
+    if saved:
+        return PartnerQuoteResponse(
+            **saved.response_body,
+            partner_id=current_partner.partner_id,
+        )
+
     quote = await rating_service.create_quote(
         session=db,
         request=request,
         simulated_bureau_delay=simulated_delay,
         partner_id=current_partner.partner_id,
+        commit=False,
     )
-    return PartnerQuoteResponse(
+    response = PartnerQuoteResponse(
         **quote.model_dump(),
         partner_id=current_partner.partner_id,
     )
+    save_response(
+        session=db,
+        partner_id=current_partner.partner_id,
+        idempotency_key=cleaned_key,
+        request=request,
+        status=status.HTTP_200_OK,
+        body=response.model_dump(mode="json"),
+    )
+    await db.commit()
+    return response
 
 
 @router.get(

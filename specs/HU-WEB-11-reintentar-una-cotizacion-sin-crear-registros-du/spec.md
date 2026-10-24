@@ -224,6 +224,6 @@ No se requieren variables de entorno nuevas. Se utiliza la conexión de base de 
 
 | ID | Task | Traces to | Controls | Status | Evidence |
 |---|---|---|---|---|---|
-| T-01 | #179 HU-WEB-11.1 · Backend: idempotencia en la cotización B2B, persistida por socio y clave | AC-01, AC-02, AC-03, AC-04, AC-05, SR-01, SR-02, SR-03, SR-04 | CTL-01, CTL-02, CTL-03, CTL-04 | TODO | — |
+| T-01 | #179 HU-WEB-11.1 · Backend: idempotencia en la cotización B2B, persistida por socio y clave | AC-01, AC-02, AC-03, AC-04, AC-05, SR-01, SR-02, SR-03, SR-04 | CTL-01, CTL-02, CTL-03, CTL-04 | DONE | backend/app/bff/quote_edge/router.py |
 | T-02 | #180 HU-WEB-11.2 · Pruebas de reintentos concurrentes y de conflicto | AC-01, AC-02, AC-03, AC-04, AC-05, SR-01, SR-02, SR-03, SR-04 | CTL-01, CTL-02, CTL-03, CTL-04 | TODO | — |
 | T-03 | Documentación del encabezado en API y registro en CHANGELOG.md | AC-01, AC-03 | — | TODO | — |

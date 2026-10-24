@@ -176,6 +176,7 @@ class RatingService:
         request: QuoteRequest,
         simulated_bureau_delay: float = 0.0,
         partner_id: Optional[str] = None,
+        commit: bool = True,
     ) -> QuoteResponse:
         """Calcula la cotización y la guarda para que la emisión compruebe su vigencia (HU-WEB-05, HU-WEB-10, HA-17)."""
         quote = await self.calculate_quote(request, simulated_bureau_delay)
@@ -198,7 +199,8 @@ class RatingService:
                 .where(PartnerDB.partner_id == partner_id)
                 .values(quota_used=PartnerDB.quota_used + 1)
             )
-        await session.commit()
+        if commit:
+            await session.commit()
         return quote
 
     async def get_partner_quote(

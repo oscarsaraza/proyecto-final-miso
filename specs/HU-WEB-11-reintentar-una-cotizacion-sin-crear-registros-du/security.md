@@ -90,10 +90,10 @@
 
 | ID | Control | Domain | Status | Mitigates | Tests | Tasks | References | Rationale |
 |---|---|---|---|---|---|---|---|---|
-| CTL-01 | Validación obligatoria del encabezado `Idempotency-Key` en `POST /api/v1/quote-edge/quotes` con rechazo HTTP 400 ante omisión o valor vacío | API | MISSING | THR-02, DATA-02 | TC-03 | T-01 | OWASP API4:2023 | Protege la base de datos contra duplicación de registros por reintentos sin clave |
+| CTL-01 | Validación obligatoria del encabezado `Idempotency-Key` en `POST /api/v1/quote-edge/quotes` con rechazo HTTP 400 ante omisión o valor vacío | API | EXISTING | THR-02, DATA-02 | TC-03 | T-01 | OWASP API4:2023 | Protege la base de datos contra duplicación de registros por reintentos sin clave |
 | CTL-02 | Confinamiento multi-tenant en tabla `idempotency_records` con clave primaria compuesta `(partner_id, idempotency_key)` derivada del token autenticado | DATA | EXISTING | THR-03, DATA-01 | TC-05 | — | OWASP API1:2023 | Impide colisiones y fugas de datos entre distintos socios |
 | CTL-03 | Cálculo de hash canónico SHA-256 del cuerpo de la petición y rechazo con HTTP 409 Conflict ante colisión de clave con contenido diferente | API | EXISTING | THR-01, DATA-02 | TC-02 | T-01 | OWASP API8:2023 | Garantiza la inmutabilidad de la operación idempotente |
-| CTL-04 | Ventana de vigencia temporal de 24 horas para claves de idempotencia, tratando registros con más de 24 horas como nuevas solicitudes | BACKEND | MISSING | THR-04, DATA-02 | TC-04 | T-01 | ASR-05, HA-11 | Evita que claves antiguas bloqueen recotizaciones o congelen tarifas obsoletas |
+| CTL-04 | Ventana de vigencia temporal de 24 horas para claves de idempotencia, tratando registros con más de 24 horas como nuevas solicitudes | BACKEND | EXISTING | THR-04, DATA-02 | TC-04 | T-01 | ASR-05, HA-11 | Evita que claves antiguas bloqueen recotizaciones o congelen tarifas obsoletas |
 | CTL-05 | Simulación segura de llamadas a buró crediticio con timeouts y degradación controlada | BACKEND | EXISTING | THR-02 | TC-01 | — | HA-05 | Protege la disponibilidad del servicio ante lentitud externa |
 
 ## 10. Cryptography
@@ -163,7 +163,7 @@
 
 | ID | Risk | Threats | Likelihood | Impact | Level | Treatment | Residual risk | Status |
 |---|---|---|---|---|---|---|---|---|
-| RISK-01 | Acumulación progresiva de registros de idempotencia antiguos en PostgreSQL | THR-04 | LOW | LOW | LOW | MITIGATE | Bajo: expiración a 24 horas y volumen acotado por las cuotas de cada socio | OPEN |
+| RISK-01 | Acumulación progresiva de registros de idempotencia antiguos en PostgreSQL | THR-04 | LOW | LOW | LOW | MITIGATE | Bajo: expiración a 24 horas y volumen acotado por las cuotas de cada socio | MITIGATED |
 
 ## 16. Pending decisions
 

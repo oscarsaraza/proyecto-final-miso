@@ -31,6 +31,7 @@ class InMemorySessionTestDouble:
         self.partners_by_id = {}
         self.partners_by_client_id = {}
         self.quotes = {}
+        self.idempotency_records = {}
 
     async def execute(self, stmt):
         class Result:
@@ -107,6 +108,7 @@ class InMemorySessionTestDouble:
             return Result([])
 
     def add(self, obj):
+        from app.core.idempotency import IdempotencyRecordDB
         from app.modules.profile.models import FinancialEntityDB, CityDB
         from app.modules.rating.models import PartnerDB, QuoteDB
 
@@ -123,8 +125,25 @@ class InMemorySessionTestDouble:
             self.partners_by_client_id[obj.client_id] = obj
         elif isinstance(obj, QuoteDB):
             self.quotes[obj.quote_id] = obj
+        elif isinstance(obj, IdempotencyRecordDB):
+            self.idempotency_records[(obj.partner_id, obj.idempotency_key)] = obj
         else:
             self.users[obj.username] = obj
+
+    async def get(self, entity_cls, ident):
+        from app.core.idempotency import IdempotencyRecordDB
+        if issubclass(entity_cls, IdempotencyRecordDB):
+            key = tuple(ident) if isinstance(ident, (list, tuple)) else ident
+            return self.idempotency_records.get(key)
+        return None
+
+    async def delete(self, obj):
+        from app.core.idempotency import IdempotencyRecordDB
+        if isinstance(obj, IdempotencyRecordDB):
+            self.idempotency_records.pop((obj.partner_id, obj.idempotency_key), None)
+
+    async def flush(self):
+        pass
 
     async def commit(self):
         pass

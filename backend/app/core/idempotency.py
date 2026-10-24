@@ -1,4 +1,5 @@
 """Idempotencia por clave: la misma petición repite la respuesta guardada sin volver a ejecutarse (ASR-05, HA-11)."""
+from datetime import datetime, timedelta, timezone
 import hashlib
 from typing import Optional
 
@@ -31,12 +32,20 @@ def request_hash(request: BaseModel) -> str:
 
 
 async def find_response(
-    session: AsyncSession, partner_id: str, idempotency_key: str, request: BaseModel
+    session: AsyncSession, partner_id: str, idempotency_key: str, request: BaseModel, max_age_hours: int = 24
 ) -> Optional[IdempotencyRecordDB]:
-    """Respuesta guardada para la clave, o None si es nueva; si la clave se usó con otra petición, lanza el conflicto."""
+    """Respuesta guardada para la clave, o None si es nueva; si la clave se usó con otra petición, lanza el conflicto.
+    Si la clave tiene más de max_age_hours (24h), expira y se elimina para permitir una nueva operación (ASR-05, HA-11)."""
     record = await session.get(IdempotencyRecordDB, (partner_id, idempotency_key))
-    if record and record.request_hash != request_hash(request):
-        raise IdempotencyConflictError()
+    if record:
+        now = datetime.now(timezone.utc)
+        record_created = record.created_at if record.created_at.tzinfo else record.created_at.replace(tzinfo=timezone.utc)
+        if now - record_created > timedelta(hours=max_age_hours):
+            await session.delete(record)
+            await session.flush()
+            return None
+        if record.request_hash != request_hash(request):
+            raise IdempotencyConflictError()
     return record
 
 
