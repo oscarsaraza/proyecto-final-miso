@@ -116,10 +116,7 @@ async def create_partner_quote(
         )
 
     if saved:
-        return PartnerQuoteResponse(
-            **saved.response_body,
-            partner_id=current_partner.partner_id,
-        )
+        return PartnerQuoteResponse(**saved.response_body)
 
     quote = await rating_service.create_quote(
         session=db,

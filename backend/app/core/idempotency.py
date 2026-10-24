@@ -39,11 +39,16 @@ async def find_response(
     record = await session.get(IdempotencyRecordDB, (partner_id, idempotency_key))
     if record:
         now = datetime.now(timezone.utc)
-        record_created = record.created_at if record.created_at.tzinfo else record.created_at.replace(tzinfo=timezone.utc)
-        if now - record_created > timedelta(hours=max_age_hours):
-            await session.delete(record)
-            await session.flush()
-            return None
+        if record.created_at:
+            record_created = (
+                record.created_at
+                if record.created_at.tzinfo
+                else record.created_at.replace(tzinfo=timezone.utc)
+            )
+            if now - record_created > timedelta(hours=max_age_hours):
+                await session.delete(record)
+                await session.flush()
+                return None
         if record.request_hash != request_hash(request):
             raise IdempotencyConflictError()
     return record
@@ -59,6 +64,7 @@ def save_response(
         request_hash=request_hash(request),
         response_status=status,
         response_body=body,
+        created_at=datetime.now(timezone.utc),
     )
     session.add(record)
     return record

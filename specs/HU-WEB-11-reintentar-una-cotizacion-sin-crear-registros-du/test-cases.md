@@ -38,11 +38,11 @@
 | Preconditions | Socio B2B autenticado con token JWT y cuota disponible |
 | Procedure | 1. Enviar POST /api/v1/quote-edge/quotes con encabezado Idempotency-Key y payload válido. 2. Guardar quote_id y cuota consumida. 3. Reenviar la petición con la misma clave y mismo payload. 4. Comparar respuestas y validar base de datos. |
 | Expected result | Retorna 200 OK con la misma cotización calculada previamente, no se crea un nuevo registro en `quotes` y `quota_used` no se incrementa adicionalmente |
-| Tool or method | pytest backend/tests/unit/test_quote_edge_idempotency.py |
+| Tool or method | pytest backend/tests/unit/test_quote_edge_idempotency.py::test_idempotent_quote_retry_success |
 | Automation | AUTOMATED |
 | Environment | LOCAL |
-| Evidence | PENDING |
-| Status | PENDING |
+| Evidence | backend/tests/unit/test_quote_edge_idempotency.py::test_idempotent_quote_retry_success |
+| Status | PASS |
 
 ### TC-02 · Detección de conflicto ante reuso de clave con payload diferente (409 Conflict)
 
@@ -55,11 +55,11 @@
 | Preconditions | Socio B2B autenticado que ya registró una cotización con una clave específica |
 | Procedure | 1. Enviar cotización inicial con Idempotency-Key "key-conflict-1" y payload A. 2. Enviar segunda solicitud con la misma clave "key-conflict-1" y payload B modificado. |
 | Expected result | Retorna HTTP 409 Conflict explicando la discrepancia de contenido para la clave de idempotencia. La cotización previa permanece inalterada. |
-| Tool or method | pytest backend/tests/unit/test_quote_edge_idempotency.py |
+| Tool or method | pytest backend/tests/unit/test_quote_edge_idempotency.py::test_idempotent_quote_payload_conflict |
 | Automation | AUTOMATED |
 | Environment | LOCAL |
-| Evidence | PENDING |
-| Status | PENDING |
+| Evidence | backend/tests/unit/test_quote_edge_idempotency.py::test_idempotent_quote_payload_conflict |
+| Status | PASS |
 
 ### TC-03 · Rechazo de cotización B2B sin encabezado Idempotency-Key (400 Bad Request)
 
@@ -72,11 +72,11 @@
 | Preconditions | Socio B2B autenticado con token JWT válido |
 | Procedure | 1. Enviar POST /api/v1/quote-edge/quotes omitiendo el encabezado Idempotency-Key. 2. Enviar POST /api/v1/quote-edge/quotes con encabezado Idempotency-Key compuesto únicamente por espacios en blanco. |
 | Expected result | Ambas solicitudes son rechazadas con HTTP 400 Bad Request indicando que el encabezado Idempotency-Key es obligatorio |
-| Tool or method | pytest backend/tests/unit/test_quote_edge_idempotency.py |
+| Tool or method | pytest backend/tests/unit/test_quote_edge_idempotency.py::test_quote_edge_missing_idempotency_key |
 | Automation | AUTOMATED |
 | Environment | LOCAL |
-| Evidence | PENDING |
-| Status | PENDING |
+| Evidence | backend/tests/unit/test_quote_edge_idempotency.py::test_quote_edge_missing_idempotency_key |
+| Status | PASS |
 
 ### TC-04 · Expiración de clave de idempotencia tras 24 horas
 
@@ -89,11 +89,11 @@
 | Preconditions | Registro de idempotencia en base de datos con antigüedad superior a 24 horas |
 | Procedure | 1. Insertar un registro de prueba en `idempotency_records` con `created_at` fijado a hace 25 horas. 2. Ejecutar consulta de idempotencia para la misma clave. 3. Reenviar la petición a Quote Edge. |
 | Expected result | El sistema reconoce la expiración de la clave, no reutiliza la respuesta anterior y permite registrar una nueva cotización exitosamente |
-| Tool or method | pytest backend/tests/unit/test_quote_edge_idempotency.py |
+| Tool or method | pytest backend/tests/unit/test_quote_edge_idempotency.py::test_idempotency_key_expiration_after_24_hours |
 | Automation | AUTOMATED |
 | Environment | LOCAL |
-| Evidence | PENDING |
-| Status | PENDING |
+| Evidence | backend/tests/unit/test_quote_edge_idempotency.py::test_idempotency_key_expiration_after_24_hours |
+| Status | PASS |
 
 ### TC-05 · Aislamiento multi-tenant de claves de idempotencia entre socios distintos
 
@@ -106,11 +106,11 @@
 | Preconditions | Dos socios B2B configurados independientemente en base de datos con sus respectivos tokens de acceso |
 | Procedure | 1. Socio A emite cotización con Idempotency-Key "key-shared-99" y payload del Socio A. 2. Socio B emite cotización con la misma Idempotency-Key "key-shared-99" y payload del Socio B. |
 | Expected result | Ambas peticiones responden 200 OK. No ocurre colisión ni error 409 entre socios. Cada respuesta queda aislada y consultable únicamente por su respectivo socio. |
-| Tool or method | pytest backend/tests/unit/test_quote_edge_idempotency.py |
+| Tool or method | pytest backend/tests/unit/test_quote_edge_idempotency.py::test_idempotency_multitenant_isolation |
 | Automation | AUTOMATED |
 | Environment | LOCAL |
-| Evidence | PENDING |
-| Status | PENDING |
+| Evidence | backend/tests/unit/test_quote_edge_idempotency.py::test_idempotency_multitenant_isolation |
+| Status | PASS |
 
 ### TC-06 · Concurrencia de reintentos simultáneos con la misma clave
 
@@ -123,11 +123,11 @@
 | Preconditions | Socio B2B autenticado con token JWT |
 | Procedure | 1. Ejecutar concurrentemente mediante asyncio múltiples llamadas al endpoint de cotización con la misma Idempotency-Key y payload idéntico. 2. Evaluar códigos de respuesta y verificar registros generados en la base de datos. |
 | Expected result | Todas las peticiones completan exitosamente (200 OK) retornando la misma cotización, y la tabla `quotes` almacena exactamente un registro. |
-| Tool or method | pytest backend/tests/unit/test_quote_edge_idempotency.py |
+| Tool or method | pytest backend/tests/unit/test_quote_edge_idempotency.py::test_concurrent_idempotent_quotes |
 | Automation | AUTOMATED |
 | Environment | LOCAL |
-| Evidence | PENDING |
-| Status | PENDING |
+| Evidence | backend/tests/unit/test_quote_edge_idempotency.py::test_concurrent_idempotent_quotes |
+| Status | PASS |
 
 ### TC-07 · Rendimiento y baja latencia en reintentos idempotentes
 
@@ -140,11 +140,11 @@
 | Preconditions | Cotización ya registrada y guardada en idempotencia |
 | Procedure | 1. Enviar reintentos continuos con la clave y payload de la cotización previa midiendo la latencia de respuesta. 2. Verificar que el tiempo de respuesta sea inferior a 50 ms en condiciones locales. |
 | Expected result | El reintento se resuelve inmediatamente desde el registro de idempotencia sin recálculos ni demoras |
-| Tool or method | pytest backend/tests/unit/test_quote_edge_idempotency.py |
+| Tool or method | pytest backend/tests/unit/test_quote_edge_idempotency.py::test_idempotent_quote_latency_performance |
 | Automation | AUTOMATED |
 | Environment | LOCAL |
-| Evidence | PENDING |
-| Status | PENDING |
+| Evidence | backend/tests/unit/test_quote_edge_idempotency.py::test_idempotent_quote_latency_performance |
+| Status | PASS |
 
 ## Security test coverage
 

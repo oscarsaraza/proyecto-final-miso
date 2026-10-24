@@ -81,8 +81,16 @@ async def test_partner_quote_creation_persists_partner_id_and_increments_quota(
     token = await _obtain_partner_token(async_client)
     headers = {"Authorization": f"Bearer {token}"}
 
-    resp1 = await async_client.post("/api/v1/quote-edge/quotes", headers=headers, json=QUOTE_PAYLOAD)
-    resp2 = await async_client.post("/api/v1/quote-edge/quotes", headers=headers, json=QUOTE_PAYLOAD)
+    resp1 = await async_client.post(
+        "/api/v1/quote-edge/quotes",
+        headers={**headers, "Idempotency-Key": "test-key-quote-1"},
+        json=QUOTE_PAYLOAD,
+    )
+    resp2 = await async_client.post(
+        "/api/v1/quote-edge/quotes",
+        headers={**headers, "Idempotency-Key": "test-key-quote-2"},
+        json=QUOTE_PAYLOAD,
+    )
 
     assert resp1.status_code == 200
     assert resp2.status_code == 200
@@ -164,14 +172,14 @@ async def test_partner_quote_isolation_between_partners_and_channels(
     q1_p1 = (
         await async_client.post(
             "/api/v1/quote-edge/quotes",
-            headers={"Authorization": f"Bearer {token_partner_1}"},
+            headers={"Authorization": f"Bearer {token_partner_1}", "Idempotency-Key": "iso-key-1"},
             json=QUOTE_PAYLOAD,
         )
     ).json()
     q2_p1 = (
         await async_client.post(
             "/api/v1/quote-edge/quotes",
-            headers={"Authorization": f"Bearer {token_partner_1}"},
+            headers={"Authorization": f"Bearer {token_partner_1}", "Idempotency-Key": "iso-key-2"},
             json={**QUOTE_PAYLOAD, "document_number": "9090909090"},
         )
     ).json()
@@ -180,7 +188,7 @@ async def test_partner_quote_isolation_between_partners_and_channels(
     q1_p2 = (
         await async_client.post(
             "/api/v1/quote-edge/quotes",
-            headers={"Authorization": f"Bearer {token_partner_2}"},
+            headers={"Authorization": f"Bearer {token_partner_2}", "Idempotency-Key": "iso-key-3"},
             json=QUOTE_PAYLOAD,
         )
     ).json()
